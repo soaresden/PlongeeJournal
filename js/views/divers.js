@@ -3,9 +3,9 @@
 // ============================================================
 
 import { el, fullName, toast, confirmBox, fmtDate, openModal } from '../lib.js';
-import { store, emptyDiver, emptyCertification, emptyMateriel,
-         libelleMateriel, CERTIFS_COURANTES } from '../store.js';
-import { BLOOD_TYPES, TYPES_MATERIEL, typeMateriel, COMBI_TYPES, COMBI_MM } from '../config.js';
+import { store, emptyDiver, emptyCertification, CERTIFS_COURANTES } from '../store.js';
+import { BLOOD_TYPES, typeMateriel, COMBI_TYPES, COMBI_MM } from '../config.js';
+import { editerMateriel, ligneMateriel } from './materiel.js';
 import { navigate } from '../router.js';
 
 function field(label, control, hint) {
@@ -330,68 +330,23 @@ export async function diverFormView({ id }) {
       return;
     }
 
-    d.materiel.forEach(m => {
-      const t = typeMateriel(m.type);
-      tableauMateriel.append(el('div.mat-ligne', { onclick: () => editerMateriel(m) },
-        el('span.mat-icone', { text: t.icone }),
-        el('div.mat-corps', {},
-          el('div.mat-type', { text: t.label }),
-          el('div.mat-detail', { text: libelleMateriel(m) })),
-        el('button.mat-suppr', {
-          type: 'button', text: '×', title: 'Retirer',
-          onclick: async e => {
-            e.stopPropagation();
-            if (!await confirmBox(`Retirer ${t.label} ?`, 'Retirer')) return;
-            d.materiel = d.materiel.filter(x => x.id !== m.id);
-            rendreMateriel();
-          },
+    d.materiel.forEach(m => tableauMateriel.append(ligneMateriel(m, {
+      onClick: piece => editerMateriel(piece,
+        modifie => {
+          const i = d.materiel.findIndex(x => x.id === modifie.id);
+          if (i >= 0) d.materiel[i] = modifie;
+          rendreMateriel();
+        },
+        piece2 => {
+          d.materiel = d.materiel.filter(x => x.id !== piece2.id);
+          rendreMateriel();
         }),
-      ));
-    });
-  }
-
-  function editerMateriel(existant) {
-    const m = existant ? { ...existant } : emptyMateriel();
-    const nouveau = !existant;
-
-    openModal(close => {
-      const typeSel = el('select');
-      typeSel.append(el('option', { value: '', text: '— choisir un type —' }));
-      TYPES_MATERIEL.forEach(t =>
-        typeSel.append(el('option', { value: t.id, text: `${t.icone}  ${t.label}` })));
-      typeSel.value = m.type || '';
-
-      const marque = el('input', { type: 'text', value: m.marque,
-        placeholder: 'Aqualung, Mares, Scubapro…' });
-      const modele = el('input', { type: 'text', value: m.modele, placeholder: 'Legend, Quad…' });
-      const note   = el('input', { type: 'text', value: m.note,
-        placeholder: 'Couleur, taille, verres correcteurs…' });
-
-      return el('div', {},
-        el('h3', { text: nouveau ? 'Ajouter du matériel' : typeMateriel(m.type).label }),
-        field('Type', typeSel),
-        el('div.row', {},
-          field('Marque', marque),
-          field('Modèle', modele),
-        ),
-        field('Note', note),
-        el('div.btn-row', {},
-          el('button.btn.ghost', { type: 'button', text: 'Annuler', onclick: close }),
-          el('button.btn.primary', { type: 'button', text: nouveau ? 'Ajouter' : 'Enregistrer',
-            onclick: () => {
-              if (!typeSel.value) return toast('Choisis un type de matériel', true);
-              Object.assign(m, {
-                type: typeSel.value, marque: marque.value.trim(),
-                modele: modele.value.trim(), note: note.value.trim(),
-              });
-              const i = d.materiel.findIndex(x => x.id === m.id);
-              if (i >= 0) d.materiel[i] = m; else d.materiel.push(m);
-              rendreMateriel();
-              close();
-            } }),
-        ),
-      );
-    });
+      onRetirer: async piece => {
+        if (!await confirmBox(`Retirer ${typeMateriel(piece.type).label} ?`, 'Retirer')) return;
+        d.materiel = d.materiel.filter(x => x.id !== piece.id);
+        rendreMateriel();
+      },
+    })));
   }
 
   rendreMateriel();
@@ -426,7 +381,10 @@ export async function diverFormView({ id }) {
       tableauMateriel,
       el('div.btn-row', {},
         el('button.btn.sm', { type: 'button', text: '+ Ajouter du matériel',
-          onclick: () => editerMateriel(null) })),
+          onclick: () => editerMateriel(null, piece => {
+            d.materiel.push(piece);
+            rendreMateriel();
+          }) })),
     ),
   ));
 

@@ -19,12 +19,12 @@ Object.defineProperty(globalThis, 'crypto', { configurable: true, value: {
 } });
 
 const { emptyDive, emptyBuddy, emptyDiver, emptyCertification, emptyMateriel,
-        libelleMateriel, reconcileTimes, validerPlongee,
+        libelleMateriel, valeursMateriel, reconcileTimes, validerPlongee,
         optionsAutomatiques, appliquerOptionsAuto, niveauCourant,
         plongeesParNiveau, parClub, libelleGaz, pmuNitrox } =
   await import(path.join(ROOT, 'js/model.js'));
-const { NIVEAUX, rangNiveau, GAZ, gazParId, DIVE_OPTIONS, TYPES_MATERIEL, typeMateriel } =
-  await import(path.join(ROOT, 'js/config.js'));
+const { NIVEAUX, rangNiveau, GAZ, gazParId, DIVE_OPTIONS, TYPES_MATERIEL, typeMateriel,
+        PALANQUEE_MODES } = await import(path.join(ROOT, 'js/config.js'));
 
 const champs = x => validerPlongee(x).map(m => m.champ);
 let d;
@@ -193,19 +193,56 @@ check('plongeur : combinaison de référence', 'combiType' in emptyDiver());
 check('plongée : tampons par plongeur', JSON.stringify(emptyDive('d', 1).tampons) === '{}');
 check('plongée : matériel emporté', 'materielIds' in emptyDive('d', 1));
 
-// --- Matériel : on ajoute des lignes, pas des cases figées ---
+// --- Matériel : chaque type a SES champs ---
 const mat = emptyMateriel('detendeur');
 check('matériel : identifiant propre', !!mat.id && mat.type === 'detendeur');
-check('matériel : champs attendus',
-  ['marque', 'modele', 'note'].every(k => k in mat), Object.keys(mat).join(','));
+check('matériel : valeurs séparées du type', 'valeurs' in mat);
 check('matériel : plusieurs pièces du même type possibles',
   emptyMateriel('masque').id !== emptyMateriel('masque').id);
 
-check('libellé marque + modèle',
-  libelleMateriel({ marque: 'Aqualung', modele: 'Legend' }) === 'Aqualung Legend');
-check('libellé avec note',
-  libelleMateriel({ marque: 'Cressi', note: 'noir' }) === 'Cressi — noir');
-check('libellé vide', libelleMateriel({}) === '—');
+const champsDe = id => typeMateriel(id).champs.map(c => c.id);
+check('combinaison : type + épaisseur, pas de modèle',
+  champsDe('combinaison').includes('sousType') && champsDe('combinaison').includes('mm')
+  && !champsDe('combinaison').includes('modele'), champsDe('combinaison').join(','));
+check('détendeur : marque + modèle',
+  champsDe('detendeur').join(',') === 'marque,modele', champsDe('detendeur').join(','));
+check('masque : marque + personnalisation, pas de modèle',
+  champsDe('masque').includes('note') && !champsDe('masque').includes('modele'),
+  champsDe('masque').join(','));
+check('palmes : pas de modèle', !champsDe('palmes').includes('modele'), champsDe('palmes').join(','));
+check('phare : marque + modèle',
+  champsDe('phare').join(',') === 'marque,modele', champsDe('phare').join(','));
+check('caméra : marque + modèle',
+  champsDe('camera').join(',') === 'marque,modele', champsDe('camera').join(','));
+check('lestage : poids en kg', champsDe('lestage').includes('kg'), champsDe('lestage').join(','));
+check('combinaison : 3 types proposés',
+  typeMateriel('combinaison').champs[0].options.length === 3);
+
+check('libellé combinaison',
+  libelleMateriel({ type: 'combinaison',
+    valeurs: { sousType: 'Semi-étanche', mm: '7', marque: 'Subea' } })
+  === 'Semi-étanche · 7 mm · Subea',
+  libelleMateriel({ type: 'combinaison', valeurs: { sousType: 'Semi-étanche', mm: '7', marque: 'Subea' } }));
+check('libellé détendeur',
+  libelleMateriel({ type: 'detendeur', valeurs: { marque: 'Aqualung', modele: 'Legend' } })
+  === 'Aqualung Legend');
+check('libellé masque',
+  libelleMateriel({ type: 'masque', valeurs: { marque: 'Cressi', note: 'noir' } })
+  === 'Cressi — noir');
+check('libellé lestage',
+  libelleMateriel({ type: 'lestage', valeurs: { kg: '6', note: 'ceinture' } })
+  === '6 kg — ceinture');
+check('libellé vide', libelleMateriel({ type: 'detendeur', valeurs: {} }) === '—');
+
+// Ancien format plat : toujours lisible
+check('ancien format relu',
+  valeursMateriel({ type: 'detendeur', marque: 'Mares', modele: 'Abyss' }).marque === 'Mares');
+check('ancien format : libellé correct',
+  libelleMateriel({ type: 'detendeur', marque: 'Mares', modele: 'Abyss' }) === 'Mares Abyss');
+
+check('plongée : aucun matériel pré-coché',
+  (emptyDive('d', 1).materielIds ?? []).length === 0,
+  JSON.stringify(emptyDive('d', 1).materielIds));
 
 check('types de matériel proposés', TYPES_MATERIEL.length >= 10, String(TYPES_MATERIEL.length));
 check('chaque type a une icône', TYPES_MATERIEL.every(t => t.icone && t.label));
@@ -277,6 +314,18 @@ check('clubs : ordre alphabétique', groupes[0].titre === 'Cherbourg', groupes[0
 check('clubs : sans club en dernier', groupes[2].titre === 'Sans club', groupes[2].titre);
 check('clubs : membres triés', groupes[0].membres[0].nom === 'Albert', groupes[0].membres[0].nom);
 check('clubs : bon effectif', groupes[0].membres.length === 2);
+
+// ------------------------------------------------------------
+//  Palanquée
+// ------------------------------------------------------------
+
+check('plongée solo non proposée',
+  !PALANQUEE_MODES.some(m => m.id === 'solo'),
+  PALANQUEE_MODES.map(m => m.id).join(','));
+check('modes de palanquée conservés',
+  ['moniteur', 'chef', 'autonome2', 'autonome3', 'jeChef']
+    .every(id => PALANQUEE_MODES.some(m => m.id === id)),
+  PALANQUEE_MODES.map(m => m.id).join(','));
 
 // ------------------------------------------------------------
 //  Tri aquatique — entièrement déduit des bases, rien en dur

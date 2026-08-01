@@ -33,6 +33,7 @@ const ASSETS = [
   './js/views/buddies.js',
   './js/views/stats.js',
   './js/views/calendar.js',
+  './js/views/materiel.js',
   './js/views/lock.js',
   './js/views/setup.js',
   './js/views/suunto.js',

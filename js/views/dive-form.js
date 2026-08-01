@@ -5,7 +5,9 @@
 import { el, toast, num, fullName, openModal, fileToDataURL, confirmBox, todayISO,
          minToTime, timeToMin, scrollTo } from '../lib.js';
 import { store, emptyDive, emptyBuddy, reconcileTimes, validerPlongee,
-         appliquerOptionsAuto, niveauCourant, libelleGaz, pmuNitrox } from '../store.js';
+         appliquerOptionsAuto, niveauCourant, libelleGaz, pmuNitrox,
+         libelleMateriel } from '../store.js';
+import { editerMateriel, ligneMateriel } from './materiel.js';
 import { DIVE_TYPES, DIVE_OPTIONS, DIVE_GOALS, PALANQUEE_MODES,
          OPTIONS_AUTO, VISIBILITES, COMBI_TYPES, COMBI_MM, NIVEAUX,
          GAZ, gazParId, BLOC_TYPES, BLOC_MATIERES, typeMateriel } from '../config.js';
@@ -891,38 +893,97 @@ export async function diveFormView({ id }) {
   const materielProfil = profil?.materiel || [];
   const equipZone = el('div');
 
+  /**
+   * On n'affiche que ce qui a été ajouté à CETTE plongée, en lignes.
+   * Deux façons d'en ajouter : reprendre une pièce du profil, ou en
+   * créer une à la volée — elle rejoint alors aussi la fiche plongeur.
+   */
   function rendreEquipement() {
     equipZone.innerHTML = '';
-    dive.materielIds ||= materielProfil.map(m => m.id);
+    dive.materielIds ||= [];
 
-    if (!materielProfil.length) {
-      equipZone.append(el('div.hint', { style: { marginTop: 0 } },
-        'Rien sur ta fiche plongeur. Ajoute ton détendeur, ton masque, tes palmes '
-      + 'une fois pour toutes : ils seront ensuite proposés sur chaque plongée. ',
-        el('a', { href: '#/divers', style: { color: 'var(--accent)' } }, 'Y aller'), '.'));
-      return;
+    const choisis = dive.materielIds
+      .map(id => materielProfil.find(m => m.id === id))
+      .filter(Boolean);
+
+    if (choisis.length) {
+      choisis.forEach(m => equipZone.append(ligneMateriel(m, {
+        onRetirer: piece => {
+          dive.materielIds = dive.materielIds.filter(x => x !== piece.id);
+          rendreEquipement();
+        },
+      })));
+    } else {
+      equipZone.append(el('div.hint', { style: { marginTop: 0 },
+        text: 'Rien d’ajouté pour cette plongée.' }));
     }
 
-    const chips = el('div.chips');
-    materielProfil.forEach(m => {
-      const t = typeMateriel(m.type);
-      const c = el('button.chip', { type: 'button' },
-        `${t.icone} ${[m.marque, m.modele].filter(Boolean).join(' ') || t.label}`);
-      if (dive.materielIds.includes(m.id)) c.classList.add('on');
-      c.onclick = () => {
-        const on = !dive.materielIds.includes(m.id);
-        dive.materielIds = on
-          ? [...dive.materielIds, m.id]
-          : dive.materielIds.filter(x => x !== m.id);
-        c.classList.toggle('on', on);
-      };
-      chips.append(c);
-    });
+    const restants = materielProfil.filter(m => !dive.materielIds.includes(m.id));
 
-    equipZone.append(chips,
-      el('div.hint', {}, 'Décoche ce que tu n’avais pas ce jour-là. ',
-        el('a', { href: '#/divers', style: { color: 'var(--accent)' } },
-          'Gérer mon matériel'), '.'));
+    equipZone.append(el('div.btn-row', {},
+      el('button.btn.sm', { type: 'button', text: '+ Nouveau matériel',
+        onclick: () => editerMateriel(null, async piece => {
+          // Ajouté à la plongée ET mémorisé sur la fiche plongeur :
+          // on ne le ressaisira jamais.
+          materielProfil.push(piece);
+          dive.materielIds = [...dive.materielIds, piece.id];
+          if (profil) {
+            profil.materiel = materielProfil;
+            try { await store.saveDiver(profil); } catch (e) { toast(e.message, true); }
+          }
+          rendreEquipement();
+        }) }),
+      restants.length
+        ? el('button.btn.sm.ghost', { type: 'button',
+            text: `Reprendre du matériel (${restants.length})`,
+            onclick: () => ouvrirChoixMateriel(restants) })
+        : null,
+    ));
+  }
+
+  /** Reprise depuis la fiche plongeur : on coche, on valide. */
+  function ouvrirChoixMateriel(restants) {
+    const enAttente = new Set();
+
+    openModal(close => {
+      const liste = el('div');
+
+      restants.forEach(m => {
+        const t = typeMateriel(m.type);
+        const c = el('input', { type: 'checkbox' });
+        const ligne = el('div.pl-ligne', { style: { gridTemplateColumns: '22px 24px 1fr' } },
+          c,
+          el('span.mat-icone', { text: t.icone }),
+          el('div.mat-corps', {},
+            el('div.mat-type', { text: t.label }),
+            el('div.mat-detail', { text: libelleMateriel(m) })),
+        );
+        const basculer = () => {
+          enAttente.has(m.id) ? enAttente.delete(m.id) : enAttente.add(m.id);
+          c.checked = enAttente.has(m.id);
+          ligne.classList.toggle('on', enAttente.has(m.id));
+        };
+        ligne.onclick = basculer;
+        c.onclick = e => { e.stopPropagation(); basculer(); };
+        liste.append(ligne);
+      });
+
+      return el('div', {},
+        el('h3', { text: 'Reprendre du matériel' }),
+        el('div.hint', { style: { marginTop: 0 },
+          text: 'Coche ce que tu avais sur cette plongée.' }),
+        liste,
+        el('div.btn-row', {},
+          el('button.btn.ghost', { type: 'button', text: 'Annuler', onclick: close }),
+          el('button.btn.primary', { type: 'button', text: 'Ajouter',
+            onclick: () => {
+              dive.materielIds = [...dive.materielIds, ...enAttente];
+              rendreEquipement();
+              close();
+            } }),
+        ),
+      );
+    });
   }
 
   rendreEquipement();

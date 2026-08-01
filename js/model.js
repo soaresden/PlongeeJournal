@@ -4,7 +4,7 @@
 // ============================================================
 
 import { uid, timeToMin, minToTime } from './lib.js';
-import { OPTIONS_AUTO, NIVEAUX, rangNiveau, PRE_REMPLI } from './config.js';
+import { OPTIONS_AUTO, NIVEAUX, rangNiveau, PRE_REMPLI, typeMateriel } from './config.js';
 
 export function emptyDiver() {
   return {
@@ -20,15 +20,33 @@ export function emptyDiver() {
   };
 }
 
-/** Une pièce de matériel : détendeur, masque, phare… */
+/**
+ * Une pièce de matériel.
+ * Les valeurs sont dans `valeurs`, dont les clés dépendent du type :
+ * une combinaison a un sous-type et une épaisseur, un détendeur une
+ * marque et un modèle.
+ */
 export function emptyMateriel(type = '') {
-  return { id: uid(), type, marque: '', modele: '', note: '' };
+  return { id: uid(), type, valeurs: {} };
 }
 
-/** Résumé d'une ligne : « Aqualung Legend — noir ». */
+/**
+ * Valeurs d'une pièce, en absorbant l'ancien format plat
+ * ({marque, modele, note} directement sur l'objet).
+ */
+export function valeursMateriel(m) {
+  if (!m) return {};
+  if (m.valeurs && Object.keys(m.valeurs).length) return m.valeurs;
+  const { marque, modele, note } = m;
+  const anciennes = { marque, modele, note };
+  return Object.fromEntries(Object.entries(anciennes).filter(([, v]) => v));
+}
+
+/** Résumé d'une ligne, composé selon le type. */
 export function libelleMateriel(m) {
-  const principal = [m?.marque, m?.modele].filter(Boolean).join(' ');
-  return [principal, m?.note].filter(Boolean).join(' — ') || '—';
+  const t = typeMateriel(m?.type);
+  const v = valeursMateriel(m);
+  return (t.resume ? t.resume(v) : '') || '—';
 }
 
 /** Carte de niveau, brevet, RIFAP… : un document daté, avec un numéro. */

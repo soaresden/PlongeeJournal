@@ -88,27 +88,93 @@ export const NIVEAUX = [
 /**
  * Types de matériel personnel.
  *
- * On ajoute des lignes plutôt que de remplir des cases figées : on peut
- * avoir deux détendeurs, trois masques, aucun phare. L'icône sert à
- * repérer la ligne d'un coup d'œil dans le tableau.
+ * Chaque type décrit SES champs : demander une épaisseur à un phare ou
+ * un modèle à une paire de palmes n'aurait pas de sens. Le formulaire
+ * s'adapte donc au type choisi.
+ *
+ * kind : 'texte' | 'seg' | 'select' | 'nombre'
  */
+const marque = { id: 'marque', label: 'Marque', kind: 'texte',
+                 placeholder: 'Aqualung, Mares, Scubapro…' };
+const modele = { id: 'modele', label: 'Modèle', kind: 'texte', placeholder: '' };
+
 export const TYPES_MATERIEL = [
-  { id: 'detendeur',   label: 'Détendeur',     icone: '🫁' },
-  { id: 'gilet',       label: 'Gilet / stab',  icone: '🦺' },
-  { id: 'combinaison', label: 'Combinaison',   icone: '🩱' },
-  { id: 'masque',      label: 'Masque',        icone: '🥽' },
-  { id: 'palmes',      label: 'Palmes',        icone: '🦶' },
-  { id: 'phare',       label: 'Phare',         icone: '🔦' },
-  { id: 'camera',      label: 'Caméra',        icone: '📷' },
-  { id: 'ordinateur',  label: 'Ordinateur',    icone: '⌚' },
-  { id: 'parachute',   label: 'Parachute',     icone: '🎈' },
-  { id: 'couteau',     label: 'Couteau',       icone: '🔪' },
-  { id: 'lestage',     label: 'Lestage',       icone: '🏋' },
-  { id: 'autre',       label: 'Autre',         icone: '🎒' },
+  {
+    id: 'combinaison', label: 'Combinaison', icone: '🩱',
+    champs: [
+      { id: 'sousType', label: 'Type', kind: 'seg', options: COMBI_TYPES },
+      { id: 'mm', label: 'Épaisseur', kind: 'select', options: COMBI_MM, suffixe: 'mm' },
+      { ...marque, requis: false },
+    ],
+    resume: v => [v.sousType, v.mm ? `${v.mm} mm` : null, v.marque].filter(Boolean).join(' · '),
+  },
+  {
+    id: 'detendeur', label: 'Détendeur', icone: '🫁',
+    champs: [marque, modele],
+    resume: v => [v.marque, v.modele].filter(Boolean).join(' '),
+  },
+  {
+    id: 'masque', label: 'Masque', icone: '🥽',
+    champs: [marque,
+      { id: 'note', label: 'Personnalisation', kind: 'texte',
+        placeholder: 'Couleur, verres correcteurs, jupe noire…' }],
+    resume: v => [v.marque, v.note].filter(Boolean).join(' — '),
+  },
+  {
+    id: 'palmes', label: 'Palmes', icone: '🦶',
+    champs: [marque, { id: 'note', label: 'Note', kind: 'texte', placeholder: 'Chaussantes, réglables…' }],
+    resume: v => [v.marque, v.note].filter(Boolean).join(' — '),
+  },
+  {
+    id: 'phare', label: 'Phare', icone: '🔦',
+    champs: [marque, modele],
+    resume: v => [v.marque, v.modele].filter(Boolean).join(' '),
+  },
+  {
+    id: 'camera', label: 'Caméra', icone: '📷',
+    champs: [marque, modele],
+    resume: v => [v.marque, v.modele].filter(Boolean).join(' '),
+  },
+  {
+    id: 'ordinateur', label: 'Ordinateur', icone: '⌚',
+    champs: [marque, modele],
+    resume: v => [v.marque, v.modele].filter(Boolean).join(' '),
+  },
+  {
+    id: 'gilet', label: 'Gilet / stab', icone: '🦺',
+    champs: [marque, modele],
+    resume: v => [v.marque, v.modele].filter(Boolean).join(' '),
+  },
+  {
+    id: 'lestage', label: 'Lestage', icone: '🏋',
+    champs: [
+      { id: 'kg', label: 'Poids (kg)', kind: 'nombre', placeholder: '6' },
+      { id: 'note', label: 'Répartition', kind: 'texte', placeholder: 'Ceinture + poches' },
+    ],
+    resume: v => [v.kg ? `${v.kg} kg` : null, v.note].filter(Boolean).join(' — '),
+  },
+  {
+    id: 'parachute', label: 'Parachute', icone: '🎈',
+    champs: [marque, { id: 'note', label: 'Couleur / taille', kind: 'texte', placeholder: 'Orange, 1,4 m' }],
+    resume: v => [v.marque, v.note].filter(Boolean).join(' — '),
+  },
+  {
+    id: 'couteau', label: 'Couteau', icone: '🔪',
+    champs: [marque],
+    resume: v => v.marque || '',
+  },
+  {
+    id: 'autre', label: 'Autre', icone: '🎒',
+    champs: [
+      { id: 'nom', label: 'De quoi s’agit-il ?', kind: 'texte', placeholder: 'Compas, dévidoir…' },
+      { id: 'note', label: 'Note', kind: 'texte', placeholder: '' },
+    ],
+    resume: v => [v.nom, v.note].filter(Boolean).join(' — '),
+  },
 ];
 
 export const typeMateriel = id => TYPES_MATERIEL.find(t => t.id === id)
-  || { id, label: id || 'Matériel', icone: '🎒' };
+  || { id, label: id || 'Matériel', icone: '🎒', champs: [marque], resume: v => v.marque || '' };
 
 /** Rang d'un niveau : -1 si inconnu. */
 export const rangNiveau = n => NIVEAUX.indexOf(String(n || '').trim());

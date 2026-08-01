@@ -406,8 +406,10 @@ input::placeholder, textarea::placeholder { color: var(--text-mute); }
 /* Un tampon est sombre sur fond clair : il lui faut un fond blanc. */
 .obs.buddy img { background: #fff; object-fit: contain; padding: 3px; }
 .obs.buddy .obs-nom {
-  font-size: 10.5px; padding: 4px 4px 0; line-height: 1.25;
-  -webkit-line-clamp: 2;
+  /* Une seule ligne : deux noms sur deux lignes doublaient la hauteur
+     de la grille pour rien — le nom complet reste dans l'infobulle. */
+  font-size: 10.5px; padding: 3px 4px 0; line-height: 1.2;
+  display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .obs.buddy .obs-n { font-size: 9px; padding: 0 4px; }
 

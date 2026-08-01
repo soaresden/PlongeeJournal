@@ -275,6 +275,7 @@ export async function diveView({ id }) {
     const modeLabel = {
       moniteur: 'Encadré par un moniteur', chef: 'Guide de palanquée',
       autonome2: 'Autonome à 2', autonome3: 'Autonome à 3',
+      // « solo » n'est plus proposé, mais reste lisible sur les anciennes fiches.
       jeChef: 'J’étais chef de palanquée', solo: 'Solo',
     }[d.palanqueeMode];
 
