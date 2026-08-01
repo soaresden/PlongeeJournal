@@ -1,0 +1,463 @@
+// ============================================================
+//  Plongeurs (identités) — un carnet par identité
+// ============================================================
+
+import { el, fullName, toast, confirmBox, fmtDate, openModal } from '../lib.js';
+import { store, emptyDiver, emptyCertification, emptyMateriel,
+         libelleMateriel, CERTIFS_COURANTES } from '../store.js';
+import { BLOOD_TYPES, TYPES_MATERIEL, typeMateriel, COMBI_TYPES, COMBI_MM } from '../config.js';
+import { navigate } from '../router.js';
+
+function field(label, control, hint) {
+  return el('div.field', {},
+    label ? el('label.lbl', { text: label }) : null, control,
+    hint ? el('div.hint', { text: hint }) : null);
+}
+
+function input(type, value, oninput, attrs = {}) {
+  const n = el('input', { type, value: value ?? '', ...attrs });
+  n.addEventListener('input', () => oninput(n.value));
+  return n;
+}
+
+// ------------------------------------------------------------
+//  Liste des identités
+// ------------------------------------------------------------
+
+export async function diversView() {
+  const divers = await store.listDivers();
+  const activeId = await store.getActiveDiverId();
+  const wrap = el('div');
+
+  if (!divers.length) {
+    wrap.append(el('div.empty', {},
+      el('span.big', { text: '👤' }),
+      'Aucun plongeur enregistré.', el('br'),
+      'Chaque identité possède son propre carnet.',
+      el('div', { style: { marginTop: '20px' } },
+        el('button.btn.primary', { onclick: () => navigate('diver/new') }, 'Créer un profil')),
+    ));
+    return { title: 'Profils', node: wrap };
+  }
+
+  for (const d of divers) {
+    const st = await store.stats(d.id);
+    const active = d.id === activeId;
+    wrap.append(el('div.card.clickable', { onclick: () => navigate(`diver/${d.id}`) },
+      el('div', { style: { display: 'flex', alignItems: 'center', gap: '12px' } },
+        el('div.dive-num', { text: st.count }),
+        el('div', { style: { flex: '1', minWidth: '0' } },
+          el('div', { style: { fontWeight: '650' } },
+            fullName(d) || 'Sans nom',
+            active ? el('span.badge.tek', { text: 'actif', style: { marginLeft: '8px' } }) : null),
+          el('div', { style: { color: 'var(--text-dim)', fontSize: '13px' },
+            text: [d.niveau, d.licence && `Licence ${d.licence}`].filter(Boolean).join(' · ')
+                  || 'Profil incomplet' }),
+          el('div', { style: { color: 'var(--text-mute)', fontSize: '12.5px', marginTop: '2px' },
+            text: st.lastDate ? `Dernière plongée ${fmtDate(st.lastDate)}` : 'Carnet vide' }),
+        ),
+        active ? null : el('button.btn.sm', {
+          text: 'Activer',
+          onclick: async e => {
+            e.stopPropagation();
+            await store.setActiveDiver(d.id);
+            toast(`Carnet de ${fullName(d)} activé`);
+            navigate('divers', true);
+          },
+        }),
+      ),
+    ));
+  }
+
+  wrap.append(el('button.btn.block', {
+    style: { marginTop: '6px' },
+    onclick: () => navigate('diver/new'),
+  }, '+ Ajouter un plongeur'));
+
+  wrap.append(el('div.section', { style: { marginTop: '22px' } },
+    el('h2', { text: 'Ordinateur de plongée' }),
+    el('div.card.clickable', { onclick: () => navigate('suunto') },
+      el('div', { style: { display: 'flex', alignItems: 'center', gap: '12px' } },
+        el('div', { style: { fontSize: '26px' }, text: '⌚' }),
+        el('div', { style: { flex: 1 } },
+          el('div', { style: { fontWeight: '650' }, text: 'Suunto' }),
+          el('div', { style: { color: 'var(--text-dim)', fontSize: '13px' },
+            text: 'Importer profondeurs, horaires et courbe depuis la montre — optionnel' })),
+        el('span', { style: { color: 'var(--text-mute)' }, text: '›' }),
+      ))));
+
+  // --- Sauvegarde des données ---
+  const { backendKind } = await import('../store.js');
+  const local = backendKind() === 'local';
+
+  wrap.append(el('div.section', { style: { marginTop: '28px' } },
+    el('h2', { text: 'Mes données' }),
+    el('div.card', {},
+      el('div.hint', { style: { marginTop: '0', marginBottom: '12px' },
+        text: local
+          ? 'Les plongées sont stockées dans ce navigateur uniquement. Exporte régulièrement '
+          + 'une sauvegarde, ou branche ta base Supabase depuis les réglages.'
+          : 'Tes plongées sont dans ta base Supabase. Un export reste utile comme copie '
+          + 'hors ligne, ou pour changer de base.' }),
+      el('div.btn-row', { style: { marginTop: '0' } },
+        el('button.btn.sm', {
+          text: 'Exporter',
+          onclick: async () => {
+            const json = await store.exportAll();
+            const blob = new Blob([json], { type: 'application/json' });
+            const a = el('a', {
+              href: URL.createObjectURL(blob),
+              download: `carnet-plongee-${new Date().toISOString().slice(0, 10)}.json`,
+            });
+            a.click();
+            URL.revokeObjectURL(a.href);
+            toast('Sauvegarde téléchargée');
+          },
+        }),
+        (() => {
+          const file = el('input', { type: 'file', accept: 'application/json', hidden: true });
+          file.onchange = async () => {
+            const f = file.files?.[0]; if (!f) return;
+            try {
+              await store.importAll(await f.text(), { merge: true });
+              toast('Sauvegarde importée');
+              navigate('divers', true);
+            } catch (e) { toast(e.message, true); }
+          };
+          const btn = el('button.btn.sm', { text: 'Importer', onclick: () => file.click() });
+          return el('span', { style: { flex: '1', display: 'flex' } }, btn, file);
+        })(),
+      ),
+    ),
+  ));
+
+  return { title: 'Profils', node: wrap };
+}
+
+// ------------------------------------------------------------
+//  Fiche / formulaire d'une identité
+// ------------------------------------------------------------
+
+export async function diverFormView({ id }) {
+  const isNew = !id || id === 'new';
+  let d = isNew ? emptyDiver() : structuredClone(await store.getDiver(id));
+  if (!d) return { title: 'Introuvable', node: el('div.empty', { text: 'Profil introuvable.' }), back: true };
+
+  const set = p => Object.assign(d, p);
+  const form = el('form', { onsubmit: e => e.preventDefault() });
+
+  const st = isNew ? null : await store.stats(d.id);
+  if (st) {
+    form.append(el('div.card', {},
+      el('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } },
+        el('div', { style: { color: 'var(--text-dim)' }, text: 'Plongées enregistrées' }),
+        el('div', { style: { fontSize: '24px', fontWeight: '700', color: 'var(--accent)' },
+          text: String(st.count) }),
+      ),
+      el('div.hint', { text: 'Compteur calculé automatiquement depuis le carnet.' }),
+    ));
+  }
+
+  form.append(el('div.section', {},
+    el('h2', { text: 'Identité' }),
+    el('div.card', {},
+      el('div.row', {},
+        field('Prénom', input('text', d.prenom, v => set({ prenom: v }), { autocomplete: 'given-name' })),
+        field('Nom', input('text', d.nom, v => set({ nom: v }), { autocomplete: 'family-name' })),
+      ),
+      el('div.row', {},
+        field('N° de licence', input('text', d.licence, v => set({ licence: v }))),
+        field('Niveau détecté', el('div', {
+          style: { padding: '11px 12px', background: 'var(--bg-2)',
+                   border: '1px solid var(--line)', borderRadius: 'var(--radius-sm)',
+                   color: st?.niveau ? 'var(--accent)' : 'var(--text-mute)',
+                   fontWeight: st?.niveau ? '650' : '400' },
+          text: st?.niveau || 'aucune plongée avec un niveau',
+        }),
+          'Déduit de tes plongées : le plus haut niveau enregistré. '
+        + 'Il se met à jour tout seul le jour où tu saisis une plongée à un niveau supérieur.'),
+      ),
+      el('div.row', {},
+        field('Nationalité', input('text', d.nationalite, v => set({ nationalite: v }))),
+        field('Groupe sanguin', (() => {
+          const s = el('select');
+          s.append(el('option', { value: '', text: '—' }));
+          BLOOD_TYPES.forEach(b => s.append(el('option', { value: b, text: b })));
+          s.value = d.groupeSanguin || '';
+          s.onchange = () => set({ groupeSanguin: s.value });
+          return s;
+        })()),
+      ),
+    ),
+  ));
+
+  form.append(el('div.section', {},
+    el('h2', { text: 'Adresse' }),
+    el('div.card', {},
+      field('Rue', input('text', d.rue, v => set({ rue: v }), { autocomplete: 'street-address' })),
+      el('div.row', {},
+        field('Code postal', input('text', d.cp, v => set({ cp: v }), { inputmode: 'numeric', autocomplete: 'postal-code' })),
+        field('Ville', input('text', d.ville, v => set({ ville: v }), { autocomplete: 'address-level2' })),
+      ),
+      field('Pays', input('text', d.pays, v => set({ pays: v }))),
+    ),
+  ));
+
+  form.append(el('div.section', {},
+    el('h2', { text: 'Personne à prévenir' }),
+    el('div.card', {},
+      el('div.row', {},
+        field('Prénom', input('text', d.urgPrenom, v => set({ urgPrenom: v }))),
+        field('Nom', input('text', d.urgNom, v => set({ urgNom: v }))),
+      ),
+      el('div.row', {},
+        field('Téléphone', input('tel', d.urgTel, v => set({ urgTel: v }), { inputmode: 'tel' })),
+        field('Lien', input('text', d.urgLien, v => set({ urgLien: v }), { placeholder: 'Conjoint, parent…' })),
+      ),
+      el('div.hint', { text: 'Ces informations sont celles qu’un secouriste cherchera en premier.' }),
+    ),
+  ));
+
+  // ---------- Cartes et certifications ----------
+  //
+  // Le niveau courant se déduit des plongées ; ces cartes-là sont
+  // autre chose : des documents datés, avec un numéro, qu'on veut
+  // pouvoir retrouver (N2, Nitrox, RIFAP…).
+  if (!isNew) {
+    const listeCertifs = el('div');
+
+    async function rendreCertifs() {
+      const certifs = await store.listCertifications(d.id);
+      listeCertifs.innerHTML = '';
+
+      if (!certifs.length) {
+        listeCertifs.append(el('div.hint', { style: { marginTop: 0 },
+          text: 'Aucune carte enregistrée.' }));
+      }
+
+      certifs.forEach(c => {
+        listeCertifs.append(el('div.kv', { style: { cursor: 'pointer' },
+          onclick: () => editerCertif(c) },
+          el('span.k', {},
+            el('b', { style: { color: 'var(--text)' }, text: c.nom || 'Sans nom' }),
+            c.organisme ? el('span', { style: { color: 'var(--text-mute)' },
+              text: ` · ${c.organisme}` }) : null),
+          el('span.v', { style: { color: 'var(--text-dim)', fontWeight: '400' },
+            text: [c.numero, c.dateObtention ? fmtDate(c.dateObtention) : null]
+              .filter(Boolean).join(' · ') || '—' }),
+        ));
+      });
+    }
+
+    function editerCertif(certif) {
+      const c = certif ? { ...certif } : emptyCertification(d.id);
+      const nouveau = !certif;
+
+      openModal(close => {
+        const nom = el('input', { type: 'text', value: c.nom, list: 'certifs-connues',
+                                  placeholder: 'N2, Nitrox, RIFAP…' });
+        const org = el('input', { type: 'text', value: c.organisme, placeholder: 'FFESSM, PADI, SSI…' });
+        const num = el('input', { type: 'text', value: c.numero, placeholder: 'Numéro de la carte' });
+        const dat = el('input', { type: 'date', value: c.dateObtention });
+
+        return el('div', {},
+          el('h3', { text: nouveau ? 'Nouvelle carte' : c.nom || 'Carte' }),
+          field('Nom de la carte', nom),
+          el('datalist', { id: 'certifs-connues' },
+            CERTIFS_COURANTES.map(x => el('option', { value: x }))),
+          el('div.row', {},
+            field('Organisme', org),
+            field('Numéro', num),
+          ),
+          field('Date d’obtention', dat),
+          el('div.btn-row', {},
+            el('button.btn.ghost', { type: 'button', text: 'Annuler', onclick: close }),
+            el('button.btn.primary', { type: 'button', text: 'Enregistrer',
+              onclick: async () => {
+                if (!nom.value.trim()) return toast('Indique au moins le nom de la carte', true);
+                Object.assign(c, {
+                  nom: nom.value.trim(), organisme: org.value.trim(),
+                  numero: num.value.trim(), dateObtention: dat.value,
+                });
+                await store.saveCertification(c);
+                await rendreCertifs();
+                close();
+                toast('Carte enregistrée');
+              } }),
+          ),
+          nouveau ? null : el('div.btn-row', {},
+            el('button.btn.danger.block', { type: 'button', text: 'Supprimer cette carte',
+              onclick: async () => {
+                if (!await confirmBox(`Supprimer « ${c.nom} » ?`, 'Supprimer')) return;
+                await store.deleteCertification(c.id);
+                await rendreCertifs();
+                close();
+                toast('Carte supprimée');
+              } })),
+        );
+      });
+    }
+
+    await rendreCertifs();
+
+    form.append(el('div.section', {},
+      el('h2', { text: 'Cartes & certifications' }),
+      el('div.card', {},
+        listeCertifs,
+        el('div.hint', { text: 'Brevets, qualifications, secourisme : ce que tu dois pouvoir '
+          + 'présenter sur un bateau. Distinct du niveau, qui se déduit de tes plongées.' }),
+        el('div.btn-row', {},
+          el('button.btn.sm', { type: 'button', text: '+ Ajouter une carte',
+            onclick: () => editerCertif(null) })),
+      ),
+    ));
+  }
+
+  // ---------- Matériel personnel ----------
+  //
+  // Un tableau de lignes, pas des cases figées : on peut avoir deux
+  // détendeurs et aucun phare. On choisit le type, puis on ajoute.
+  d.materiel ||= [];
+
+  const tableauMateriel = el('div');
+
+  function rendreMateriel() {
+    tableauMateriel.innerHTML = '';
+
+    if (!d.materiel.length) {
+      tableauMateriel.append(el('div.hint', { style: { marginTop: 0 },
+        text: 'Aucun matériel enregistré.' }));
+      return;
+    }
+
+    d.materiel.forEach(m => {
+      const t = typeMateriel(m.type);
+      tableauMateriel.append(el('div.mat-ligne', { onclick: () => editerMateriel(m) },
+        el('span.mat-icone', { text: t.icone }),
+        el('div.mat-corps', {},
+          el('div.mat-type', { text: t.label }),
+          el('div.mat-detail', { text: libelleMateriel(m) })),
+        el('button.mat-suppr', {
+          type: 'button', text: '×', title: 'Retirer',
+          onclick: async e => {
+            e.stopPropagation();
+            if (!await confirmBox(`Retirer ${t.label} ?`, 'Retirer')) return;
+            d.materiel = d.materiel.filter(x => x.id !== m.id);
+            rendreMateriel();
+          },
+        }),
+      ));
+    });
+  }
+
+  function editerMateriel(existant) {
+    const m = existant ? { ...existant } : emptyMateriel();
+    const nouveau = !existant;
+
+    openModal(close => {
+      const typeSel = el('select');
+      typeSel.append(el('option', { value: '', text: '— choisir un type —' }));
+      TYPES_MATERIEL.forEach(t =>
+        typeSel.append(el('option', { value: t.id, text: `${t.icone}  ${t.label}` })));
+      typeSel.value = m.type || '';
+
+      const marque = el('input', { type: 'text', value: m.marque,
+        placeholder: 'Aqualung, Mares, Scubapro…' });
+      const modele = el('input', { type: 'text', value: m.modele, placeholder: 'Legend, Quad…' });
+      const note   = el('input', { type: 'text', value: m.note,
+        placeholder: 'Couleur, taille, verres correcteurs…' });
+
+      return el('div', {},
+        el('h3', { text: nouveau ? 'Ajouter du matériel' : typeMateriel(m.type).label }),
+        field('Type', typeSel),
+        el('div.row', {},
+          field('Marque', marque),
+          field('Modèle', modele),
+        ),
+        field('Note', note),
+        el('div.btn-row', {},
+          el('button.btn.ghost', { type: 'button', text: 'Annuler', onclick: close }),
+          el('button.btn.primary', { type: 'button', text: nouveau ? 'Ajouter' : 'Enregistrer',
+            onclick: () => {
+              if (!typeSel.value) return toast('Choisis un type de matériel', true);
+              Object.assign(m, {
+                type: typeSel.value, marque: marque.value.trim(),
+                modele: modele.value.trim(), note: note.value.trim(),
+              });
+              const i = d.materiel.findIndex(x => x.id === m.id);
+              if (i >= 0) d.materiel[i] = m; else d.materiel.push(m);
+              rendreMateriel();
+              close();
+            } }),
+        ),
+      );
+    });
+  }
+
+  rendreMateriel();
+
+  const combiSegProfil = el('div.seg');
+  COMBI_TYPES.forEach(t => {
+    const b = el('button', { type: 'button', text: t });
+    if (t === d.combiType) b.classList.add('on');
+    b.onclick = () => {
+      combiSegProfil.querySelectorAll('button').forEach(x => x.classList.remove('on'));
+      b.classList.add('on');
+      set({ combiType: t });
+    };
+    combiSegProfil.append(b);
+  });
+
+  const mmSelProfil = el('select');
+  mmSelProfil.append(el('option', { value: '', text: '— mm —' }));
+  COMBI_MM.forEach(m => mmSelProfil.append(el('option', { value: m, text: `${m} mm` })));
+  mmSelProfil.value = d.combiMm || '';
+  mmSelProfil.onchange = () => set({ combiMm: mmSelProfil.value });
+
+  form.append(el('div.section', {},
+    el('h2', { text: 'Mon matériel' }),
+    el('div.card', {},
+      el('div.hint', { style: { marginTop: 0 },
+        text: 'Saisi une fois ici, repris automatiquement sur chaque nouvelle plongée. '
+            + 'Tu peux toujours l’ajuster plongée par plongée.' }),
+      field('Combinaison habituelle', combiSegProfil),
+      field('Épaisseur', mmSelProfil),
+      el('div.lbl', { style: { marginTop: '18px' }, text: 'Mon équipement' }),
+      tableauMateriel,
+      el('div.btn-row', {},
+        el('button.btn.sm', { type: 'button', text: '+ Ajouter du matériel',
+          onclick: () => editerMateriel(null) })),
+    ),
+  ));
+
+  const buttons = el('div.btn-row', {},
+    el('button.btn.primary', {
+      type: 'button', text: isNew ? 'Créer le profil' : 'Enregistrer',
+      onclick: async () => {
+        if (!d.prenom.trim() && !d.nom.trim()) return toast('Indique au moins un nom', true);
+        await store.saveDiver(d);
+        if (isNew) await store.setActiveDiver(d.id);
+        toast('Profil enregistré');
+        navigate('divers', true);
+      },
+    }),
+  );
+
+  if (!isNew) {
+    buttons.append(el('button.btn.danger', {
+      type: 'button', text: 'Supprimer',
+      onclick: async () => {
+        if (await confirmBox(
+          `Supprimer ${fullName(d)} et ses ${st.count} plongée(s) ? Cette action est définitive.`,
+          'Tout supprimer')) {
+          await store.deleteDiver(d.id);
+          toast('Profil supprimé');
+          navigate('divers', true);
+        }
+      },
+    }));
+  }
+  form.append(buttons);
+
+  return { title: isNew ? 'Nouveau plongeur' : fullName(d) || 'Profil', node: form, back: true };
+}

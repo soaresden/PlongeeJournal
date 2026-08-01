@@ -1,0 +1,31 @@
+# ------------------------------------------------------------
+#  Rien de secret ne doit partir sur GitHub.
+#  Ce dépôt est public : mots de passe, clés et jetons n'y ont
+#  pas leur place. Les identifiants Supabase se saisissent dans
+#  l'app (Profil → Réglages) et restent dans le navigateur.
+# ------------------------------------------------------------
+
+credentials.json
+database.txt
+*.secret
+*.key
+.env
+.env.*
+secrets.json
+config.local.js
+
+# ...mais le modèle, lui, doit rester dans le dépôt
+!credentials.example.json
+
+# Sauvegardes du carnet (contiennent tes plongées)
+carnet-plongee-*.json
+
+# Outils de développement
+node_modules/
+package-lock.json
+
+# Système
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp

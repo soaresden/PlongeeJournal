@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=5">
+<meta name="theme-color" content="#06131f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Carnet de plongée">
+<title>Carnet de plongée</title>
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" href="./assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="./assets/icon-180.png">
+<link rel="stylesheet" href="./css/styles.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+</head>
+<body>
+
+<div id="app">
+  <header id="topbar">
+    <button id="backBtn" class="icon-btn" hidden aria-label="Retour">&#8592;</button>
+    <div id="topTitle">Carnet de plongée</div>
+    <div id="topActions"></div>
+  </header>
+
+  <main id="view" tabindex="-1"></main>
+
+  <nav id="tabbar">
+    <button class="tab" data-route="dives">
+      <span class="tab-ico">&#9832;</span><span class="tab-lbl">Plongées</span>
+    </button>
+    <button class="tab" data-route="stats">
+      <span class="tab-ico">&#9776;</span><span class="tab-lbl">Stats</span>
+    </button>
+    <button class="tab tab-add" data-route="dive/new" aria-label="Nouvelle plongée">
+      <span class="tab-ico">+</span>
+    </button>
+    <button class="tab" data-route="buddies">
+      <span class="tab-ico">&#129357;</span><span class="tab-lbl">Plongeurs</span>
+    </button>
+    <button class="tab" data-route="divers">
+      <span class="tab-ico">&#9673;</span><span class="tab-lbl">Profil</span>
+    </button>
+  </nav>
+</div>
+
+<div id="toast" role="status" aria-live="polite"></div>
+<div id="modalRoot"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script type="module" src="./js/app.js"></script>
+</body>
+</html>

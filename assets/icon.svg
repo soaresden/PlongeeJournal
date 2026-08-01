@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0d2438"/>
+      <stop offset="1" stop-color="#06131f"/>
+    </linearGradient>
+    <linearGradient id="ac" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#24c6dc"/>
+      <stop offset="1" stop-color="#0e8fa8"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+
+  <!-- masque de plongée -->
+  <path d="M136 196h240a26 26 0 0 1 26 26v44a70 70 0 0 1-70 70h-26a44 44 0 0 1-38-22l-12-21-12 21a44 44 0 0 1-38 22h-26a70 70 0 0 1-70-70v-44a26 26 0 0 1 26-26z"
+        fill="none" stroke="url(#ac)" stroke-width="20" stroke-linejoin="round"/>
+  <!-- sangle -->
+  <path d="M110 232H74M402 232h36" stroke="url(#ac)" stroke-width="18" stroke-linecap="round"/>
+
+  <!-- bulles -->
+  <circle cx="352" cy="150" r="16" fill="#24c6dc" opacity=".85"/>
+  <circle cx="392" cy="112" r="10" fill="#24c6dc" opacity=".6"/>
+  <circle cx="416" cy="84"  r="6"  fill="#24c6dc" opacity=".4"/>
+
+  <!-- vagues -->
+  <path d="M78 398c30-24 60-24 90 0s60 24 90 0 60-24 90 0 60 24 90 0"
+        fill="none" stroke="#90aec4" stroke-width="16" stroke-linecap="round" opacity=".55"/>
+  <path d="M78 444c30-24 60-24 90 0s60 24 90 0 60-24 90 0 60 24 90 0"
+        fill="none" stroke="#90aec4" stroke-width="16" stroke-linecap="round" opacity=".3"/>
+</svg>
