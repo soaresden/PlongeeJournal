@@ -134,6 +134,28 @@ check('credentials.example.json : mêmes champs que le vrai fichier',
   ['ProjectID', 'APIKeys_Publishable', 'APIKeys_SecretKey'].every(k => k in modele),
   Object.keys(modele).join(','));
 
+// --- 6 bis. « Le carnet a-t-il déjà un mot de passe ? » ---
+//
+// Sur un appareil neuf, `installed` est faux alors que le compte existe.
+// C'est le schéma en place qui fait foi, sinon on propose de créer un
+// mot de passe déjà créé — et Supabase répond « déjà inscrit ».
+mem.clear();
+served = null;
+s = await mod();
+
+check('appareil neuf, base vierge → première installation',
+  s.carnetDejaInstalle(false) === false);
+check('appareil neuf, schéma détecté → déverrouiller',
+  s.carnetDejaInstalle(true) === true);
+
+s.saveSettings({ installed: true });
+check('appareil connu → déverrouiller', s.carnetDejaInstalle(false) === true);
+
+mem.clear(); s = await mod();
+s.saveSettings({ schemaReady: true });
+check('schéma déjà validé sur cet appareil → déverrouiller',
+  s.carnetDejaInstalle(false) === true);
+
 // --- 7. .gitignore protège bien le fichier ---
 const ignore = fs.readFileSync(path.join(ROOT, '.gitignore'), 'utf8');
 check('.gitignore couvre credentials.json', /^credentials\.json$/m.test(ignore));

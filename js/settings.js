@@ -61,6 +61,22 @@ export function isSupabaseConfigured() {
 }
 
 /**
+ * Ce carnet a-t-il déjà un mot de passe ?
+ *
+ * `installed` est propre à l'appareil : sur un téléphone neuf ou sur le
+ * site publié, il est faux alors que le compte existe depuis longtemps.
+ * Le vrai signal est le schéma : une base initialisée a forcément servi,
+ * donc un mot de passe a été défini. On propose alors de DÉVERROUILLER,
+ * pas de créer — sinon Supabase répond « déjà inscrit » et l'utilisateur
+ * se retrouve bloqué.
+ *
+ * @param {boolean} schemaEnPlace  résultat du contrôle sur app_meta
+ */
+export function carnetDejaInstalle(schemaEnPlace = false) {
+  return !!(settings().installed || schemaEnPlace || settings().schemaReady);
+}
+
+/**
  * Accepte indifféremment un Project ID (« abcdefghijklmnop ») ou une URL
  * complète, et renvoie toujours l'URL. Le Project ID est plus simple à
  * recopier : c'est ce que Supabase affiche dans Project Settings → General.

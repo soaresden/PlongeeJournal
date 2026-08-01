@@ -10,7 +10,7 @@
 import { el, toast, confirmBox, openModal } from '../lib.js';
 import { settings, saveSettings, resetSettings, checkCredentials,
          isSupabaseConfigured, suuntoRedirectUri, appUrl,
-         toSupabaseUrl, projectId } from '../settings.js';
+         toSupabaseUrl, projectId, carnetDejaInstalle } from '../settings.js';
 import { getClient, getSession } from '../supabase.js';
 import { initStore, resetStore, backendKind } from '../store.js';
 import { securitySection } from './lock.js';
@@ -344,23 +344,36 @@ export async function setupView() {
   //  Étape 3 — le mot de passe
   // ============================================================
 
-  const motDePasseFait = !!session || settings().installed;
+  // Si le schéma est en place, la base a déjà été installée — donc un
+  // mot de passe existe, même si CET appareil ne le sait pas.
+  const dejaInstalle = carnetDejaInstalle(schemaOk);
+  const motDePasseFait = !!session;
 
-  wrap.append(step(3, 'Choisir ton mot de passe', motDePasseFait ? 'fait' : schemaOk ? 'encours' : 'attente',
+  wrap.append(step(3, dejaInstalle ? 'Déverrouiller le carnet' : 'Choisir ton mot de passe',
+    motDePasseFait ? 'fait' : schemaOk ? 'encours' : 'attente',
     session
       ? await securitySection()
       : el('div.card', {},
+          // Une base déjà initialisée a presque toujours son mot de passe :
+          // sur un appareil neuf, c'est « déverrouiller » qu'il faut proposer,
+          // pas « créer ». L'inverse menait droit à « ce carnet a déjà un
+          // mot de passe ».
           el('div.hint', { style: { marginTop: 0 },
-            text: settings().installed
-              ? 'Ton carnet a déjà un mot de passe. Déverrouille-le pour continuer.'
+            text: dejaInstalle
+              ? 'Ce carnet a déjà un mot de passe. Déverrouille-le : ton adresse te sera '
+              + 'demandée une fois sur ce nouvel appareil, puis mémorisée.'
               : 'Un seul mot de passe protège tout le carnet. Une adresse email te sera '
               + 'demandée une fois, uniquement pour pouvoir le réinitialiser si tu l’oublies.' }),
           !schemaOk
             ? el('div.hint', { style: { color: 'var(--warn)' }, text: 'Termine d’abord l’étape 2.' })
             : el('div.btn-row', {},
                 el('button.btn.primary', {
-                  text: settings().installed ? 'Déverrouiller' : 'Définir mon mot de passe',
-                  onclick: () => navigate(settings().installed ? 'verrou' : 'motdepasse'),
+                  text: dejaInstalle ? 'Déverrouiller mon carnet' : 'Définir mon mot de passe',
+                  onclick: () => navigate(dejaInstalle ? 'verrou' : 'motdepasse'),
+                }),
+                el('button.btn.sm.ghost', {
+                  text: dejaInstalle ? 'Première installation' : 'J’ai déjà un mot de passe',
+                  onclick: () => navigate(dejaInstalle ? 'motdepasse' : 'verrou'),
                 })),
           el('div.card', { style: { background: 'rgba(255,180,84,.09)', borderColor: 'var(--warn)',
                                     margin: '14px 0 0' } },

@@ -55,17 +55,19 @@ export async function lockView() {
     };
   }
 
-  // Pas encore de mot de passe défini -> on passe par l'installation
-  if (!settings().installed && !settings().accountEmail) {
-    navigate('setup', true);
-    return { title: 'Installation', node: el('div') };
-  }
-
   if (await getSession().catch(() => null)) {
     navigate('dives', true);
     return { title: '', node: el('div') };
   }
 
+  // Sur un appareil neuf (autre navigateur, téléphone, site publié), rien
+  // n'est mémorisé : ni l'adresse, ni le fait qu'un mot de passe existe.
+  // On demande donc aussi l'adresse — une seule fois, elle sera retenue.
+  const nouvelAppareil = !settings().accountEmail;
+
+  const mail = el('input', { type: 'email', value: settings().accountEmail,
+                             placeholder: 'ton@email.fr', autocomplete: 'username',
+                             inputmode: 'email', autocapitalize: 'off' });
   const pass = el('input', { type: 'password', placeholder: 'Mot de passe',
                              autocomplete: 'current-password', enterkeyhint: 'go' });
   const msg = el('div.hint');
@@ -75,10 +77,14 @@ export async function lockView() {
   const aide = el('div');
   let echecs = 0;
 
+  const adresse = () => (nouvelAppareil ? mail.value.trim() : settings().accountEmail);
+
   async function open(password) {
     unlock.disabled = true; unlock.textContent = 'Ouverture…';
     try {
-      await signIn(settings().accountEmail, password);
+      await signIn(adresse(), password);
+      // Adresse retenue : elle ne sera plus demandée sur cet appareil.
+      saveSettings({ accountEmail: adresse(), installed: true });
       resetStore();
       await initStore({ force: true });
       navigate('dives', true);
@@ -102,10 +108,11 @@ export async function lockView() {
   }
 
   async function lancerDiagnostic() {
+    if (!adresse()) return say('Indique d’abord l’adresse de ton carnet', 'var(--danger)');
     aide.innerHTML = '';
     aide.append(el('div.hint', { text: 'Analyse en cours…' }));
     try {
-      const d = await diagnostiquerConnexion(settings().accountEmail);
+      const d = await diagnostiquerConnexion(adresse());
       aide.innerHTML = '';
       aide.append(el('div.card.alerte', { style: { marginTop: '14px' } },
         el('div', { style: { fontWeight: '650', marginBottom: '6px' }, text: d.titre }),
@@ -120,7 +127,7 @@ export async function lockView() {
               el('button.btn.sm', { type: 'button', text: 'Renvoyer le mail de confirmation',
                 onclick: async e => {
                   e.target.disabled = true;
-                  try { await renvoyerConfirmation(settings().accountEmail); toast('Mail renvoyé'); }
+                  try { await renvoyerConfirmation(adresse()); toast('Mail renvoyé'); }
                   catch (err) { toast(err.message, true); e.target.disabled = false; }
                 } }))
           : null,
@@ -130,7 +137,7 @@ export async function lockView() {
                 onclick: () => navigate('motdepasse') }))
           : null,
         el('div.hint', { style: { marginBottom: 0 },
-          text: `Adresse utilisée : ${settings().accountEmail || '(aucune)'}` }),
+          text: `Adresse utilisée : ${adresse() || '(aucune)'}` }),
       ));
     } catch (e) {
       aide.innerHTML = '';
@@ -139,6 +146,9 @@ export async function lockView() {
   }
 
   unlock.onclick = () => {
+    if (nouvelAppareil && !mail.value.trim()) {
+      return say('Indique l’adresse de ton carnet', 'var(--danger)');
+    }
     if (!pass.value) return say('Saisis ton mot de passe', 'var(--danger)');
     open(pass.value);
   };
@@ -177,12 +187,13 @@ export async function lockView() {
   // ---- Mot de passe oublié ----
   const forgot = el('button.btn.sm.ghost', { type: 'button', text: 'Mot de passe oublié' });
   forgot.onclick = async () => {
-    const mail = settings().accountEmail;
-    if (!mail) return say('Aucune adresse enregistrée sur cet appareil', 'var(--danger)');
+    const cible = adresse();
+    if (!cible) return say('Indique d’abord l’adresse de ton carnet', 'var(--danger)');
+    saveSettings({ accountEmail: cible });
     forgot.disabled = true;
     try {
-      await resetPassword(mail);
-      say(`Lien de réinitialisation envoyé à ${mail}. Ouvre-le depuis cet appareil.`, 'var(--ok)');
+      await resetPassword(cible);
+      say(`Lien de réinitialisation envoyé à ${cible}. Ouvre-le depuis cet appareil.`, 'var(--ok)');
     } catch (e) {
       say(e.message, 'var(--danger)');
     } finally { forgot.disabled = false; }
@@ -191,8 +202,12 @@ export async function lockView() {
   const form = el('form', { onsubmit: e => { e.preventDefault(); unlock.click(); } },
     card(
       el('div', { style: { textAlign: 'center', color: 'var(--text-dim)', marginBottom: '18px' },
-        text: 'Carnet verrouillé' }),
-      field(null, pass),
+        text: nouvelAppareil ? 'Retrouve ton carnet' : 'Carnet verrouillé' }),
+      nouvelAppareil
+        ? field('Adresse du carnet', mail,
+            'Demandée une seule fois sur ce nouvel appareil, puis mémorisée.')
+        : null,
+      field(nouvelAppareil ? 'Mot de passe' : null, pass),
       msg,
       el('div', { style: { marginTop: '14px' } }, unlock),
       bioBox,
@@ -251,7 +266,22 @@ export async function passwordView() {
         const adresse = mail.value.trim();
         if (!adresse) { say('L’adresse email est nécessaire pour pouvoir réinitialiser', 'var(--danger)'); return; }
 
-        const res = await signUp(adresse, pw1.value);
+        let res;
+        try {
+          res = await signUp(adresse, pw1.value);
+        } catch (err) {
+          // Cas courant sur un appareil neuf : le compte existe déjà.
+          // On ne laisse pas l'utilisateur devant un mur, on l'envoie
+          // déverrouiller avec l'adresse déjà retenue.
+          if (/déjà un mot de passe|already/i.test(err.message)) {
+            saveSettings({ accountEmail: adresse, installed: true });
+            say('Ce carnet a déjà un mot de passe — direction l’écran de déverrouillage.',
+                'var(--warn)');
+            setTimeout(() => navigate('verrou', true), 1400);
+            return;
+          }
+          throw err;
+        }
         saveSettings({ accountEmail: adresse, installed: true });
 
         if (res?.session) {
