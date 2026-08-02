@@ -48,6 +48,7 @@ const viewEl  = $('#view');
 const titleEl = $('#topTitle');
 const backBtn = $('#backBtn');
 const actions = $('#topActions');
+const identEl = $('#topIdent');
 
 // ------------------------------------------------------------
 //  Indicateur de synchronisation
@@ -189,6 +190,22 @@ onRender(async path => {
   viewEl.append(result.node);
   viewEl.removeAttribute('aria-busy');
   titleEl.textContent = result.title || 'Carnet de plongée';
+
+  // Identité du carnet dans la barre du haut : ces deux lignes n'ont pas
+  // besoin d'une carte à elles seules, et la place gagnée revient au
+  // contenu — c'est visible sur le calendrier.
+  identEl.innerHTML = '';
+  identEl.hidden = !result.identite;
+  if (result.identite) {
+    const { nom, compte, derniere } = result.identite;
+    identEl.append(
+      el('span.ident-nom', { text: nom }),
+      el('span.ident-sous', { text: derniere ? `${compte} · ${derniere}` : String(compte) }));
+    identEl.onclick = () => navigate('divers');
+    document.body.classList.add('avec-ident');
+  } else {
+    document.body.classList.remove('avec-ident');
+  }
   document.title = (result.title ? result.title + ' · ' : '') + 'Carnet de plongée';
   backBtn.hidden = !result.back;
 

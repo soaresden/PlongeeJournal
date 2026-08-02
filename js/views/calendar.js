@@ -1,18 +1,23 @@
 // ============================================================
 //  Calendrier des plongées
 //
-//  Une seule grille de lecture, celle des calendriers muraux :
-//  douze colonnes (les mois), trente-et-une lignes (les jours).
-//  Chaque jour est un carré ; il se colore quand on a plongé.
+//  Une grille par année : les mois d'un côté, les jours de l'autre, un
+//  carré par jour qui se colore quand on a plongé.
+//
+//  L'ORIENTATION N'EST PAS FIXE. Un bloc 12 × 31 est trois fois plus haut
+//  que large ; transposé, il est trois fois plus large que haut. Aucune des
+//  deux formes ne convient à tous les écrans : sur un téléphone en portrait
+//  c'est la transposée qui gagne, mais dès que les filtres passent en
+//  colonne à droite, la grille reçoit toute la hauteur et c'est l'inverse.
+//  On calcule donc le carré qu'on obtiendrait dans chaque sens et on garde
+//  le plus grand. Les carrés sont toujours aussi gros que possible, et
+//  aucun des deux axes ne déborde : jamais de scroll.
 //
 //  Quatre échelles :
 //   • Tout     — toutes les années du carnet, empilées.
 //   • Année    — une année, sélectionnable.
 //   • Mois     — le mois en grand, avec les numéros.
 //   • Période  — de telle date (ou tel numéro) à telle autre.
-//
-//  La taille des carrés se déduit de la hauteur disponible, jamais
-//  de la largeur : c'est ce qui garantit qu'on ne scrolle pas.
 // ============================================================
 
 import { el, fmtDate, fmtDuration, fmtDateLong, fullName, scrollTo } from '../lib.js';
@@ -20,7 +25,8 @@ import { navigate } from '../router.js';
 
 const MOIS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin',
               'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
-const MOIS_COURT = ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'];
+const MOIS_COURT = ['jan', 'fév', 'mar', 'avr', 'mai', 'jun',
+                    'jul', 'aoû', 'sep', 'oct', 'nov', 'déc'];
 const JOURS = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
 
 const pad = n => String(n).padStart(2, '0');
@@ -29,6 +35,33 @@ const iso = d => cle(d.getFullYear(), d.getMonth(), d.getDate());
 
 /** 0 à 4 : plus il y a de plongées ce jour-là, plus le carré est chaud. */
 const chaleur = n => (n ? Math.min(4, n) : 0);
+
+// Géométrie de la grille, en pixels. La gouttière porte les noms de mois
+// (sens vertical) ou les mois en ligne (sens horizontal) ; la règle porte
+// les numéros de jours.
+export const GEO = { gouttiere: 30, regle: 11, gap: 2, minCote: 4 };
+
+/**
+ * Le plus grand carré possible dans un sens donné.
+ *  - 'v' : 12 colonnes (les mois) × 31 lignes (les jours)
+ *  - 'h' : 31 colonnes (les jours) × 12 lignes (les mois)
+ */
+export function coteDansLeSens(sens, largeur, hauteur, geo = GEO) {
+  const [cols, lignes] = sens === 'v' ? [12, 31] : [31, 12];
+  const parLaLargeur = (largeur - geo.gouttiere - cols * geo.gap) / cols;
+  const parLaHauteur = (hauteur - geo.regle - lignes * geo.gap) / lignes;
+  return Math.max(geo.minCote, Math.floor(Math.min(parLaLargeur, parLaHauteur)));
+}
+
+/**
+ * Le sens qui donne les plus gros carrés. À égalité on prend l'horizontal :
+ * les noms de mois y tiennent en toutes lettres.
+ */
+export function meilleurSens(largeur, hauteur, geo = GEO) {
+  const h = coteDansLeSens('h', largeur, hauteur, geo);
+  const v = coteDansLeSens('v', largeur, hauteur, geo);
+  return { sens: v > h ? 'v' : 'h', cote: Math.max(h, v) };
+}
 
 // ============================================================
 
@@ -56,7 +89,8 @@ export function calendrier(dives, { buddies = [] } = {}) {
   let fin = dernier;
   const compagnonsFiltre = new Set();
 
-  const barre = el('div');
+  const echelles = el('div.cal-tete');   // Tout / Année / Mois / Période
+  const barre = el('div');               // commandes propres à l'échelle
   const filtre = el('div');
   const scene = el('div');
   const detail = el('div');
@@ -116,70 +150,128 @@ export function calendrier(dives, { buddies = [] } = {}) {
   //  La grille d'une année : 12 colonnes × 31 lignes
   // ============================================================
 
+  /** Une case : soit un jour réel, soit un trou (31 février). */
+  function caseDe(an, m, j, jours, borne) {
+    if (j > new Date(an, m + 1, 0).getDate()) return el('div.j.vide');
+
+    const k = cle(an, m, j);
+    const horsBorne = borne && (k < borne.debut || k > borne.fin);
+    const duJour = horsBorne ? [] : (jours.get(k) || []);
+
+    const jourSemaine = new Date(an, m, j).getDay();     // 0 = dimanche
+    let extra = '';
+    if (jourSemaine === 0 || jourSemaine === 6) extra += ' we';
+    if (horsBorne) extra += ' hors';
+
+    const c = carre(k, duJour, extra);
+    if (horsBorne) c.disabled = true;
+    return c;
+  }
+
+  const etiquetteJour = j => (j === 1 || j % 5 === 0 || j === 31) ? String(j) : '';
+
   function grilleAnnee(an, { jours, borne = null }) {
-    const g = el('div.an12');
+    const g = el('div.an12', { class: `sens-${sens}` });
 
-    // Ligne d'en-tête : le coin vide, puis les initiales des mois.
-    g.append(el('div.an12-coin'));
-    MOIS.forEach((nom, m) => g.append(
-      el('div.an12-mois', { title: nom, text: MOIS_COURT[m] })));
-
-    for (let j = 1; j <= 31; j++) {
-      // La gouttière ne porte qu'un repère sur cinq : au-delà, à cette
-      // taille, les chiffres se marchent dessus.
-      g.append(el('div.an12-num', { text: (j === 1 || j % 5 === 0) ? String(j) : '' }));
+    if (sens === 'h') {
+      // Les jours en règle horizontale, les mois en gouttière verticale.
+      g.append(el('div.an12-coin'));
+      for (let j = 1; j <= 31; j++) g.append(el('div.an12-num', { text: etiquetteJour(j) }));
 
       for (let m = 0; m < 12; m++) {
-        const dansLeMois = j <= new Date(an, m + 1, 0).getDate();
-        if (!dansLeMois) { g.append(el('div.j.vide')); continue; }
-
-        const k = cle(an, m, j);
-        const horsBorne = borne && (k < borne.debut || k > borne.fin);
-        const duJour = horsBorne ? [] : (jours.get(k) || []);
-
-        const jourSemaine = new Date(an, m, j).getDay();     // 0 = dimanche
-        let extra = '';
-        if (jourSemaine === 0 || jourSemaine === 6) extra += ' we';
-        if (horsBorne) extra += ' hors';
-
-        const c = carre(k, duJour, extra);
-        if (horsBorne) c.disabled = true;
-        g.append(c);
+        g.append(el('div.an12-mois', { title: MOIS[m], text: MOIS_COURT[m] }));
+        for (let j = 1; j <= 31; j++) g.append(caseDe(an, m, j, jours, borne));
+      }
+    } else {
+      // Les mois en règle horizontale, les jours en gouttière verticale.
+      g.append(el('div.an12-coin'));
+      for (let m = 0; m < 12; m++) {
+        g.append(el('div.an12-mois', { title: MOIS[m], text: MOIS_COURT[m] }));
+      }
+      for (let j = 1; j <= 31; j++) {
+        g.append(el('div.an12-num', { text: etiquetteJour(j) }));
+        for (let m = 0; m < 12; m++) g.append(caseDe(an, m, j, jours, borne));
       }
     }
     return g;
   }
 
   // ------------------------------------------------------------
-  //  Hauteur : mesurée, jamais devinée.
-  //
-  //  Un `svh` compte le viewport entier — barre du haut, barre d'onglets,
-  //  sélecteur de vue et filtres compris. C'est exactement ce qui faisait
-  //  déborder la grille. On mesure donc la place qui reste réellement
-  //  sous le haut de la grille et au-dessus de la barre d'onglets.
+  //  Mesure. Une unité `svh` compte le viewport entier — barre du haut,
+  //  barre d'onglets, sélecteur de vue et filtres compris — donc elle
+  //  déborde toujours. On mesure la place réellement libre : la largeur
+  //  utile de la colonne du calendrier, et la hauteur jusqu'au sommet de
+  //  la barre d'onglets.
   // ------------------------------------------------------------
 
-  /** Nombre d'années actuellement affichées. */
+  /** Sens courant de la grille, et nombre d'années affichées. */
+  let sens = 'h';
   let nbAnnees = 1;
 
-  function ajusterHauteur() {
-    if (!scene.isConnected || !scene.querySelector('.an12')) return;
-
-    const premiere = scene.querySelector('.an12-entete') || scene.querySelector('.an12');
-    const haut = premiere.getBoundingClientRect().top;
-
-    // Le bas utile : le sommet de la barre d'onglets, qui est fixe et
-    // recouvre la fin de la zone de défilement.
+  function placeDisponible() {
+    const repere = scene.querySelector('.an12-entete') || scene.querySelector('.an12') || scene;
     const tabs = document.getElementById('tabbar');
     const bas = tabs ? tabs.getBoundingClientRect().top : window.innerHeight;
 
-    // Ce qu'il faut laisser : la légende et le rembourrage bas de la carte.
-    const reserve = 34;
-    const dispo = bas - haut - reserve;
+    return {
+      largeur: scene.clientWidth,
+      // 24 px de marge basse ; chaque année emporte son étiquette (26 px).
+      hauteur: (bas - repere.getBoundingClientRect().top - 24) / nbAnnees - 26,
+    };
+  }
 
-    // Chaque année emporte son étiquette (~26 px) en plus de sa grille.
-    const parAnnee = Math.floor(dispo / nbAnnees) - 26;
-    scene.style.setProperty('--hpx', `${Math.max(72, parAnnee)}px`);
+  /**
+   * Applique la taille des carrés. Renvoie true si le sens a changé —
+   * auquel cas la grille doit être reconstruite, l'ordre du DOM diffère.
+   */
+  function ajusterHauteur() {
+    if (!scene.isConnected || !scene.querySelector('.an12')) return false;
+
+    const { largeur, hauteur } = placeDisponible();
+    // Avant la première mise en page (ou hors navigateur) la mesure ne veut
+    // rien dire : on garde le sens en place plutôt que d'osciller.
+    if (largeur <= 0 || !Number.isFinite(hauteur)) return false;
+
+    const choix = meilleurSens(largeur, hauteur);
+    scene.style.setProperty('--cell', `${choix.cote}px`);
+
+    if (choix.sens !== sens) { sens = choix.sens; return true; }
+    return false;
+  }
+
+  /**
+   * La vue « mois » se dimensionne sur le même principe : le plus grand
+   * carré tenant à la fois dans la largeur et dans la hauteur restante.
+   * Sans ça, ses cases gardaient leur taille et débordaient vers le bas.
+   */
+  function ajusterMois() {
+    const grille = scene.querySelector('.mois-grille');
+    if (!grille || !scene.isConnected) return;
+
+    const largeur = scene.clientWidth;
+    if (largeur <= 0) return;
+
+    const tabs = document.getElementById('tabbar');
+    const bas = tabs ? tabs.getBoundingClientRect().top : window.innerHeight;
+    // 34 px : la ligne de résumé sous la grille, plus la marge basse.
+    const hauteur = bas - grille.getBoundingClientRect().top - 34;
+
+    const lignes = Number(grille.dataset.lignes) || 6;
+    const GAP = 5, ENTETE = 18;
+    const cote = Math.max(18, Math.floor(Math.min(
+      (largeur - 6 * GAP) / 7,
+      (hauteur - ENTETE - lignes * GAP) / lignes)));
+
+    scene.style.setProperty('--cellm', `${cote}px`);
+  }
+
+  /** Mesure, puis reconstruit si l'orientation doit changer. */
+  function mesurerPuisEventuellementRefaire() {
+    ajusterMois();
+    if (ajusterHauteur()) {
+      rendreScene({ sansMesure: true });
+      ajusterHauteur();
+    }
   }
 
   function vueAnnees(deLAn, aLAn, borne = null) {
@@ -213,6 +305,8 @@ export function calendrier(dives, { buddies = [] } = {}) {
     const decalage = (new Date(annee, mois, 1).getDay() + 6) % 7;   // lundi en tête
 
     const grille = el('div.mois-grille');
+    // Le nombre de semaines varie de 4 à 6 : la mesure en a besoin.
+    grille.dataset.lignes = String(Math.ceil((decalage + nbJours) / 7));
     JOURS.forEach(j => grille.append(el('div.mois-jour-nom', { text: j })));
     for (let i = 0; i < decalage; i++) grille.append(el('div'));
 
@@ -242,6 +336,7 @@ export function calendrier(dives, { buddies = [] } = {}) {
 
   function rendreBarre() {
     barre.innerHTML = '';
+    echelles.innerHTML = '';
 
     const seg = el('div.seg');
     [['tout', 'Tout'], ['annee', 'Année'], ['mois', 'Mois'], ['periode', 'Période']]
@@ -259,10 +354,9 @@ export function calendrier(dives, { buddies = [] } = {}) {
 
     // La légende voyage avec le sélecteur : en bas, elle mangeait la
     // hauteur que la grille réclamait.
-    barre.append(el('div.cal-tete', {}, seg,
-      el('div.legende', {},
-        ...[0, 1, 2, 3, 4].map(n => el('div', { class: `j n${n}` })),
-        el('span', { text: 'plongées' }))));
+    echelles.append(seg, el('div.legende', {},
+      ...[0, 1, 2, 3, 4].map(n => el('div', { class: `j n${n}` })),
+      el('span', { text: 'plongées' })));
 
     if (mode === 'annee') {
       const sel = el('select');
@@ -300,9 +394,16 @@ export function calendrier(dives, { buddies = [] } = {}) {
     }
 
     if (mode === 'periode') {
-      const par = el('div.seg', { style: { marginBottom: '10px' } });
+      const par = el('div.seg');
       let parNumero = false;
-      const zone = el('div');
+      const zone = el('div.cal-champs');
+
+      // Une paire « de … à … » sur une seule ligne : dans une colonne de
+      // 200 px, deux blocs de formulaire complets mangeaient la moitié de
+      // la hauteur que la grille réclame.
+      const paire = (etiqA, champA, etiqB, champB) => el('div.cal-paire', {},
+        el('label', {}, el('span', { text: etiqA }), champA),
+        el('label', {}, el('span', { text: etiqB }), champB));
 
       const rendreChamps = () => {
         zone.innerHTML = '';
@@ -321,18 +422,14 @@ export function calendrier(dives, { buddies = [] } = {}) {
           };
           de.addEventListener('change', appliquer);
           a.addEventListener('change', appliquer);
-          zone.append(el('div.row', {},
-            el('div.field', {}, el('label.lbl', { text: 'De la plongée n°' }), de),
-            el('div.field', {}, el('label.lbl', { text: 'À la plongée n°' }), a)));
+          zone.append(paire('de la n°', de, 'à la n°', a));
           appliquer();
         } else {
           const de = el('input', { type: 'date', value: debut });
           const a = el('input', { type: 'date', value: fin });
           de.addEventListener('change', () => { debut = de.value || premier; rendreScene(); });
           a.addEventListener('change', () => { fin = a.value || dernier; rendreScene(); });
-          zone.append(el('div.row', {},
-            el('div.field', {}, el('label.lbl', { text: 'Du' }), de),
-            el('div.field', {}, el('label.lbl', { text: 'Au' }), a)));
+          zone.append(paire('du', de, 'au', a));
         }
       };
 
@@ -402,7 +499,7 @@ export function calendrier(dives, { buddies = [] } = {}) {
     entete.onclick = () => {
       chips.hidden = !chips.hidden;
       majEntete();
-      requestAnimationFrame(ajusterHauteur);
+      requestAnimationFrame(mesurerPuisEventuellementRefaire);
     };
     majEntete();
 
@@ -411,7 +508,7 @@ export function calendrier(dives, { buddies = [] } = {}) {
 
   // ============================================================
 
-  function rendreScene() {
+  function rendreScene({ sansMesure = false } = {}) {
     scene.innerHTML = '';
 
     if (mode === 'mois') {
@@ -428,8 +525,9 @@ export function calendrier(dives, { buddies = [] } = {}) {
       scene.append(vueAnnees(anneeMin, anneeMax));
     }
 
-    // La grille est en place : on peut mesurer et dimensionner les carrés.
-    requestAnimationFrame(ajusterHauteur);
+    // La grille est en place : on peut mesurer, dimensionner les carrés,
+    // et changer d'orientation si l'autre sens fait mieux.
+    if (!sansMesure) requestAnimationFrame(mesurerPuisEventuellementRefaire);
   }
 
   rendreFiltre();
@@ -444,11 +542,16 @@ export function calendrier(dives, { buddies = [] } = {}) {
       window.removeEventListener('orientationchange', surRedimensionnement);
       return;
     }
-    ajusterHauteur();
+    mesurerPuisEventuellementRefaire();
   };
   window.addEventListener('resize', surRedimensionnement);
   window.addEventListener('orientationchange', surRedimensionnement);
 
-  wrap.append(barre, filtre, el('div.card.cal-carte', {}, scene), detail);
+  // Dès qu'il y a la place, les commandes passent en colonne à droite :
+  // elles s'appliquent en direct, donc les garder sous les yeux ne coûte
+  // rien, et la grille récupère toute la hauteur.
+  wrap.append(echelles, el('div.cal-wrap', {},
+    el('div.cal-carte', {}, scene),
+    el('div.cal-panneau', {}, barre, filtre, detail)));
   return wrap;
 }

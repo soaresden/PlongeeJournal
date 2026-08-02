@@ -52,6 +52,8 @@ const check = (name, cond, extra = '') => {
 };
 
 check('écran initial rendu', view().includes('Bienvenue'), view().slice(0, 80));
+check('barre du haut : emplacement d’identité présent',
+  !!document.getElementById('topIdent'), '');
 
 // --- Créer un plongeur -------------------------------------
 const { store, emptyDiver, emptyDive, emptyBuddy, guessWater } = await import(path.join(ROOT, 'js/store.js'));
@@ -192,10 +194,22 @@ check('fiche : Modifier et Supprimer présents',
   [...blocs[iActions].querySelectorAll('.btn')].length === 2,
   String(blocs[iActions]?.querySelectorAll('.btn').length));
 
-// --- Calendrier ---
+// --- Identité dans la barre du haut ---
 window.location.hash = '#/dives';
 window.dispatchEvent(new window.Event('hashchange'));
-await tick(120);
+await tick(150);
+
+const ident = document.getElementById('topIdent');
+check('barre du haut : le nom du plongeur y est affiché',
+  !ident.hidden && ident.querySelector('.ident-nom')?.textContent === 'Denis Testeur',
+  ident.querySelector('.ident-nom')?.textContent);
+check('barre du haut : le compte et la dernière date suivent',
+  /^2 plongées · /.test(ident.querySelector('.ident-sous')?.textContent || ''),
+  ident.querySelector('.ident-sous')?.textContent);
+check('liste : la carte d’identité ne double plus la barre du haut',
+  !view().includes('Dernière plongée le'), view().slice(0, 60));
+
+// --- Calendrier ---
 
 const versCal = [...document.querySelectorAll('#view .seg button')]
   .find(b => /Calendrier/.test(b.textContent));
@@ -212,12 +226,21 @@ if (versCal) {
   check('cal/tout : une grille par année',
     document.querySelectorAll('#view .an12').length === 1,
     String(document.querySelectorAll('#view .an12').length));
-  check('cal/tout : douze en-têtes de mois',
+  check('cal/tout : douze lignes de mois',
     document.querySelectorAll('#view .an12 .an12-mois').length === 12,
     String(document.querySelectorAll('#view .an12 .an12-mois').length));
-  check('cal/tout : 31 lignes de jours',
+  check('cal/tout : 31 colonnes de jours',
     document.querySelectorAll('#view .an12 .an12-num').length === 31,
     String(document.querySelectorAll('#view .an12 .an12-num').length));
+  check('cal/tout : la grille annonce son orientation',
+    /\bsens-[hv]\b/.test(document.querySelector('#view .an12')?.className || ''),
+    document.querySelector('#view .an12')?.className);
+  check('cal/tout : le sélecteur d’échelle est en tête, hors des colonnes',
+    !!document.querySelector('#view .cal-tete .seg')
+      && !document.querySelector('#view .cal-wrap .cal-tete'), '');
+  check('cal/tout : la grille et le panneau se partagent la largeur',
+    !!document.querySelector('#view .cal-wrap > .cal-carte .an12')
+      && !!document.querySelector('#view .cal-wrap > .cal-panneau'), '');
   check('cal/tout : 12 × 31 cases',
     document.querySelectorAll('#view .an12 .j').length === 372,
     String(document.querySelectorAll('#view .an12 .j').length));
@@ -276,6 +299,9 @@ if (versCal) {
   onglet('Mois')?.click();
   await tick(150);
   check('cal/mois : grille mensuelle', !!document.querySelector('#view .mois-grille'), '');
+  check('cal/mois : le nombre de semaines est connu de la mesure',
+    Number(document.querySelector('#view .mois-grille')?.dataset.lignes) === 5,
+    document.querySelector('#view .mois-grille')?.dataset.lignes);
   check('cal/mois : les sept jours de la semaine',
     document.querySelectorAll('#view .mois-jour-nom').length === 7,
     String(document.querySelectorAll('#view .mois-jour-nom').length));
@@ -300,6 +326,10 @@ if (versCal) {
   await tick(150);
   const bornes = document.querySelectorAll('#view input[type=date]');
   check('cal/période : deux bornes de date', bornes.length === 2, String(bornes.length));
+  check('cal/période : les bornes tiennent sur une ligne',
+    document.querySelectorAll('#view .cal-paire').length === 1
+      && document.querySelectorAll('#view .cal-champs .field').length === 0,
+    String(document.querySelectorAll('#view .cal-paire').length));
   check('cal/période : bornes pré-remplies sur tout le carnet',
     bornes[0]?.value === '2026-06-02' && bornes[1]?.value === '2026-07-14',
     `${bornes[0]?.value} → ${bornes[1]?.value}`);
@@ -326,26 +356,65 @@ if (versCal) {
     chaudsDe('#view .an12 .j').length === 2, String(chaudsDe('#view .an12 .j').length));
 }
 
-// --- Le calendrier tient-il dans la hauteur qu'on lui donne ? ---
-// jsdom ne calcule pas les mises en page : on vérifie l'arithmétique de la
-// feuille de style, qui est ce qui garantit l'absence de scroll.
+// --- Le calendrier tient-il à l'écran, dans les deux directions ? ---
+// jsdom ne calcule pas les mises en page : on teste la géométrie comme une
+// fonction pure, et on vérifie que la feuille de style s'y raccroche.
 {
-  const css = fs.readFileSync(path.join(ROOT, 'css/styles.css'), 'utf8');
-  const cell = /--cell:\s*calc\(\(var\(--hpx[^)]*\)\s*-\s*(\d+)px\s*-\s*31\s*\*\s*var\(--gap\)\)\s*\/\s*31\)/.exec(css);
-  const gap = /\.an12\s*\{[^}]*--gap:\s*([\d.]+)px/.exec(css);
-  check('cal : le côté du carré se déduit de la hauteur', !!cell && !!gap,
-    `${!!cell}/${!!gap}`);
+  const { GEO, coteDansLeSens, meilleurSens } =
+    await import(path.join(ROOT, 'js/views/calendar.js'));
+  const { gouttiere: G, regle: R, gap: g } = GEO;
 
-  if (cell && gap) {
-    const entete = Number(cell[1]), g = Number(gap[1]);
-    // Pour n'importe quelle hauteur allouée, en-tête + 31 carrés + 31
-    // gouttières doit retomber exactement sur cette hauteur.
-    const rendu = h => entete + 31 * ((h - entete - 31 * g) / 31) + 31 * g;
-    check('cal : la grille retombe pile sur la hauteur allouée',
-      [180, 260, 420, 700].every(h => Math.abs(rendu(h) - h) < 0.001), '');
-  }
+  // Un sens ne doit jamais déborder, ni en largeur ni en hauteur.
+  const tient = (sens, L, H) => {
+    const c = coteDansLeSens(sens, L, H);
+    const [cols, lignes] = sens === 'v' ? [12, 31] : [31, 12];
+    return (G + cols * c + cols * g <= L && R + lignes * c + lignes * g <= H)
+      || c === GEO.minCote;
+  };
+  const ecrans = [[320, 480], [375, 620], [420, 300], [523, 560],
+                  [311, 534], [900, 700], [1400, 400]];
+  check('cal : aucun débordement, sens horizontal',
+    ecrans.every(([L, H]) => tient('h', L, H)), '');
+  check('cal : aucun débordement, sens vertical',
+    ecrans.every(([L, H]) => tient('v', L, H)), '');
+
+  check('cal : on retient toujours le sens qui donne le plus gros carré',
+    ecrans.every(([L, H]) => {
+      const m = meilleurSens(L, H);
+      return m.cote === Math.max(coteDansLeSens('h', L, H), coteDansLeSens('v', L, H))
+        && m.cote === coteDansLeSens(m.sens, L, H);
+    }), '');
+
+  // Téléphone en portrait, commandes empilées : la transposée gagne.
+  check('cal : en portrait large et bas, les mois passent en lignes',
+    meilleurSens(360, 300).sens === 'h', JSON.stringify(meilleurSens(360, 300)));
+  // Colonne étroite et haute (commandes à droite) : l'inverse.
+  check('cal : en colonne étroite et haute, les mois passent en colonnes',
+    meilleurSens(311, 534).sens === 'v', JSON.stringify(meilleurSens(311, 534)));
+  check('cal : le panneau latéral fait grossir les carrés',
+    meilleurSens(311, 534).cote > meilleurSens(523, 200).cote,
+    `${meilleurSens(311, 534).cote} vs ${meilleurSens(523, 200).cote}`);
+
+  const css = fs.readFileSync(path.join(ROOT, 'css/styles.css'), 'utf8');
+  check('cal : les deux orientations sont stylées',
+    /\.an12\.sens-h\s*\{[^}]*repeat\(31,\s*var\(--cell/.test(css)
+      && /\.an12\.sens-v\s*\{[^}]*repeat\(12,\s*var\(--cell/.test(css), '');
+  check('cal : les lignes suivent le côté du carré',
+    /grid-auto-rows:\s*var\(--cell/.test(css), '');
+  check('cal : la vue mois est dimensionnée elle aussi',
+    /\.mois-grille\s*\{[^}]*repeat\(7,\s*var\(--cellm/.test(css)
+      && /\.j\.grand\s*\{[^}]*var\(--cellm/.test(css), '');
+  check('cal : la vue mois mesure la place restante',
+    /ajusterMois/.test(fs.readFileSync(path.join(ROOT, 'js/views/calendar.js'), 'utf8')), '');
+  const declH = /\.an12\.sens-h\s*\{([^}]*)\}/.exec(css)?.[1] || '';
+  check('cal : la gouttière du CSS est celle du calcul',
+    declH.includes(`${G}px`), `${G} / ${declH.trim()}`);
+  check('cal : les commandes passent à droite dès qu’il y a la place',
+    /@media \(min-width: 560px\)[\s\S]{0,400}\.cal-panneau\s*\{[^}]*flex:/.test(css), '');
 
   const src = fs.readFileSync(path.join(ROOT, 'js/views/calendar.js'), 'utf8');
+  check('cal : la largeur utile est mesurée',
+    /scene\.clientWidth/.test(src), '');
   check('cal : la hauteur est mesurée, pas exprimée en svh',
     /getBoundingClientRect/.test(src) && !/\d+svh/.test(src), '');
   check('cal : la barre d’onglets est déduite de la place utile',

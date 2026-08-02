@@ -48,22 +48,14 @@ export async function divesView() {
 
   const wrap = el('div');
 
-  // Bandeau carnet
+  // Le bandeau d'identité vit dans la barre du haut : une carte pour deux
+  // lignes de texte coûtait 80 px de hauteur sur chaque écran.
   const st = await store.stats(diverId);
-  wrap.append(el('div.card', {},
-    el('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' } },
-      el('div', {},
-        el('div', { style: { fontWeight: '650' }, text: fullName(diver) || 'Carnet' }),
-        el('div', { style: { color: 'var(--text-dim)', fontSize: '13px' },
-          text: st.lastDate ? `Dernière plongée le ${fmtDate(st.lastDate)}` : 'Aucune plongée enregistrée' }),
-      ),
-      el('div', { style: { textAlign: 'right' } },
-        el('div', { style: { fontSize: '26px', fontWeight: '700', color: 'var(--accent)', lineHeight: '1' },
-          text: String(st.count) }),
-        el('div', { style: { fontSize: '11px', color: 'var(--text-mute)' }, text: 'plongées' }),
-      ),
-    ),
-  ));
+  const identite = {
+    nom: fullName(diver) || 'Carnet',
+    compte: `${st.count} plongée${st.count > 1 ? 's' : ''}`,
+    derniere: st.lastDate ? fmtDate(st.lastDate) : '',
+  };
 
   if (!dives.length) {
     wrap.append(el('div.empty', {},
@@ -71,7 +63,7 @@ export async function divesView() {
       'Ton carnet est vide.', el('br'),
       'Appuie sur + pour saisir ta première plongée.',
     ));
-    return { title: 'Plongées', node: wrap };
+    return { title: 'Plongées', node: wrap, identite };
   }
 
   // Bascule liste / calendrier
@@ -174,7 +166,7 @@ export async function divesView() {
   renderList();
   await afficherVue();
 
-  return { title: 'Plongées', node: wrap };
+  return { title: 'Plongées', node: wrap, identite };
 }
 
 // ------------------------------------------------------------
