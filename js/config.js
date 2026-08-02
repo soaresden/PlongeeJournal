@@ -59,6 +59,36 @@ export const OPTIONS_AUTO = [
 ];
 
 export const VISIBILITES = ['Compliquée', 'Correcte', 'Transparente'];
+export const VISIBILITE_ICONES = {
+  'Compliquée': '🌫', 'Correcte': '👁', 'Transparente': '💎',
+};
+
+/** Temps qu'il faisait en surface. */
+export const METEO = [
+  { id: 'soleil',  label: 'Soleil',   icone: '☀️' },
+  { id: 'nuageux', label: 'Nuageux',  icone: '⛅' },
+  { id: 'couvert', label: 'Couvert',  icone: '☁️' },
+  { id: 'pluie',   label: 'Pluie',    icone: '🌧️' },
+  { id: 'vent',    label: 'Vent',     icone: '🌬️' },
+  { id: 'orage',   label: 'Orage',    icone: '⛈️' },
+  { id: 'brume',   label: 'Brume',    icone: '🌁' },
+  { id: 'neige',   label: 'Neige',    icone: '❄️' },
+];
+
+/** État de la mer / du plan d'eau. */
+export const ETAT_MER = [
+  { id: 'calme',   label: 'Calme',    icone: '🪞' },
+  { id: 'ridee',   label: 'Ridée',    icone: '〰️' },
+  { id: 'agitee',  label: 'Agitée',   icone: '🌊' },
+  { id: 'forte',   label: 'Forte',    icone: '🌊🌊' },
+];
+
+export const COURANTS = [
+  { id: 'nul',     label: 'Nul',      icone: '·' },
+  { id: 'faible',  label: 'Faible',   icone: '→' },
+  { id: 'soutenu', label: 'Soutenu',  icone: '⇉' },
+  { id: 'fort',    label: 'Fort',     icone: '⇛' },
+];
 
 export const COMBI_TYPES = ['Humide', 'Semi-étanche', 'Étanche'];
 export const COMBI_MM = ['3', '5', '5,5', '7', '7,5', '9'];

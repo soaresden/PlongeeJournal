@@ -7,6 +7,14 @@ import { store } from '../store.js';
 import { staticMap } from '../map.js';
 import { navigate } from '../router.js';
 import { profileSvg } from '../fit.js';
+import { consommation, libelleGaz } from '../store.js';
+import { METEO, ETAT_MER, COURANTS, VISIBILITE_ICONES } from '../config.js';
+
+/** Retrouve le pictogramme d'une condition à partir de sa valeur stockée. */
+const picto = (liste, valeur) => {
+  const o = liste.find(x => x.id === valeur || x.label === valeur);
+  return o ? `${o.icone} ${o.label}` : (valeur || null);
+};
 
 function typeBadge(type = '') {
   const t = type.toLowerCase();
@@ -75,10 +83,12 @@ export async function divesView() {
   const list = el('div');
   const cal = el('div');
 
+  const carteBox = el('div');
+
   const bascule = el('div.seg', { style: { marginBottom: '12px' } });
   function rendreBascule() {
     bascule.innerHTML = '';
-    [['liste', '☰ Liste'], ['calendrier', '▦ Calendrier']].forEach(([id, label]) => {
+    [['liste', '☰ Liste'], ['calendrier', '▦ Calendrier'], ['carte', '🗺 Carte']].forEach(([id, label]) => {
       const b = el('button', { type: 'button', text: label });
       if (id === vue) b.classList.add('on');
       b.onclick = async () => {
@@ -92,19 +102,23 @@ export async function divesView() {
   }
 
   async function afficherVue() {
-    const calendrierActif = vue === 'calendrier';
-    zoneRecherche.hidden = calendrierActif;
-    list.hidden = calendrierActif;
-    cal.hidden = !calendrierActif;
+    zoneRecherche.hidden = vue !== 'liste';
+    list.hidden = vue !== 'liste';
+    cal.hidden = vue !== 'calendrier';
+    carteBox.hidden = vue !== 'carte';
 
-    if (calendrierActif && !cal.childNodes.length) {
+    if (vue === 'calendrier' && !cal.childNodes.length) {
       const { calendrier } = await import('./calendar.js');
-      cal.append(calendrier(dives));
+      cal.append(calendrier(dives, { buddies }));
+    }
+    if (vue === 'carte' && !carteBox.childNodes.length) {
+      const { carteDesPlongees } = await import('./carte.js');
+      carteBox.append(carteDesPlongees(dives, { buddies }));
     }
   }
 
   rendreBascule();
-  wrap.append(bascule, zoneRecherche, list, cal);
+  wrap.append(bascule, zoneRecherche, list, cal, carteBox);
 
   function matches(d, q) {
     if (!q) return true;
@@ -192,6 +206,23 @@ export async function diveView({ id }) {
     ),
   ));
 
+  // Actions en tête : on ouvre une fiche pour la lire ou la corriger.
+  // Les chercher en bas d'une page longue n'avait aucun sens.
+  wrap.append(el('div.btn-row.actions-fiche', {},
+    el('button.btn.primary', { text: '✎ Modifier', onclick: () => navigate(`dive/${d.id}/edit`) }),
+    el('button.btn.danger', {
+      text: '🗑 Supprimer',
+      onclick: async () => {
+        if (await confirmBox(
+          `Supprimer la plongée n°${d.numero ?? ''} du ${fmtDate(d.date)} ?`, 'Supprimer')) {
+          await store.deleteDive(d.id);
+          toast('Plongée supprimée');
+          navigate('dives', true);
+        }
+      },
+    }),
+  ));
+
   // Carte
   if (d.lat != null) {
     wrap.append(el('div.section', {},
@@ -248,8 +279,11 @@ export async function diveView({ id }) {
     kv('Température fond', d.tempFond != null ? `${d.tempFond} °C` : null),
     kv('Température surface', d.tempSurface != null ? `${d.tempSurface} °C` : null),
     kv('Température air', d.tempAir != null ? `${d.tempAir} °C` : null),
-    kv('Visibilité', d.visibilite || null),
-    kv('Courant', d.courant || null),
+    kv('Météo', picto(METEO, d.meteo)),
+    kv('État de l’eau', picto(ETAT_MER, d.etatMer)),
+    kv('Visibilité', d.visibilite
+      ? `${VISIBILITE_ICONES[d.visibilite] || ''} ${d.visibilite}`.trim() : null),
+    kv('Courant', picto(COURANTS, d.courant)),
     kv('Lestage', d.lestage || null),
     kv('Combinaison', [d.combiType, d.combiMm ? `${d.combiMm} mm` : null]
       .filter(Boolean).join(' ') || d.combinaison || null),
@@ -259,6 +293,32 @@ export async function diveView({ id }) {
   );
   if (condCard.children.length) {
     wrap.append(el('div.section', {}, el('h2', { text: 'Conditions & matériel' }), condCard));
+  }
+
+  // Consommation d'air
+  const conso = consommation(d);
+  if (conso) {
+    wrap.append(el('div.section', {},
+      el('h2', { text: 'Consommation' }),
+      el('div.card', {},
+        el('div.conso-chiffres', {},
+          el('div.conso-bloc', {},
+            el('div.conso-val', { text: `${conso.surface} L/min` }),
+            el('div.conso-lbl', { text: 'à la surface' })),
+          el('div.conso-bloc', {},
+            el('div.conso-val.secondaire', { text: `${conso.brute} L/min` }),
+            el('div.conso-lbl', { text: `à ${conso.profMoy} m` })),
+          el('div.conso-bloc', {},
+            el('div.conso-val.secondaire', { text: `${conso.litres} L` }),
+            el('div.conso-lbl', { text: 'consommés' })),
+        ),
+        el('div.hint', { style: { marginBottom: 0 },
+          text: [libelleGaz(d),
+                 `${d.pressionDepart} → ${d.pressionFin} bar sur ${d.blocLitres} L`,
+                 conso.estime ? 'profondeur moyenne estimée' : null]
+            .filter(Boolean).join(' · ') }),
+      ),
+    ));
   }
 
   // Spécificités
@@ -315,7 +375,7 @@ export async function diveView({ id }) {
         el('div.obs-grid', {}, liste.map(o => el('div.obs', {},
           o.photo
             ? el('img', { src: o.photo, alt: o.nom, loading: 'lazy' })
-            : el('div.obs-noimg', { text: o.source === 'osm' ? '⚓' : '?' }),
+            : el('div.obs-noimg', { text: titre.split(' ')[0] }),
           el('div.obs-nom', { text: o.nom }),
           o.sci && o.sci !== o.nom ? el('div.obs-sci', { text: o.sci }) : null,
         ))),
@@ -337,20 +397,6 @@ export async function diveView({ id }) {
         el('div.prose', { text: v }))),
     ));
   }
-
-  wrap.append(el('div.btn-row', {},
-    el('button.btn.primary', { text: 'Modifier', onclick: () => navigate(`dive/${d.id}/edit`) }),
-    el('button.btn.danger', {
-      text: 'Supprimer',
-      onclick: async () => {
-        if (await confirmBox('Supprimer cette plongée ?', 'Supprimer')) {
-          await store.deleteDive(d.id);
-          toast('Plongée supprimée');
-          navigate('dives', true);
-        }
-      },
-    }),
-  ));
 
   return { title: `Plongée n°${d.numero ?? ''}`, node: wrap, back: true };
 }

@@ -208,7 +208,7 @@ export function locationPicker(value, onChange) {
   // ---- carte ----
   async function initMap() {
     const start = state.lat != null
-      ? { lat: state.lat, lng: state.lng, zoom: 15 }
+      ? { lat: state.lat, lng: state.lng, zoom: 13 }
       : { ...CONFIG.defaultCenter, zoom: CONFIG.defaultZoom };
 
     if (CONFIG.googleMapsKey) {
@@ -233,6 +233,7 @@ export function locationPicker(value, onChange) {
     });
     plan.addTo(map);
     L.control.layers({ 'Plan': plan, 'Satellite': sat }, {}, { position: 'topright' }).addTo(map);
+    L.control.scale({ imperial: false, position: 'bottomleft' }).addTo(map);
 
     if (state.lat != null) setMarker(state.lat, state.lng);
 
@@ -325,7 +326,9 @@ export function locationPicker(value, onChange) {
                 eau: guessWater(`${saisi} ${r.label} ${r.detail}`) || undefined,
               });
 
-              centerOn(r.lat, r.lng, approx ? 13 : 14);
+              // Zoom volontairement large : on doit reconnaître le secteur
+              // avant d'affiner. Environ 2 km de large à 13.
+              centerOn(r.lat, r.lng, approx ? 12 : 13);
               setMarker(r.lat, r.lng);
               results.hidden = true;
               toast(approx
@@ -354,7 +357,7 @@ export function locationPicker(value, onChange) {
       pos => {
         gpsBtn.textContent = '📍 Ma position';
         const { latitude: lat, longitude: lng } = pos.coords;
-        centerOn(lat, lng, 16);
+        centerOn(lat, lng, 14);
         setMarker(lat, lng);
       },
       err => {
@@ -388,17 +391,29 @@ export function locationPicker(value, onChange) {
   return searchWrap;
 }
 
-/** Petite carte en lecture seule, pour la fiche d'une plongée. */
-export function staticMap(lat, lng, height = 190) {
+/**
+ * Carte de la fiche d'une plongée.
+ *
+ * Zoom 13 : environ 2 à 3 km de large. Au-delà (14, 15…) on ne voit plus
+ * qu'une tache d'eau sans repère — impossible de reconnaître l'endroit.
+ * Les boutons de zoom et l'échelle restent disponibles pour aller voir
+ * de plus près.
+ */
+export function staticMap(lat, lng, height = 220, zoom = 13) {
   const box = el('div.map-box', { style: { height: height + 'px' } });
   requestAnimationFrame(() => {
     if (typeof L === 'undefined') return;
-    const m = L.map(box, { zoomControl: false, attributionControl: false, dragging: false,
-                           scrollWheelZoom: false, doubleClickZoom: false, touchZoom: false })
-               .setView([lat, lng], 14);
+    const m = L.map(box, {
+      zoomControl: true, attributionControl: false,
+      dragging: true, scrollWheelZoom: false, doubleClickZoom: true, touchZoom: true,
+    }).setView([lat, lng], zoom);
+
     L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
       { maxZoom: 19 }).addTo(m);
     L.marker([lat, lng]).addTo(m);
+    // Barre d'échelle : sans elle, on ne sait pas ce qu'on regarde.
+    L.control.scale({ imperial: false, position: 'bottomleft' }).addTo(m);
+
     setTimeout(() => m.invalidateSize(), 60);
   });
   return box;

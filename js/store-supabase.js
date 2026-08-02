@@ -71,14 +71,16 @@ function buddyToRow(b) {
   return {
     id: b.id, owner_id: ownerId,
     prenom: ns(b.prenom), nom: ns(b.nom), licence: ns(b.licence),
-    club: ns(b.club), moniteur: !!b.moniteur, niveau: ns(b.niveau), note: ns(b.note),
+    club: ns(b.club), moniteur: !!b.moniteur, structure: !!b.structure,
+    site_web: ns(b.siteWeb), note: ns(b.note),
   };
 }
 
 function rowToBuddy(r) {
   return {
     id: r.id, prenom: ns(r.prenom), nom: ns(r.nom), licence: ns(r.licence),
-    club: ns(r.club), moniteur: !!r.moniteur, niveau: ns(r.niveau), note: ns(r.note),
+    club: ns(r.club), moniteur: !!r.moniteur, structure: !!r.structure,
+    siteWeb: ns(r.site_web), note: ns(r.note),
     stamps: [], createdAt: r.created_at,
   };
 }
@@ -108,6 +110,7 @@ function diveToRow(d) {
     pression_depart: nnum(d.pressionDepart), pression_fin: nnum(d.pressionFin),
     temp_air: nnum(d.tempAir), temp_surface: nnum(d.tempSurface), temp_fond: nnum(d.tempFond),
     visibilite: ns(d.visibilite), courant: ns(d.courant),
+    meteo: ns(d.meteo), etat_mer: ns(d.etatMer),
     palanquee_mode: ns(d.palanqueeMode), chef_buddy_id: nz(d.chefBuddyId),
     stamp_id: nz(d.stampId), stamp_path: nz(d.stampPath),
     fait: ns(d.fait), vu: ns(d.vu), observations: ns(d.observations),
@@ -147,6 +150,7 @@ function rowToDive(r, buddyIds, suuntoKeys) {
     tempSurface: r.temp_surface === null ? null : Number(r.temp_surface),
     tempFond: r.temp_fond === null ? null : Number(r.temp_fond),
     visibilite: ns(r.visibilite), courant: ns(r.courant),
+    meteo: ns(r.meteo), etatMer: ns(r.etat_mer),
     palanqueeMode: ns(r.palanquee_mode), chefBuddyId: ns(r.chef_buddy_id),
     stampId: ns(r.stamp_id), stampPath: ns(r.stamp_path), stampImage: '',
     buddyIds: buddyIds || [],
@@ -492,7 +496,11 @@ export const supabaseStore = {
   /** Clés Suunto déjà importées, pour griser la liste. */
   async importedSuuntoKeys() { return mem.suuntoKeys || []; },
 
-  async stats(diverId) { return computeStats(mem.dives.filter(d => d.diverId === diverId)); },
+  async stats(diverId) {
+    return computeStats(
+      mem.dives.filter(d => d.diverId === diverId),
+      (mem.certifs || []).filter(c => c.diverId === diverId));
+  },
 
   async exportAll() {
     return JSON.stringify({ ...mem, _export: new Date().toISOString(), _version: 2 }, null, 2);

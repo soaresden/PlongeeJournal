@@ -7,7 +7,7 @@
 //  l'ensemble n'est à parcourir qu'une fois.
 // ============================================================
 
-import { el, toast, confirmBox, openModal } from '../lib.js';
+import { el, toast, confirmBox, openModal, scrollTo } from '../lib.js';
 import { settings, saveSettings, resetSettings, checkCredentials,
          isSupabaseConfigured, suuntoRedirectUri, appUrl,
          toSupabaseUrl, projectId, carnetDejaInstalle } from '../settings.js';
@@ -42,16 +42,32 @@ async function loadSchema() {
   return res.text();
 }
 
+/**
+ * Le schéma est-il en place ?
+ * Ne lève jamais : si le client Supabase lui-même ne peut pas se charger
+ * (hors ligne, CDN bloqué), l'assistant doit le dire, pas s'effacer.
+ */
 async function probeSchema() {
-  const sb = await getClient();
-  const { data, error } = await sb.from('app_meta').select('value').eq('key', 'schema_version').maybeSingle();
-  if (error) {
-    if (/does not exist|schema cache|relation|not find the table/i.test(error.message)) {
-      return { ready: false, reason: 'absent' };
-    }
-    return { ready: false, reason: error.message };
+  let sb;
+  try {
+    sb = await getClient();
+  } catch (e) {
+    return { ready: false, reason: `Client Supabase injoignable : ${e.message}` };
   }
-  return { ready: true, version: data?.value ?? '?' };
+
+  try {
+    const { data, error } = await sb.from('app_meta')
+      .select('value').eq('key', 'schema_version').maybeSingle();
+    if (error) {
+      if (/does not exist|schema cache|relation|not find the table/i.test(error.message)) {
+        return { ready: false, reason: 'absent' };
+      }
+      return { ready: false, reason: error.message };
+    }
+    return { ready: true, version: data?.value ?? '?' };
+  } catch (e) {
+    return { ready: false, reason: e.message };
+  }
 }
 
 const dashboardLink = (suffixe = '') => {
@@ -154,126 +170,240 @@ function tutoGoogleMaps() {
 }
 
 // ============================================================
+//  Assistant d'installation — un écran par étape
+//
+//  Un long formulaire à faire défiler donne l'impression qu'il y a
+//  tout à faire d'un coup. Ici, chaque étape occupe l'écran, la
+//  suivante n'apparaît qu'une fois la précédente franchie, et une
+//  barre de progression dit où on en est.
+// ============================================================
+
+const ETAPES = [
+  { id: 1, titre: 'Ta base', sousTitre: 'Créer le projet Supabase' },
+  { id: 2, titre: 'Les tables', sousTitre: 'Exécuter le script SQL' },
+  { id: 3, titre: 'Ton accès', sousTitre: 'Mot de passe du carnet' },
+];
+
+/** Barre de progression cliquable : on peut revenir en arrière. */
+function progression(courante, faites, aller) {
+  const barre = el('div.wiz-barre');
+
+  ETAPES.forEach((e, i) => {
+    if (i) barre.append(el('div.wiz-trait', { class: faites.has(e.id) ? 'wiz-trait fait' : 'wiz-trait' }));
+
+    const fait = faites.has(e.id);
+    const active = e.id === courante;
+    const puce = el('button.wiz-puce', {
+      type: 'button',
+      class: `wiz-puce${fait ? ' fait' : ''}${active ? ' active' : ''}`,
+      text: fait && !active ? '✓' : String(e.id),
+      title: e.sousTitre,
+      // On ne saute pas vers une étape qu'on n'a pas encore atteinte.
+      disabled: !fait && !active,
+      onclick: () => aller(e.id),
+    });
+
+    barre.append(el('div.wiz-etape', {},
+      puce,
+      el('div.wiz-label', { class: active ? 'wiz-label active' : 'wiz-label', text: e.titre })));
+  });
+
+  return barre;
+}
 
 export async function setupView() {
-  const s = settings();
   const wrap = el('div');
+  const scene = el('div');
 
   const session = isSupabaseConfigured() ? await getSession().catch(() => null) : null;
-  const aLesCles = isSupabaseConfigured();
+
+  // Carnet ouvert : ce n'est plus une installation, ce sont des réglages.
+  if (session) return { title: 'Réglages', node: await ecranReglages(session), back: true };
+
   let schemaOk = false;
+  let etape = isSupabaseConfigured() ? 2 : 1;
 
-  // ---------- Bandeau d'état ----------
-  wrap.append(el('div.card', {},
-    el('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' } },
-      el('div', {},
-        el('div', { style: { fontWeight: '650' },
-          text: session ? 'Carnet ouvert' : aLesCles ? 'Base branchée, carnet verrouillé' : 'Installation à faire' }),
-        el('div', { style: { color: 'var(--text-dim)', fontSize: '13px' },
-          text: aLesCles ? projectId() || s.supabaseUrl : 'Aucune base Supabase reliée' }),
-      ),
-      el('span', { class: 'badge ' + (session ? 'ens' : aLesCles ? 'jour' : 'nuit'),
-        text: session ? 'en ligne' : aLesCles ? 'verrouillé' : 'à installer' }),
-    ),
-  ));
+  const faites = () => {
+    const f = new Set();
+    if (isSupabaseConfigured()) f.add(1);
+    if (schemaOk) f.add(2);
+    return f;
+  };
 
-  if (!aLesCles) {
-    wrap.append(el('div.card', {},
-      el('div.hint', { style: { marginTop: 0 } },
-        'Tes plongées seront stockées dans ', el('b', { text: 'ta propre base Supabase' }),
-        ' — gratuite, et à toi seul. Il y a trois choses à faire, une seule fois. '
-      + 'Compte cinq minutes.'),
-    ));
+  async function afficher(n) {
+    etape = n;
+    scene.innerHTML = '';
+    scene.append(progression(etape, faites(), aller));
+
+    if (etape === 1) scene.append(ecranBase());
+    else if (etape === 2) scene.append(await ecranTables());
+    else scene.append(ecranAcces());
+
+    scrollTo(scene, { behavior: 'auto', block: 'start' });
   }
+
+  const aller = n => afficher(n);
 
   // ============================================================
   //  Étape 1 — le projet Supabase
   // ============================================================
 
-  const urlIn = el('input', { type: 'text', value: projectId(s.supabaseUrl) || s.supabaseUrl,
-                              placeholder: 'kwodqmaathesvqrnkvhn',
-                              autocapitalize: 'off', autocorrect: 'off', spellcheck: 'false' });
-  const keyIn = el('input', { type: 'text', value: s.supabaseKey, placeholder: 'sb_publishable_…',
-                              autocapitalize: 'off', autocorrect: 'off', spellcheck: 'false' });
-  const credMsg = el('div.hint');
-  const urlPreview = el('div.hint');
+  function ecranBase() {
+    const s = settings();
 
-  const refreshPreview = () => {
-    const u = toSupabaseUrl(urlIn.value);
-    urlPreview.textContent = u ? `→ ${u}` : '';
-  };
-  urlIn.addEventListener('input', refreshPreview);
-  refreshPreview();
+    const urlIn = el('input', { type: 'text', value: projectId(s.supabaseUrl) || s.supabaseUrl,
+                                placeholder: 'kwodqmaathesvqrnkvhn',
+                                autocapitalize: 'off', autocorrect: 'off', spellcheck: 'false' });
+    const keyIn = el('input', { type: 'text', value: s.supabaseKey, placeholder: 'sb_publishable_…',
+                                autocapitalize: 'off', autocorrect: 'off', spellcheck: 'false' });
+    const credMsg = el('div.hint');
+    const apercu = el('div.hint');
 
-  const saveCreds = el('button.btn.primary', { type: 'button', text: 'Enregistrer et tester' });
-  saveCreds.onclick = async () => {
-    const url = toSupabaseUrl(urlIn.value);
-    const key = keyIn.value.trim();
-    const errs = checkCredentials(url, key);
-    if (errs.length) {
-      credMsg.innerHTML = '';
-      errs.forEach(e => credMsg.append(el('div', { style: { color: 'var(--danger)' }, text: e })));
-      return;
-    }
-    saveCreds.textContent = 'Test en cours…'; saveCreds.disabled = true;
-    saveSettings({ supabaseUrl: url, supabaseKey: key });
-    try {
-      const sb = await getClient();
-      const { error } = await sb.auth.getSession();
-      if (error) throw error;
-      toast('Projet joignable');
-      navigate('setup', true);
-    } catch (e) {
-      credMsg.innerHTML = '';
-      credMsg.append(el('div', { style: { color: 'var(--danger)' }, text: 'Échec : ' + e.message }));
-      saveCreds.textContent = 'Enregistrer et tester'; saveCreds.disabled = false;
-    }
-  };
+    const majApercu = () => {
+      const u = toSupabaseUrl(urlIn.value);
+      apercu.textContent = u ? `→ ${u}` : '';
+    };
+    urlIn.addEventListener('input', majApercu);
+    majApercu();
 
-  wrap.append(step(1, 'Créer ta base Supabase', aLesCles ? 'fait' : 'encours',
-    el('div.card', {},
-      el('ol', { style: { margin: '0 0 14px', paddingLeft: '20px', color: 'var(--text-dim)',
-                          fontSize: '14px', lineHeight: '1.8' } },
-        el('li', {}, 'Ouvre ', el('a', { href: 'https://supabase.com/dashboard', target: '_blank',
-          rel: 'noopener', style: { color: 'var(--accent)' } }, 'supabase.com/dashboard'),
-          ' et crée un compte (gratuit).'),
-        el('li', {}, 'Bouton ', el('b', { text: 'New project' }), '. Donne-lui un nom, choisis une '
-          + 'région proche (Europe), et note le mot de passe de base qu’il te demande — '
-          + 'l’app n’en aura pas besoin, mais Supabase peut te le redemander.'),
-        el('li', {}, 'Attends que le projet soit prêt (une à deux minutes).'),
-        el('li', {}, el('b', { text: 'Project Settings → General' }), ' : copie le ',
-          el('b', { text: 'Project ID' }), '.'),
-        el('li', {}, el('b', { text: 'Project Settings → API Keys' }), ' : copie la clé ',
-          el('b', { text: 'publishable' }), ' (elle commence par ', el('code', { text: 'sb_publishable_' }), ').'),
+    const valider = el('button.btn.primary.block', { type: 'button', text: 'Vérifier et continuer' });
+    valider.onclick = async () => {
+      const url = toSupabaseUrl(urlIn.value);
+      const key = keyIn.value.trim();
+      const errs = checkCredentials(url, key);
+      if (errs.length) {
+        credMsg.innerHTML = '';
+        errs.forEach(e => credMsg.append(el('div', { style: { color: 'var(--danger)' }, text: e })));
+        return;
+      }
+      valider.disabled = true; valider.textContent = 'Vérification…';
+      saveSettings({ supabaseUrl: url, supabaseKey: key });
+      try {
+        const sb = await getClient();
+        const { error } = await sb.auth.getSession();
+        if (error) throw error;
+        toast('Projet joignable');
+        await afficher(2);
+      } catch (e) {
+        credMsg.innerHTML = '';
+        credMsg.append(el('div', { style: { color: 'var(--danger)' }, text: 'Échec : ' + e.message }));
+        valider.disabled = false; valider.textContent = 'Vérifier et continuer';
+      }
+    };
+
+    return el('div', {},
+      el('div.wiz-titre', { text: 'Créer ta base Supabase' }),
+      el('div.wiz-intro', { text: 'Tes plongées seront stockées dans ta propre base — gratuite, '
+        + 'et à toi seul. Trois étapes, une seule fois, cinq minutes.' }),
+
+      el('div.card', {},
+        el('ol.wiz-liste', {},
+          el('li', {}, 'Ouvre ', el('a', { href: 'https://supabase.com/dashboard', target: '_blank',
+            rel: 'noopener', style: { color: 'var(--accent)' } }, 'supabase.com/dashboard'),
+            ' et crée un compte (gratuit).'),
+          el('li', {}, 'Bouton ', el('b', { text: 'New project' }), '. Nom au choix, région Europe.'),
+          el('li', {}, 'Attends une à deux minutes que le projet soit prêt.'),
+          el('li', {}, el('b', { text: 'Project Settings → General' }), ' : copie le ',
+            el('b', { text: 'Project ID' }), '.'),
+          el('li', {}, el('b', { text: 'Project Settings → API Keys' }), ' : copie la clé ',
+            el('b', { text: 'publishable' }), '.'),
+        ),
       ),
-      field('Project ID', urlIn, urlPreview),
-      field('Clé publiable', keyIn,
-        el('span', {}, 'Cette clé est ', el('b', { text: 'faite pour être publique' }),
-          ' : elle n’ouvre que ce que les règles de sécurité de la base autorisent. '
-        + 'En revanche, ne colle jamais ici la clé ', el('b', { text: 'secret' }),
-          ' — l’app la refuserait.')),
-      credMsg,
-      el('div.btn-row', {}, saveCreds),
-      el('div.hint', {}, 'Astuce : en local, tu peux préremplir ces deux champs via le fichier ',
-        el('code', { text: 'credentials.json' }), ' à la racine du projet. Il est ignoré par git.'),
-    ),
-  ));
 
-  if (!aLesCles) {
-    wrap.append(el('div.hint', { style: { textAlign: 'center' },
-      text: 'Les étapes 2 et 3 apparaîtront une fois cette première validée.' }));
-    return { title: 'Installation', node: wrap, back: !!session };
+      el('div.card', {},
+        field('Project ID', urlIn, apercu),
+        field('Clé publiable', keyIn,
+          el('span', {}, 'Cette clé est ', el('b', { text: 'faite pour être publique' }),
+            ' : elle n’ouvre que ce que les règles de sécurité autorisent. '
+          + 'Jamais la clé ', el('b', { text: 'secret' }), ' — l’app la refuserait.')),
+        credMsg,
+      ),
+
+      el('div.wiz-actions', {}, valider),
+      el('div.hint', { style: { textAlign: 'center' } },
+        'En local, tu peux préremplir ces champs via le fichier ',
+        el('code', { text: 'credentials.json' }), ' — ignoré par git.'),
+    );
   }
 
   // ============================================================
   //  Étape 2 — les tables
   // ============================================================
 
-  const schemaBox = el('div.card');
-  const etape2 = step(2, 'Préparer les tables', 'encours', schemaBox);
-  wrap.append(etape2);
+  async function ecranTables() {
+    const bloc = el('div');
+    const etat = el('div.card', {}, el('div.hint', { style: { marginTop: 0 }, text: 'Vérification…' }));
 
-  async function showScript() {
+    const rendre = async () => {
+      const probe = await probeSchema();
+      schemaOk = probe.ready;
+      etat.innerHTML = '';
+
+      if (probe.ready) {
+        saveSettings({ schemaReady: true });
+        etat.append(
+          el('div', { style: { color: 'var(--ok)', fontWeight: '650', fontSize: '15px' },
+            text: `✓ Tables en place (schéma v${probe.version})` }),
+          el('div.hint', { text: 'Rien à refaire. Ce contrôle est automatique à chaque ouverture.' }),
+        );
+        actions.innerHTML = '';
+        actions.append(
+          el('button.btn.primary.block', { type: 'button', text: 'Continuer',
+            onclick: () => afficher(3) }),
+          el('button.btn.sm.ghost.block', { type: 'button', text: 'Revoir le script',
+            style: { marginTop: '8px' }, onclick: montrerScript }),
+        );
+        return;
+      }
+
+      etat.append(
+        el('div', { style: { color: 'var(--warn)', fontWeight: '650' }, text: '⚠ Tables absentes' }),
+        el('div.hint', { text: 'Le script crée les tables, les règles de sécurité qui rendent tes '
+          + 'plongées illisibles sans ton mot de passe, et le dossier des tampons. '
+          + 'Le relancer plus tard ne casse rien.' }),
+        probe.reason && probe.reason !== 'absent'
+          ? el('div.hint', { style: { color: 'var(--warn)' }, text: probe.reason }) : null,
+      );
+
+      actions.innerHTML = '';
+      actions.append(
+        el('button.btn.primary.block', { type: 'button', text: 'J’ai exécuté le script — vérifier',
+          onclick: async () => { etat.innerHTML = ''; etat.append(
+            el('div.hint', { style: { marginTop: 0 }, text: 'Vérification…' })); await rendre(); } }),
+      );
+    };
+
+    const actions = el('div.wiz-actions');
+
+    bloc.append(
+      el('div.wiz-titre', { text: 'Préparer les tables' }),
+      el('div.wiz-intro', { text: 'Une seule manipulation, une seule fois.' }),
+
+      el('div.card', {},
+        el('ol.wiz-liste', {},
+          el('li', {}, 'Copie le script ci-dessous.'),
+          el('li', {}, 'Dans Supabase : ', el('b', { text: 'SQL Editor → New query' }),
+            ', colle, puis ', el('b', { text: 'Run' }), '.'),
+          el('li', {}, 'Reviens ici et valide.'),
+        ),
+        el('div.btn-row', {},
+          copyBtn(loadSchema, '📋 Copier le script SQL'),
+          el('a', { class: 'btn sm ghost', target: '_blank', rel: 'noopener',
+            href: dashboardLink('/sql/new') }, 'Ouvrir SQL Editor'),
+        ),
+      ),
+
+      etat, actions,
+      el('div.hint', { style: { textAlign: 'center' } },
+        el('button.btn.sm.ghost', { type: 'button', text: '← Revenir aux identifiants',
+          onclick: () => afficher(1) })),
+    );
+
+    await rendre();
+    return bloc;
+  }
+
+  async function montrerScript() {
     let sql = '';
     try { sql = await loadSchema(); } catch (e) { return toast(e.message, true); }
     openModal(close => el('div', {},
@@ -285,153 +415,116 @@ export async function setupView() {
     ));
   }
 
-  async function renderSchemaStep() {
-    schemaBox.innerHTML = '';
-    schemaBox.append(el('div.hint', { style: { marginTop: 0 }, text: 'Vérification…' }));
+  // ============================================================
+  //  Étape 3 — l'accès
+  // ============================================================
 
-    const probe = await probeSchema();
-    schemaOk = probe.ready;
-    schemaBox.innerHTML = '';
+  function ecranAcces() {
+    // Une base déjà initialisée a forcément servi : un mot de passe existe,
+    // même si CET appareil ne le sait pas. On propose donc de déverrouiller.
+    const deja = carnetDejaInstalle(schemaOk);
 
-    // met à jour la pastille de l'étape
-    const puce = etape2.querySelector('span');
-    if (probe.ready) {
-      puce.textContent = '✓';
-      puce.style.background = 'var(--ok)'; puce.style.borderColor = 'var(--ok)'; puce.style.color = '#05202a';
-    }
+    return el('div', {},
+      el('div.wiz-titre', { text: deja ? 'Déverrouiller ton carnet' : 'Choisir ton mot de passe' }),
+      el('div.wiz-intro', { text: deja
+        ? 'Ce carnet a déjà un mot de passe. Ton adresse te sera demandée une fois sur '
+        + 'ce nouvel appareil, puis mémorisée.'
+        : 'Un seul mot de passe protège tout le carnet. Une adresse email est demandée '
+        + 'une fois, uniquement pour pouvoir le réinitialiser si tu l’oublies.' }),
 
-    if (probe.ready) {
-      saveSettings({ schemaReady: true });
-      schemaBox.append(
-        el('div', { style: { color: 'var(--ok)', fontWeight: '600' },
-          text: `Tables en place (schéma v${probe.version})` }),
-        el('div.hint', { text: 'Rien à refaire : ce contrôle est automatique.' }),
-        el('div.btn-row', {},
-          el('button.btn.sm.ghost', { type: 'button', text: 'Revoir le script', onclick: showScript })),
-      );
-      return;
-    }
-
-    schemaBox.append(
-      el('ol', { style: { margin: '0 0 14px', paddingLeft: '20px', color: 'var(--text-dim)',
-                          fontSize: '14px', lineHeight: '1.8' } },
-        el('li', {}, 'Copie le script ci-dessous.'),
-        el('li', {}, 'Dans Supabase : ', el('b', { text: 'SQL Editor → New query' }),
-          ', colle, puis ', el('b', { text: 'Run' }), '.'),
-        el('li', {}, 'Reviens ici et clique sur « J’ai exécuté le script ».'),
+      el('div.card', { style: { background: 'rgba(255,180,84,.09)', borderColor: 'var(--warn)' } },
+        el('div', { style: { fontWeight: '650', marginBottom: '6px' },
+          text: '⚠ À vérifier dans Supabase' }),
+        el('div.hint', { style: { marginTop: 0 },
+          text: 'Par défaut, Supabase exige de confirmer son adresse par email avant '
+              + 'd’autoriser la connexion. Tant que le lien n’est pas cliqué, le mot de passe '
+              + 'est refusé — avec un message trompeur.' }),
+        el('div.hint', {}, 'Pour un carnet personnel : ',
+          el('a', { href: dashboardLink('/auth/providers'), target: '_blank', rel: 'noopener',
+            style: { color: 'var(--accent)' } }, 'Authentication → Sign In / Providers → Email'),
+          ' → décoche ', el('b', { text: 'Confirm email' }), '.'),
+        el('div.hint', {}, 'Une fois ton mot de passe créé, décoche aussi ',
+          el('b', { text: 'Allow new users to sign up' }), ' : personne d’autre ne pourra '
+          + 'créer de compte sur ta base.'),
       ),
-      el('div.hint', { style: { marginTop: 0 },
-        text: 'Le script crée les tables, les règles de sécurité qui rendent tes plongées '
-            + 'illisibles sans ton mot de passe, et le dossier de stockage des tampons. '
-            + 'Le relancer plus tard ne casse rien.' }),
-      el('div.btn-row', {},
-        copyBtn(loadSchema, '📋 Copier le script SQL'),
-        el('a', { class: 'btn sm ghost', target: '_blank', rel: 'noopener',
-          href: dashboardLink('/sql/new') }, 'Ouvrir SQL Editor'),
+
+      el('div.wiz-actions', {},
+        el('button.btn.primary.block', {
+          type: 'button',
+          text: deja ? 'Déverrouiller mon carnet' : 'Définir mon mot de passe',
+          onclick: () => navigate(deja ? 'verrou' : 'motdepasse'),
+        }),
+        el('button.btn.ghost.block', { type: 'button', style: { marginTop: '8px' },
+          text: deja ? 'Première installation : créer le mot de passe' : 'J’ai déjà un mot de passe',
+          onclick: () => navigate(deja ? 'motdepasse' : 'verrou'),
+        }),
       ),
-      el('div.btn-row', {},
-        el('button.btn.primary', { type: 'button', text: 'J’ai exécuté le script', onclick: renderSchemaStep }),
-        el('button.btn.sm.ghost', { type: 'button', text: 'Voir le script', onclick: showScript }),
-      ),
-      probe.reason && probe.reason !== 'absent'
-        ? el('div.hint', { style: { color: 'var(--warn)' }, text: probe.reason }) : null,
+
+      el('div.hint', { style: { textAlign: 'center' } },
+        el('button.btn.sm.ghost', { type: 'button', text: '← Revenir aux tables',
+          onclick: () => afficher(2) })),
     );
   }
 
-  await renderSchemaStep();
+  wrap.append(scene);
+  await afficher(etape);
 
-  // ============================================================
-  //  Étape 3 — le mot de passe
-  // ============================================================
+  return { title: 'Installation', node: wrap };
+}
 
-  // Si le schéma est en place, la base a déjà été installée — donc un
-  // mot de passe existe, même si CET appareil ne le sait pas.
-  const dejaInstalle = carnetDejaInstalle(schemaOk);
-  const motDePasseFait = !!session;
+// ============================================================
+//  Réglages — carnet ouvert
+// ============================================================
 
-  wrap.append(step(3, dejaInstalle ? 'Déverrouiller le carnet' : 'Choisir ton mot de passe',
-    motDePasseFait ? 'fait' : schemaOk ? 'encours' : 'attente',
-    session
-      ? await securitySection()
-      : el('div.card', {},
-          // Une base déjà initialisée a presque toujours son mot de passe :
-          // sur un appareil neuf, c'est « déverrouiller » qu'il faut proposer,
-          // pas « créer ». L'inverse menait droit à « ce carnet a déjà un
-          // mot de passe ».
-          el('div.hint', { style: { marginTop: 0 },
-            text: dejaInstalle
-              ? 'Ce carnet a déjà un mot de passe. Déverrouille-le : ton adresse te sera '
-              + 'demandée une fois sur ce nouvel appareil, puis mémorisée.'
-              : 'Un seul mot de passe protège tout le carnet. Une adresse email te sera '
-              + 'demandée une fois, uniquement pour pouvoir le réinitialiser si tu l’oublies.' }),
-          !schemaOk
-            ? el('div.hint', { style: { color: 'var(--warn)' }, text: 'Termine d’abord l’étape 2.' })
-            : el('div.btn-row', {},
-                el('button.btn.primary', {
-                  text: dejaInstalle ? 'Déverrouiller mon carnet' : 'Définir mon mot de passe',
-                  onclick: () => navigate(dejaInstalle ? 'verrou' : 'motdepasse'),
-                }),
-                el('button.btn.sm.ghost', {
-                  text: dejaInstalle ? 'Première installation' : 'J’ai déjà un mot de passe',
-                  onclick: () => navigate(dejaInstalle ? 'motdepasse' : 'verrou'),
-                })),
-          el('div.card', { style: { background: 'rgba(255,180,84,.09)', borderColor: 'var(--warn)',
-                                    margin: '14px 0 0' } },
-            el('div', { style: { fontWeight: '650', marginBottom: '6px' },
-              text: '⚠ À faire AVANT de créer ton mot de passe' }),
-            el('div.hint', { style: { marginTop: 0 } },
-              'Par défaut, Supabase exige de confirmer son adresse par email avant d’autoriser '
-            + 'la connexion. Tant que le lien n’est pas cliqué, le mot de passe est refusé — '
-            + 'et le message affiché est trompeur : « mot de passe incorrect ».'),
-            el('div.hint', {}, 'Pour un carnet personnel, le plus simple est de désactiver cette '
-            + 'confirmation : ',
-              el('a', { href: dashboardLink('/auth/providers'), target: '_blank', rel: 'noopener',
-                style: { color: 'var(--accent)' } }, 'Authentication → Sign In / Providers → Email'),
-              ' → décoche ', el('b', { text: 'Confirm email' }), '.'),
-            el('div.hint', {}, 'Puis, ton mot de passe une fois créé, décoche aussi ',
-              el('b', { text: 'Allow new users to sign up' }),
-              ' au même endroit : personne d’autre ne pourra créer de compte sur ta base.'),
-          ),
-        ),
+async function ecranReglages(session) {
+  const s = settings();
+  const wrap = el('div');
+
+  wrap.append(el('div.card', {},
+    el('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' } },
+      el('div', {},
+        el('div', { style: { fontWeight: '650' }, text: 'Carnet ouvert' }),
+        el('div', { style: { color: 'var(--text-dim)', fontSize: '13px' },
+          text: projectId() || s.supabaseUrl }),
+      ),
+      el('span.badge.ens', { text: 'en ligne' }),
+    ),
   ));
 
-  // ============================================================
-  //  Options
-  // ============================================================
+  wrap.append(el('div.section', {},
+    el('h2', { text: 'Sécurité' }),
+    await securitySection(),
+  ));
 
+  // ---------- Cartes ----------
   const gmapIn = el('input', { type: 'text', value: s.googleMapsKey,
                                placeholder: 'Vide = OpenStreetMap (gratuit)',
                                autocapitalize: 'off', spellcheck: 'false' });
 
-  wrap.append(el('div.section', { style: { marginTop: '28px' } },
-    el('h2', { text: 'Options' }),
-
+  wrap.append(el('div.section', {},
+    el('h2', { text: 'Cartes' }),
     el('div.card', {},
-      el('div', { style: { fontWeight: '650', marginBottom: '4px' }, text: '🗺 Cartes' }),
       field('Clé Google Maps (optionnelle)', gmapIn,
         'Sans clé, l’app utilise OpenStreetMap avec fond satellite — largement suffisant '
       + 'pour poser un point dans l’eau.'),
-      el('div.hint', { style: { color: 'var(--warn)' },
-        text: '⚠ Une « Maps Demo Key » (obtenue sans carte bancaire) ne convient pas : '
-            + 'c’est un bac à sable bridé, filigrané, sans Places API — donc sans '
-            + 'autocomplétion de lieux — et elle n’apparaît pas dans tes Identifiants, '
-            + 'ce qui la rend impossible à restreindre. Reste sur OpenStreetMap.' }),
       el('div.btn-row', {},
         el('button.btn.sm', { type: 'button', text: 'Enregistrer',
           onclick: () => { saveSettings({ googleMapsKey: gmapIn.value.trim() }); toast('Réglage enregistré'); } }),
         el('button.btn.sm.ghost', { type: 'button', text: '🔐 Comment la protéger', onclick: tutoGoogleMaps }),
       ),
       el('div.hint', { style: { color: 'var(--warn)' },
-        text: '⚠ Une clé Google Maps est forcément visible dans le navigateur : c’est ainsi que '
-            + 'Google l’a conçue. Ce qui la protège, c’est de la restreindre à TON site. '
-            + 'Sans restriction, n’importe qui peut la récupérer et consommer ton quota.' }),
+        text: '⚠ Une « Maps Demo Key » (obtenue sans carte bancaire) ne convient pas : bac à '
+            + 'sable bridé, sans Places API, impossible à restreindre. Reste sur OpenStreetMap.' }),
     ),
+  ));
 
+  // ---------- Suunto ----------
+  wrap.append(el('div.section', {},
+    el('h2', { text: 'Ordinateur de plongée' }),
     el('div.card', {},
-      el('div', { style: { fontWeight: '650', marginBottom: '4px' }, text: '⌚ Ordinateur de plongée Suunto' }),
       el('div.hint', { style: { marginTop: 0 },
-        text: 'Optionnel, et à faire plus tard : la liaison exige un compte développeur Suunto '
-            + 'et le déploiement d’une fonction côté serveur. La marche à suivre est dans le README.' }),
+        text: 'Optionnel : la liaison Suunto exige un compte développeur et le déploiement '
+            + 'd’une fonction côté serveur. Marche à suivre dans le README.' }),
       field('URL de redirection à déclarer chez Suunto',
         el('input', { type: 'text', readonly: true, value: suuntoRedirectUri() })),
       el('div.btn-row', {},
@@ -441,24 +534,32 @@ export async function setupView() {
     ),
   ));
 
-  // ============================================================
-  //  Maintenance
-  // ============================================================
-
+  // ---------- Maintenance ----------
   wrap.append(el('div.section', {},
     el('h2', { text: 'Maintenance' }),
     el('div.card', {},
-      session
-        ? el('div.btn-row', { style: { marginTop: 0 } },
-            el('button.btn.sm', { type: 'button', text: 'Recharger depuis la base',
-              onclick: async () => {
-                try { await initStore({ force: true }); toast('Carnet rechargé'); }
-                catch (e) { toast(e.message, true); }
-              } }))
-        : null,
+      el('div.btn-row', { style: { marginTop: 0 } },
+        el('button.btn.sm', { type: 'button', text: 'Recharger depuis la base',
+          onclick: async () => {
+            try { await initStore({ force: true }); toast('Carnet rechargé'); }
+            catch (e) { toast(e.message, true); }
+          } }),
+        el('button.btn.sm.ghost', { type: 'button', text: 'Revoir le script SQL',
+          onclick: async () => {
+            let sql = '';
+            try { sql = await loadSchema(); } catch (e) { return toast(e.message, true); }
+            openModal(close => el('div', {},
+              el('h3', { text: 'Script d’initialisation' }),
+              el('textarea', { readonly: true, value: sql,
+                style: { height: '46vh', fontSize: '11px', fontFamily: 'monospace' } }),
+              el('div.btn-row', {}, copyBtn(sql, '📋 Copier'),
+                el('button.btn.ghost', { type: 'button', text: 'Fermer', onclick: close })),
+            ));
+          } }),
+      ),
       el('div.hint', { text: 'Oublier la configuration efface les identifiants de CET appareil. '
-        + 'Ta base Supabase et tes plongées ne sont pas touchées : il suffira de recoller le '
-        + 'Project ID et la clé pour les retrouver.' }),
+        + 'Ta base et tes plongées ne sont pas touchées : il suffira de recoller le Project ID '
+        + 'et la clé pour les retrouver.' }),
       el('div.btn-row', {},
         el('button.btn.danger', { type: 'button', text: 'Oublier cette configuration',
           onclick: async () => {
@@ -471,5 +572,5 @@ export async function setupView() {
     ),
   ));
 
-  return { title: session ? 'Réglages' : 'Installation', node: wrap, back: !!session };
+  return wrap;
 }

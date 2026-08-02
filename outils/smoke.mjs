@@ -117,7 +117,7 @@ check('plongées de nuit', st.nuit === 1, String(st.nuit));
 // --- Parcours de tous les écrans ---------------------------
 const routes = ['dives', `dive/${dv.id}`, `dive/${dv.id}/edit`, 'dive/new',
                 'divers', `diver/${d.id}`, 'buddies', `buddy/${b.id}`, 'stats',
-                'setup', 'verrou', 'login', 'motdepasse', 'suunto', 'suunto?ok=1',
+                'setup', 'verrou', 'login', 'motdepasse', 'suunto', 'suunto?ok=1', 'urgence',
                 'route/inexistante'];
 for (const r of routes) {
   window.location.hash = '#/' + r;
@@ -135,6 +135,23 @@ await tick(90);
 check('la liste affiche les deux lieux',
   view().includes('Lac de Beaumont-sur-Oise') && view().includes('Calanque de Sormiou'), view().slice(0, 150));
 check('la liste affiche le compagnon', view().includes('Jean Moniteur'), '');
+
+// --- Assistant d'installation : un écran par étape ---
+window.location.hash = '#/setup';
+window.dispatchEvent(new window.Event('hashchange'));
+await tick(150);
+check('installation : barre de progression à 3 étapes',
+  document.querySelectorAll('#view .wiz-etape').length === 3,
+  String(document.querySelectorAll('#view .wiz-etape').length));
+check('installation : une seule étape affichée',
+  document.querySelectorAll('#view .wiz-titre').length === 1,
+  String(document.querySelectorAll('#view .wiz-titre').length));
+check('installation : étapes non atteintes verrouillées',
+  document.querySelectorAll('#view .wiz-puce[disabled]').length === 2,
+  String(document.querySelectorAll('#view .wiz-puce[disabled]').length));
+check('installation : commence à l’étape 1',
+  document.querySelector('#view .wiz-puce.active')?.textContent === '1',
+  document.querySelector('#view .wiz-puce.active')?.textContent);
 
 // --- Écran Plongeurs : vignettes, pas des lignes ---
 window.location.hash = '#/buddies';
@@ -166,6 +183,15 @@ check('fiche : chef de palanquée marqué', detail.includes('Jean Moniteur ★')
 check('fiche : comptes-rendus', detail.includes('Remontée assistée') && detail.includes('Brochet'), '');
 check('fiche : tampon affiché', !!document.querySelector('#view .stamp img'), '');
 
+// Les actions se lisent en haut de fiche, pas au bout d'un long défilement.
+const racine = document.querySelector('#view').firstElementChild;
+const blocs = [...racine.children];
+const iActions = blocs.findIndex(c => c.classList.contains('actions-fiche'));
+check('fiche : actions en tête', iActions === 1, `position ${iActions}`);
+check('fiche : Modifier et Supprimer présents',
+  [...blocs[iActions].querySelectorAll('.btn')].length === 2,
+  String(blocs[iActions]?.querySelectorAll('.btn').length));
+
 // --- Calendrier ---
 window.location.hash = '#/dives';
 window.dispatchEvent(new window.Event('hashchange'));
@@ -175,21 +201,171 @@ const versCal = [...document.querySelectorAll('#view .seg button')]
   .find(b => /Calendrier/.test(b.textContent));
 check('bascule calendrier présente', !!versCal, '');
 if (versCal) {
+  localStorage.removeItem('plongee-journal:cal-mode');
   versCal.click();
+  await tick(200);
+
+  const carres = sel => [...document.querySelectorAll(sel)];
+  const chaudsDe = sel => carres(sel).filter(c => /\bn[1-4]\b/.test(c.className));
+
+  // --- Vue « tout » : la grille murale, 12 colonnes × 31 lignes ---
+  check('cal/tout : une grille par année',
+    document.querySelectorAll('#view .an12').length === 1,
+    String(document.querySelectorAll('#view .an12').length));
+  check('cal/tout : douze en-têtes de mois',
+    document.querySelectorAll('#view .an12 .an12-mois').length === 12,
+    String(document.querySelectorAll('#view .an12 .an12-mois').length));
+  check('cal/tout : 31 lignes de jours',
+    document.querySelectorAll('#view .an12 .an12-num').length === 31,
+    String(document.querySelectorAll('#view .an12 .an12-num').length));
+  check('cal/tout : 12 × 31 cases',
+    document.querySelectorAll('#view .an12 .j').length === 372,
+    String(document.querySelectorAll('#view .an12 .j').length));
+
+  // 2026 : 7 jours inexistants (février 29/30/31, et les 31 des mois courts).
+  check('cal/tout : les jours qui n’existent pas sont vides',
+    document.querySelectorAll('#view .an12 .j.vide').length === 7,
+    String(document.querySelectorAll('#view .an12 .j.vide').length));
+  check('cal/tout : les week-ends sont marqués',
+    document.querySelectorAll('#view .an12 .j.we').length === 104,
+    String(document.querySelectorAll('#view .an12 .j.we').length));
+
+  check('cal/tout : étiquette et compteur de l’année',
+    document.querySelector('#view .an12-an')?.textContent === '2026'
+      && /2 plongées/.test(document.querySelector('#view .an12-n')?.textContent || ''),
+    document.querySelector('#view .an12-n')?.textContent);
+
+  check('cal/tout : deux jours colorés', chaudsDe('#view .an12 .j').length === 2,
+    String(chaudsDe('#view .an12 .j').length));
+  check('cal/tout : les autres jours ne sont pas cliquables',
+    carres('#view .an12 button.j').filter(c => !c.disabled).length === 2,
+    String(carres('#view .an12 button.j').filter(c => !c.disabled).length));
+
+  chaudsDe('#view .an12 .j').pop()?.click();
+  await tick(100);
+  check('cal/tout : le jour se déplie', view().includes('Lac de Beaumont-sur-Oise'), '');
+
+  // --- Filtre par compagnon ---
+  const entete = document.querySelector('#view .filtre-entete');
+  check('cal : filtre par compagnon proposé', !!entete, '');
+  entete?.click();
+  await tick(40);
+  const chipJean = [...document.querySelectorAll('#view .filtre-card .chip')]
+    .find(c => /Jean/.test(c.textContent));
+  check('cal : le compagnon apparaît avec son compte',
+    /Jean Moniteur · 1/.test(chipJean?.textContent || ''), chipJean?.textContent);
+  chipJean?.click();
+  await tick(120);
+  check('cal : le filtre ne garde que la plongée partagée',
+    chaudsDe('#view .an12 .j').length === 1, String(chaudsDe('#view .an12 .j').length));
+  chipJean?.click();
+  await tick(120);
+
+  const onglet = nom => [...document.querySelectorAll('#view .seg button')]
+    .find(b => b.textContent.trim() === nom);
+
+  // --- Vue « année » ---
+  onglet('Année')?.click();
   await tick(150);
-  // Les deux plongées sont sur deux mois différents : juillet n'en montre qu'une.
-  const cases = document.querySelectorAll('#view .cal-case.a-plonge');
-  check('calendrier : seul le jour plongé du mois est marqué', cases.length === 1, String(cases.length));
-  check('calendrier : les autres jours ne sont pas cliquables',
-    [...document.querySelectorAll('#view .cal-case:not(.vide)')].filter(c => !c.disabled).length === 1);
-  check('calendrier : en-têtes de semaine',
-    document.querySelectorAll('#view .cal-jour-nom').length === 7,
-    String(document.querySelectorAll('#view .cal-jour-nom').length));
-  const moisAffiche = document.querySelector('#view .mois')?.textContent || '';
-  check('calendrier : ouvre sur la dernière plongée', /juillet 2026/i.test(moisAffiche), moisAffiche);
-  cases[0]?.click();
-  await tick(80);
-  check('calendrier : le jour se déplie', view().includes('Lac de Beaumont-sur-Oise'), '');
+  check('cal/année : une seule grille', document.querySelectorAll('#view .an12').length === 1, '');
+  check('cal/année : sélecteur sur la dernière année',
+    document.querySelector('#view .cal-nav select')?.value === '2026',
+    document.querySelector('#view .cal-nav select')?.value);
+
+  // --- Vue « mois » ---
+  onglet('Mois')?.click();
+  await tick(150);
+  check('cal/mois : grille mensuelle', !!document.querySelector('#view .mois-grille'), '');
+  check('cal/mois : les sept jours de la semaine',
+    document.querySelectorAll('#view .mois-jour-nom').length === 7,
+    String(document.querySelectorAll('#view .mois-jour-nom').length));
+  const selects = document.querySelectorAll('#view .cal-nav select');
+  check('cal/mois : ouvre sur le mois de la dernière plongée',
+    selects[0]?.value === '6' && selects[1]?.value === '2026',
+    `${selects[0]?.value}/${selects[1]?.value}`);
+  check('cal/mois : juillet fait 31 jours',
+    document.querySelectorAll('#view .mois-grille .j.grand').length === 31,
+    String(document.querySelectorAll('#view .mois-grille .j.grand').length));
+  check('cal/mois : une seule journée plongée en juillet',
+    carres('#view .mois-grille .j.grand').filter(c => !c.disabled).length === 1,
+    String(carres('#view .mois-grille .j.grand').filter(c => !c.disabled).length));
+  document.querySelector('#view .cal-nav .btn')?.click();
+  await tick(120);
+  check('cal/mois : navigation vers juin',
+    document.querySelectorAll('#view .cal-nav select')[0]?.value === '5',
+    document.querySelectorAll('#view .cal-nav select')[0]?.value);
+
+  // --- Vue « période » ---
+  onglet('Période')?.click();
+  await tick(150);
+  const bornes = document.querySelectorAll('#view input[type=date]');
+  check('cal/période : deux bornes de date', bornes.length === 2, String(bornes.length));
+  check('cal/période : bornes pré-remplies sur tout le carnet',
+    bornes[0]?.value === '2026-06-02' && bornes[1]?.value === '2026-07-14',
+    `${bornes[0]?.value} → ${bornes[1]?.value}`);
+  check('cal/période : même grille murale', !!document.querySelector('#view .an12'), '');
+
+  bornes[0].value = '2026-07-01';
+  bornes[0].dispatchEvent(new window.Event('change'));
+  await tick(120);
+  check('cal/période : hors bornes grisé, pas masqué',
+    document.querySelectorAll('#view .an12 .j.hors').length === 351,
+    String(document.querySelectorAll('#view .an12 .j.hors').length));
+  check('cal/période : une seule plongée dans la fenêtre',
+    chaudsDe('#view .an12 .j').length === 1, String(chaudsDe('#view .an12 .j').length));
+
+  const parNumeros = onglet('Par numéros');
+  check('cal/période : bascule par numéros', !!parNumeros, '');
+  parNumeros?.click();
+  await tick(150);
+  check('cal/période : les numéros remplacent les dates',
+    document.querySelectorAll('#view input[type=date]').length === 0
+      && document.querySelectorAll('#view input[inputmode=numeric]').length === 2,
+    String(document.querySelectorAll('#view input[inputmode=numeric]').length));
+  check('cal/période : les numéros couvrent tout le carnet',
+    chaudsDe('#view .an12 .j').length === 2, String(chaudsDe('#view .an12 .j').length));
+}
+
+// --- Le calendrier tient-il dans la hauteur qu'on lui donne ? ---
+// jsdom ne calcule pas les mises en page : on vérifie l'arithmétique de la
+// feuille de style, qui est ce qui garantit l'absence de scroll.
+{
+  const css = fs.readFileSync(path.join(ROOT, 'css/styles.css'), 'utf8');
+  const cell = /--cell:\s*calc\(\(var\(--hpx[^)]*\)\s*-\s*(\d+)px\s*-\s*31\s*\*\s*var\(--gap\)\)\s*\/\s*31\)/.exec(css);
+  const gap = /\.an12\s*\{[^}]*--gap:\s*([\d.]+)px/.exec(css);
+  check('cal : le côté du carré se déduit de la hauteur', !!cell && !!gap,
+    `${!!cell}/${!!gap}`);
+
+  if (cell && gap) {
+    const entete = Number(cell[1]), g = Number(gap[1]);
+    // Pour n'importe quelle hauteur allouée, en-tête + 31 carrés + 31
+    // gouttières doit retomber exactement sur cette hauteur.
+    const rendu = h => entete + 31 * ((h - entete - 31 * g) / 31) + 31 * g;
+    check('cal : la grille retombe pile sur la hauteur allouée',
+      [180, 260, 420, 700].every(h => Math.abs(rendu(h) - h) < 0.001), '');
+  }
+
+  const src = fs.readFileSync(path.join(ROOT, 'js/views/calendar.js'), 'utf8');
+  check('cal : la hauteur est mesurée, pas exprimée en svh',
+    /getBoundingClientRect/.test(src) && !/\d+svh/.test(src), '');
+  check('cal : la barre d’onglets est déduite de la place utile',
+    /getElementById\('tabbar'\)/.test(src), '');
+  check('cal : la grille se recalcule au redimensionnement',
+    /addEventListener\('resize'/.test(src) && /orientationchange/.test(src), '');
+}
+
+// --- Carte des plongées ---
+const versCarte = [...document.querySelectorAll('#view .seg button')]
+  .find(b => /Carte/.test(b.textContent));
+check('bascule carte présente', !!versCarte, '');
+if (versCarte) {
+  versCarte.click();
+  await tick(220);
+  check('carte : conteneur rendu', !!document.querySelector('#view .carte-plein'), '');
+  check('carte : les deux lieux comptés',
+    /2 lieux · 2 plongée/.test(view()), view().slice(0, 160));
+  check('carte : filtre par compagnon aussi disponible',
+    !!document.querySelector('#view .filtre-entete'), '');
 }
 
 window.location.hash = `#/dive/${dv.id}/edit`;

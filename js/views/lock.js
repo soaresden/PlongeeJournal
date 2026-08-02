@@ -12,6 +12,7 @@ import { el, toast } from '../lib.js';
 import { signIn, signUp, resetPassword, changePassword, getSession, signOut,
          diagnostiquerConnexion, renvoyerConfirmation } from '../supabase.js';
 import { settings, saveSettings, isSupabaseConfigured } from '../settings.js';
+import { existe as ficheUrgenceExiste, memoriser } from '../urgence.js';
 import { initStore, resetStore } from '../store.js';
 import * as bio from '../biometric.js';
 import { navigate } from '../router.js';
@@ -214,7 +215,11 @@ export async function lockView() {
       el('div', { style: { textAlign: 'center', marginTop: '10px' } }, forgot),
       aide,
     ),
-    el('div', { style: { textAlign: 'center' } },
+    el('div', { style: { display: 'flex', justifyContent: 'center', gap: '8px' } },
+      ficheUrgenceExiste()
+        ? el('button.btn.sm.urgence-lien', { type: 'button', text: '🆘 Fiche d’urgence',
+            onclick: () => navigate('urgence') })
+        : null,
       el('button.btn.sm.ghost', { type: 'button', text: '⚙ Réglages', onclick: () => navigate('setup') })),
   );
 

@@ -20,7 +20,7 @@ Object.defineProperty(globalThis, 'crypto', { configurable: true, value: {
 
 const { emptyDive, emptyBuddy, emptyDiver, emptyCertification, emptyMateriel,
         libelleMateriel, valeursMateriel, reconcileTimes, validerPlongee,
-        optionsAutomatiques, appliquerOptionsAuto, niveauCourant,
+        optionsAutomatiques, appliquerOptionsAuto, niveauCourant, consommation,
         plongeesParNiveau, parClub, libelleGaz, pmuNitrox } =
   await import(path.join(ROOT, 'js/model.js'));
 const { NIVEAUX, rangNiveau, GAZ, gazParId, DIVE_OPTIONS, TYPES_MATERIEL, typeMateriel,
@@ -109,8 +109,8 @@ check('plongée : trois catégories « vu »',
 check('compagnon : champ licence', 'licence' in emptyBuddy());
 check('compagnon : champ club', 'club' in emptyBuddy());
 check('compagnon : moniteur booléen', emptyBuddy().moniteur === false);
-check('compagnon : plus de niveau imposé',
-  emptyBuddy().niveau === '', emptyBuddy().niveau);
+check('compagnon : plus de champ niveau du tout',
+  !('niveau' in emptyBuddy()), String(emptyBuddy().niveau));
 
 // ------------------------------------------------------------
 //  Étiquettes automatiques
@@ -170,6 +170,44 @@ check('PMU ne surestime jamais',
 check('PMU refuse une valeur absurde', pmuNitrox(0) === null && pmuNitrox(null) === null);
 
 // ------------------------------------------------------------
+//  Consommation d'air
+// ------------------------------------------------------------
+
+const conso = p => consommation(Object.assign(ok(), p));
+
+let c = conso({ pressionDepart: 200, pressionFin: 50, blocLitres: 12, dureeMin: 45, profMoy: 15 });
+check('litres consommés = ΔP × volume', c.litres === 1800, String(c.litres));
+check('consommation au fond', c.brute === 40, String(c.brute));
+check('consommation ramenée à la surface', c.surface === 16, String(c.surface));
+check('profondeur moyenne non estimée', c.estime === false);
+
+c = conso({ pressionDepart: 200, pressionFin: 50, blocLitres: 12, dureeMin: 45,
+            profMax: 30, profMoy: null });
+check('sans profondeur moyenne : estimée à 60 %', c.profMoy === 18, String(c.profMoy));
+check('estimation signalée', c.estime === true);
+
+c = conso({ pressionDepart: 200, pressionFin: 80, blocLitres: 12, dureeMin: 50,
+            profMoy: 20, blocType: 'Bi-bouteilles' });
+check('bi-bouteilles : volume doublé', c.litres === 2880, String(c.litres));
+
+check('pressions manquantes : pas de calcul',
+  conso({ pressionDepart: null, pressionFin: null }) === null);
+check('volume manquant : pas de calcul',
+  conso({ pressionDepart: 200, pressionFin: 50, blocLitres: null, dureeMin: 45 }) === null);
+check('pression finale supérieure : refusé',
+  conso({ pressionDepart: 50, pressionFin: 200, blocLitres: 12, dureeMin: 45 }) === null);
+check('la surface est toujours ≤ au fond',
+  conso({ pressionDepart: 200, pressionFin: 50, blocLitres: 12, dureeMin: 45, profMoy: 30 }).surface
+  < conso({ pressionDepart: 200, pressionFin: 50, blocLitres: 12, dureeMin: 45, profMoy: 30 }).brute);
+
+// ------------------------------------------------------------
+//  Conditions météo
+// ------------------------------------------------------------
+
+check('plongée : champ météo', 'meteo' in emptyDive('d', 1));
+check('plongée : état de l’eau', 'etatMer' in emptyDive('d', 1));
+
+// ------------------------------------------------------------
 //  Niveaux de préparation
 // ------------------------------------------------------------
 
@@ -179,6 +217,25 @@ check('PN2 se classe sous N2', rangNiveau('PN2') < rangNiveau('N2'));
 check('PN2 se classe au-dessus de N1', rangNiveau('PN2') > rangNiveau('N1'));
 check('PN3 sous N3 et au-dessus de N2',
   rangNiveau('PN3') < rangNiveau('N3') && rangNiveau('PN3') > rangNiveau('N2'));
+// --- Le niveau vient aussi des cartes ---
+check('carte N3 l’emporte sur des plongées en N1',
+  niveauCourant(
+    [{ date: '2025-01-01', niveau: 'N1' }],
+    [{ nom: 'N3', dateObtention: '2024-06-01' }, { nom: 'Nitrox', dateObtention: '2021-01-01' }]
+  ) === 'N3',
+  niveauCourant([{ date: '2025-01-01', niveau: 'N1' }],
+    [{ nom: 'N3', dateObtention: '2024-06-01' }]));
+check('RIFAP ne se classe pas comme un niveau',
+  niveauCourant([], [{ nom: 'RIFAP', dateObtention: '2023-01-01' },
+                     { nom: 'N2', dateObtention: '2022-01-01' }]) === 'N2');
+check('sans carte, on retombe sur les plongées',
+  niveauCourant([{ date: '2025-01-01', niveau: 'N2' }], []) === 'N2');
+check('ni carte ni plongée : vide', niveauCourant([], []) === '');
+
+// --- Structures de plongée ---
+check('compagnon : indicateur structure', emptyBuddy().structure === false);
+check('compagnon : site web', 'siteWeb' in emptyBuddy());
+
 check('niveau courant : N1 l’emporte sur PN2',
   niveauCourant([{ date: '2024-01-01', niveau: 'PN2' }, { date: '2023-01-01', niveau: 'N1' }]) === 'PN2',
   niveauCourant([{ date: '2024-01-01', niveau: 'PN2' }, { date: '2023-01-01', niveau: 'N1' }]));

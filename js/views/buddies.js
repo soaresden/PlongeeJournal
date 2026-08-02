@@ -126,15 +126,19 @@ export async function buddiesView() {
                    || (b.stamps || [])[0];
 
     return el('div.obs.clickable.buddy', {
+      class: `obs clickable buddy${b.moniteur && !b.structure ? ' moniteur' : ''}`
+           + (b.structure ? ' structure' : ''),
       onclick: () => navigate(`buddy/${b.id}`),
-      title: [fullName(b), b.moniteur ? 'moniteur' : null,
+      title: [fullName(b), b.structure ? 'club / centre' : b.moniteur ? 'moniteur' : null,
               n ? `${n} plongée${n > 1 ? 's' : ''} ensemble` : null].filter(Boolean).join(' · '),
     },
       empreinte
         ? el('img', { src: empreinte.dataUrl, alt: '', loading: 'lazy' })
         : el('div.obs-noimg.initiales', {
             text: ((b.prenom?.[0] || '') + (b.nom?.[0] || '')).toUpperCase() || '?' }),
-      b.moniteur ? el('span.pastille-mon', { text: 'M', title: 'Moniteur' }) : null,
+      b.structure
+        ? el('span.pastille-struct', { text: '⌂', title: 'Club / centre' })
+        : b.moniteur ? el('span.pastille-mon', { text: 'M', title: 'Moniteur' }) : null,
       n ? el('span.compteur', { text: String(n) }) : null,
       el('div.obs-nom', { text: fullName(b) }),
     );
@@ -192,9 +196,98 @@ export async function buddyFormView({ id }) {
   const listeClubs = el('datalist', { id: 'clubs-connus' },
     tousLesClubs.map(c => el('option', { value: c })));
 
-  form.append(el('div.section', {},
-    el('h2', { text: 'Identité' }),
-    el('div.card', {},
+  // Actions en tête : on ne les cherche pas en bas d'un formulaire.
+  const buttons = el('div.btn-row.actions-fiche', {},
+    el('button.btn.primary', {
+      type: 'button', text: isNew ? 'Ajouter' : 'Enregistrer',
+      onclick: async () => {
+        if (!b.prenom.trim() && !b.nom.trim()) return toast('Indique au moins un nom', true);
+
+        // Le numéro de licence identifie une personne : pas de doublon.
+        const licence = String(b.licence || '').trim();
+        if (licence) {
+          const autres = await store.listBuddies();
+          const collision = autres.find(x => x.id !== b.id
+            && String(x.licence || '').trim().toLowerCase() === licence.toLowerCase());
+          if (collision) {
+            return toast(`Licence déjà utilisée par ${fullName(collision)}`, true);
+          }
+        }
+
+        try {
+          await store.saveBuddy(b);
+          toast('Plongeur enregistré');
+          navigate('buddies', true);
+        } catch (e) { toast(e.message, true); }
+      },
+    }),
+  );
+
+  if (!isNew) {
+    buttons.append(el('button.btn.danger', {
+      type: 'button', text: 'Supprimer',
+      onclick: async () => {
+        if (await confirmBox(`Supprimer ${fullName(b)} ? Il sera retiré des plongées où il apparaît.`, 'Supprimer')) {
+          await store.deleteBuddy(b.id);
+          toast('Plongeur supprimé');
+          navigate('buddies', true);
+        }
+      },
+    }));
+  }
+  form.append(buttons);
+
+  // Une structure n'est pas une personne : on masque ce qui n'a pas
+  // de sens pour elle (nom de famille, licence) et on propose la
+  // recherche de son logo.
+  const blocIdentite = el('div.card');
+
+  function rendreIdentite() {
+    blocIdentite.innerHTML = '';
+
+    const caseStructure = el('input', { type: 'checkbox' });
+    caseStructure.checked = !!b.structure;
+    caseStructure.onchange = () => {
+      set({ structure: caseStructure.checked });
+      if (caseStructure.checked) set({ nom: '', licence: '' });
+      rendreIdentite();
+    };
+
+    blocIdentite.append(
+      el('label.switch', { style: { marginBottom: '14px' } }, caseStructure,
+        el('span', { text: 'C’est un club / centre de plongée' })),
+    );
+
+    if (b.structure) {
+      blocIdentite.append(
+        field('Nom de la structure', input('text', b.prenom, v => set({ prenom: v }),
+          { placeholder: 'Buceo Pandora' })),
+        field('Lieu', input('text', b.club, v => set({ club: v }),
+          { placeholder: 'Gran Canaria', list: 'clubs-connus' }),
+          'Sert à regrouper la liste.'),
+        listeClubs,
+        field('Site web (optionnel)', input('text', b.siteWeb, v => set({ siteWeb: v }),
+          { placeholder: 'buceopandora.com', inputmode: 'url', autocapitalize: 'off' })),
+        el('div.hint', { style: { marginTop: 0 },
+          text: 'Une structure n’a ni nom de famille ni licence : son « tampon » est '
+              + 'son logo, qu’on retrouve en général en deux clics.' }),
+        el('div.btn-row', {},
+          el('button.btn.sm', { type: 'button', text: '🔎 Chercher le logo',
+            onclick: () => chercherLogo() }),
+          b.siteWeb
+            ? el('button.btn.sm.ghost', { type: 'button', text: '⬇ Depuis le site',
+                onclick: () => logoDepuisSite() })
+            : null,
+        ),
+      );
+      return;
+    }
+
+    const caseMoniteur = el('input', { type: 'checkbox' });
+    caseMoniteur.checked = !!b.moniteur;
+    caseMoniteur.onchange = () => set({ moniteur: caseMoniteur.checked });
+
+    blocIdentite.append(
       el('div.row', {},
         field('Prénom', input('text', b.prenom, v => set({ prenom: v }))),
         field('Nom', input('text', b.nom, v => set({ nom: v }))),
@@ -204,24 +297,74 @@ export async function buddyFormView({ id }) {
         'Identifiant unique du plongeur : deux fiches ne peuvent pas porter le même numéro.'),
       field('Club / structure', input('text', b.club, v => set({ club: v }),
         { placeholder: 'La Garenne, Corfou Plongée…', list: 'clubs-connus' }),
-        'Sert à regrouper la liste des compagnons.'),
+        'Sert à regrouper la liste.'),
       listeClubs,
-      field('Qualification', (() => {
-        const c = el('input', { type: 'checkbox' });
-        c.checked = !!b.moniteur;
-        c.onchange = () => set({ moniteur: c.checked });
-        return el('label.switch', {}, c, el('span', { text: 'C’est un moniteur' }));
-      })(),
+      field('Qualification',
+        el('label.switch', {}, caseMoniteur, el('span', { text: 'C’est un moniteur' })),
         'Un niveau (N1, N3…) change avec le temps : le figer ici serait faux pour '
       + 'tes plongées passées. Seul « moniteur ou non » reste vrai. Ton propre niveau, '
       + 'lui, est enregistré sur chaque plongée.'),
-      b.niveau
-        ? field('Ancien niveau saisi', el('div.hint', { style: { marginTop: 0 },
-            text: `« ${b.niveau} » — conservé pour mémoire, plus utilisé.` }))
-        : null,
       field('Note', input('text', b.note, v => set({ note: v }),
         { placeholder: 'Contact, remarque…' })),
-    ),
+    );
+  }
+
+  /**
+   * Le logo d'un centre se trouve en deux clics sur le web. On ne peut
+   * pas le télécharger à sa place — les moteurs bloquent les requêtes
+   * automatiques — mais on ouvre la bonne recherche et on rappelle le
+   * geste : enregistrer l'image, puis la déposer comme tampon.
+   */
+  function chercherLogo() {
+    const nom = (b.prenom || '').trim();
+    if (!nom) return toast('Renseigne d’abord le nom de la structure', true);
+    const q = encodeURIComponent(`${nom} ${b.club || ''} logo plongée`.trim());
+    window.open(`https://duckduckgo.com/?q=${q}&iax=images&ia=images`, '_blank', 'noopener');
+    toast('Enregistre le logo, puis ajoute-le en tampon ci-dessous');
+  }
+
+  /** Tentative directe : le logo du site, via son favicon haute résolution. */
+  async function logoDepuisSite() {
+    const domaine = String(b.siteWeb || '').trim()
+      .replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+    if (!domaine) return toast('Renseigne d’abord le site web', true);
+
+    const url = `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domaine)}&sz=256`;
+    try {
+      const dataUrl = await urlVersDataUrl(url);
+      b.stamps.push({ id: uid(), dataUrl, label: 'Logo', type: 'tampon',
+                      addedAt: new Date().toISOString() });
+      renderStamps();
+      toast('Logo récupéré — vérifie qu’il est net');
+    } catch {
+      toast('Logo introuvable depuis le site — passe par la recherche', true);
+    }
+  }
+
+  /** Charge une image distante et la convertit, sans passer par le réseau applicatif. */
+  function urlVersDataUrl(url) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onerror = () => reject(new Error('Image inaccessible'));
+      img.onload = () => {
+        const cv = document.createElement('canvas');
+        cv.width = img.width || 256; cv.height = img.height || 256;
+        const ctx = cv.getContext('2d');
+        ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, cv.width, cv.height);
+        ctx.drawImage(img, 0, 0);
+        try { resolve(cv.toDataURL('image/png')); }
+        catch { reject(new Error('Image protégée')); }
+      };
+      img.src = url;
+    });
+  }
+
+  rendreIdentite();
+
+  form.append(el('div.section', {},
+    el('h2', { text: 'Identité' }),
+    blocIdentite,
   ));
 
   // ---- Tampons ----
@@ -384,45 +527,6 @@ export async function buddyFormView({ id }) {
     ),
   ));
 
-  const buttons = el('div.btn-row', {},
-    el('button.btn.primary', {
-      type: 'button', text: isNew ? 'Ajouter' : 'Enregistrer',
-      onclick: async () => {
-        if (!b.prenom.trim() && !b.nom.trim()) return toast('Indique au moins un nom', true);
-
-        // Le numéro de licence identifie une personne : pas de doublon.
-        const licence = String(b.licence || '').trim();
-        if (licence) {
-          const autres = await store.listBuddies();
-          const collision = autres.find(x => x.id !== b.id
-            && String(x.licence || '').trim().toLowerCase() === licence.toLowerCase());
-          if (collision) {
-            return toast(`Licence déjà utilisée par ${fullName(collision)}`, true);
-          }
-        }
-
-        try {
-          await store.saveBuddy(b);
-          toast('Plongeur enregistré');
-          navigate('buddies', true);
-        } catch (e) { toast(e.message, true); }
-      },
-    }),
-  );
-
-  if (!isNew) {
-    buttons.append(el('button.btn.danger', {
-      type: 'button', text: 'Supprimer',
-      onclick: async () => {
-        if (await confirmBox(`Supprimer ${fullName(b)} ? Il sera retiré des plongées où il apparaît.`, 'Supprimer')) {
-          await store.deleteBuddy(b.id);
-          toast('Plongeur supprimé');
-          navigate('buddies', true);
-        }
-      },
-    }));
-  }
-  form.append(buttons);
 
   return { title: isNew ? 'Nouveau plongeur' : fullName(b), node: form, back: true };
 }

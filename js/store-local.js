@@ -149,7 +149,11 @@ export const localStore = {
     return [...new Set(db().dives.flatMap(d => d.suuntoKeys || []))];
   },
 
-  async stats(diverId) { return computeStats(db().dives.filter(d => d.diverId === diverId)); },
+  async stats(diverId) {
+    return computeStats(
+      db().dives.filter(d => d.diverId === diverId),
+      (db().certifs || []).filter(c => c.diverId === diverId));
+  },
 
   async exportAll() {
     return JSON.stringify({ ...db(), _export: new Date().toISOString(), _version: 1 }, null, 2);

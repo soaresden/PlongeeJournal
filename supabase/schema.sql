@@ -98,7 +98,10 @@ create table if not exists public.buddies (
   licence    text default '',       -- identifiant unique du plongeur (FFESSM…)
   club       text default '',       -- sert à regrouper la liste
   moniteur   boolean not null default false,  -- seule qualité durable
-  niveau     text default '',       -- ancien champ, conservé pour l'historique
+  -- Une structure (centre, club) n'est pas une personne : ni nom de
+  -- famille, ni licence. Son « tampon » est son logo.
+  structure  boolean not null default false,
+  site_web   text default '',
   note       text default '',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -107,7 +110,16 @@ create table if not exists public.buddies (
 -- Rattrapage si la table existait déjà sans les colonnes.
 alter table public.buddies add column if not exists licence  text default '';
 alter table public.buddies add column if not exists club     text default '';
-alter table public.buddies add column if not exists moniteur boolean not null default false;
+alter table public.buddies add column if not exists moniteur  boolean not null default false;
+alter table public.buddies add column if not exists structure boolean not null default false;
+alter table public.buddies add column if not exists site_web  text default '';
+
+-- Migration : une fiche dont le « nom » vaut Plongee/Diving/Buceo… est
+-- une structure, pas un plongeur.
+update public.buddies
+   set structure = true
+ where structure = false
+   and nom ~* '^(plongee|plongée|diving|buceo|dive|divers|club|centre)$';
 
 -- Migration : « note » servait de club avant que la colonne existe.
 -- On déplace l'information une seule fois, sans écraser un club déjà saisi.
@@ -120,10 +132,24 @@ update public.buddies
 -- Migration : le niveau d'un compagnon change avec le temps, il ne veut donc
 -- rien dire figé sur une fiche. Seul « est-ce un moniteur » reste vrai.
 -- Ce qui compte pour les statistiques, c'est TON niveau, sur chaque plongée.
-update public.buddies
-   set moniteur = true
- where moniteur = false
-   and niveau ~* '(mf1|mf2|\me[1-4]\M|initiateur|monit|instruct)';
+do $$
+begin
+  if exists (select 1 from information_schema.columns
+              where table_schema = 'public' and table_name = 'buddies'
+                and column_name = 'niveau') then
+    -- Dernier service rendu par l'ancienne colonne : en déduire les moniteurs.
+    execute $q$
+      update public.buddies
+         set moniteur = true
+       where moniteur = false
+         and niveau ~* '(mf1|mf2|\me[1-4]\M|initiateur|monit|instruct)'
+    $q$;
+  end if;
+end $$;
+
+-- Le niveau d'un compagnon ne veut rien dire figé sur une fiche : il change
+-- avec le temps. On supprime la colonne plutôt que de la traîner vide.
+alter table public.buddies drop column if exists niveau;
 
 -- Un même numéro de licence ne peut désigner qu'un seul compagnon.
 -- L'index ignore les fiches sans licence, qui restent donc possibles.
@@ -220,6 +246,8 @@ create table if not exists public.dives (
   temp_fond    numeric(4,1),
   visibilite   text default '',
   courant      text default '',
+  meteo        text default '',    -- soleil, nuageux, pluie…
+  etat_mer     text default '',    -- calme, ridée, agitée, forte
 
   palanquee_mode text default '',
   chef_buddy_id  uuid references public.buddies(id) on delete set null,
@@ -257,6 +285,8 @@ alter table public.dives add column if not exists palier_secu_min integer;
 alter table public.dives add column if not exists niveau     text default '';
 alter table public.dives add column if not exists altitude   numeric(7,1);
 alter table public.dives add column if not exists indice_eau text default '';
+alter table public.dives add column if not exists meteo      text default '';
+alter table public.dives add column if not exists etat_mer   text default '';
 alter table public.dives add column if not exists combi_type text default '';
 alter table public.dives add column if not exists combi_mm   text default '';
 alter table public.dives add column if not exists options_refusees  text[] not null default '{}';
@@ -357,7 +387,7 @@ create table if not exists public.app_meta (
   value text not null
 );
 
-insert into public.app_meta (key, value) values ('schema_version', '7')
+insert into public.app_meta (key, value) values ('schema_version', '10')
 on conflict (key) do update set value = excluded.value;
 
 -- ------------------------------------------------------------

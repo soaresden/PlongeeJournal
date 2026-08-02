@@ -158,6 +158,36 @@ export async function diverFormView({ id }) {
     ));
   }
 
+  // Actions en tête : on ne les cherche pas en bas d'un formulaire.
+  const buttons = el('div.btn-row.actions-fiche', {},
+    el('button.btn.primary', {
+      type: 'button', text: isNew ? 'Créer le profil' : 'Enregistrer',
+      onclick: async () => {
+        if (!d.prenom.trim() && !d.nom.trim()) return toast('Indique au moins un nom', true);
+        await store.saveDiver(d);
+        if (isNew) await store.setActiveDiver(d.id);
+        toast('Profil enregistré');
+        navigate('divers', true);
+      },
+    }),
+  );
+
+  if (!isNew) {
+    buttons.append(el('button.btn.danger', {
+      type: 'button', text: 'Supprimer',
+      onclick: async () => {
+        if (await confirmBox(
+          `Supprimer ${fullName(d)} et ses ${st.count} plongée(s) ? Cette action est définitive.`,
+          'Tout supprimer')) {
+          await store.deleteDiver(d.id);
+          toast('Profil supprimé');
+          navigate('divers', true);
+        }
+      },
+    }));
+  }
+  form.append(buttons);
+
   form.append(el('div.section', {},
     el('h2', { text: 'Identité' }),
     el('div.card', {},
@@ -388,34 +418,6 @@ export async function diverFormView({ id }) {
     ),
   ));
 
-  const buttons = el('div.btn-row', {},
-    el('button.btn.primary', {
-      type: 'button', text: isNew ? 'Créer le profil' : 'Enregistrer',
-      onclick: async () => {
-        if (!d.prenom.trim() && !d.nom.trim()) return toast('Indique au moins un nom', true);
-        await store.saveDiver(d);
-        if (isNew) await store.setActiveDiver(d.id);
-        toast('Profil enregistré');
-        navigate('divers', true);
-      },
-    }),
-  );
-
-  if (!isNew) {
-    buttons.append(el('button.btn.danger', {
-      type: 'button', text: 'Supprimer',
-      onclick: async () => {
-        if (await confirmBox(
-          `Supprimer ${fullName(d)} et ses ${st.count} plongée(s) ? Cette action est définitive.`,
-          'Tout supprimer')) {
-          await store.deleteDiver(d.id);
-          toast('Profil supprimé');
-          navigate('divers', true);
-        }
-      },
-    }));
-  }
-  form.append(buttons);
 
   return { title: isNew ? 'Nouveau plongeur' : fullName(d) || 'Profil', node: form, back: true };
 }

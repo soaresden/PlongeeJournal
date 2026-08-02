@@ -18,6 +18,7 @@ import { statsView }                      from './views/stats.js';
 import { lockView, passwordView }         from './views/lock.js';
 import { setupView }                      from './views/setup.js';
 import { suuntoView }                     from './views/suunto.js';
+import { urgenceView }                    from './views/urgence.js';
 
 // ---------- Routes ----------
 route('dives',            divesView);
@@ -36,9 +37,12 @@ route('login',            lockView);      // ancien lien
 route('motdepasse',       passwordView);
 route('setup',            setupView);
 route('suunto',           suuntoView);
+route('urgence',          urgenceView);
 
 // Écrans accessibles carnet verrouillé
-const PUBLIC = new Set(['verrou', 'login', 'motdepasse', 'setup']);
+// « urgence » est public par nécessité : une fiche de secours
+// verrouillée ne sert à rien.
+const PUBLIC = new Set(['verrou', 'login', 'motdepasse', 'setup', 'urgence']);
 
 const viewEl  = $('#view');
 const titleEl = $('#topTitle');
@@ -114,7 +118,23 @@ async function ensureStore() {
   if (!session) return false;
   await initStore();
   booted = true;
+  await majFicheUrgence();
   return true;
+}
+
+/**
+ * Recopie localement l'essentiel de la fiche plongeur, pour que les
+ * secours y accèdent sans mot de passe.
+ */
+async function majFicheUrgence() {
+  try {
+    const { store } = await import('./store.js');
+    const { memoriser } = await import('./urgence.js');
+    const id = await store.getActiveDiverId();
+    if (!id) return;
+    const [diver, st] = await Promise.all([store.getDiver(id), store.stats(id)]);
+    memoriser(diver, st?.niveau || '');
+  } catch { /* jamais bloquant */ }
 }
 
 onRender(async path => {

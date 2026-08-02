@@ -6,11 +6,12 @@ import { el, toast, num, fullName, openModal, fileToDataURL, confirmBox, todayIS
          minToTime, timeToMin, scrollTo } from '../lib.js';
 import { store, emptyDive, emptyBuddy, reconcileTimes, validerPlongee,
          appliquerOptionsAuto, niveauCourant, libelleGaz, pmuNitrox,
-         libelleMateriel } from '../store.js';
+         libelleMateriel, consommation } from '../store.js';
 import { editerMateriel, ligneMateriel } from './materiel.js';
 import { DIVE_TYPES, DIVE_OPTIONS, DIVE_GOALS, PALANQUEE_MODES,
          OPTIONS_AUTO, VISIBILITES, COMBI_TYPES, COMBI_MM, NIVEAUX,
-         GAZ, gazParId, BLOC_TYPES, BLOC_MATIERES, typeMateriel } from '../config.js';
+         GAZ, gazParId, BLOC_TYPES, BLOC_MATIERES, typeMateriel,
+         VISIBILITE_ICONES, METEO, ETAT_MER, COURANTS } from '../config.js';
 import { locationPicker } from '../map.js';
 import { navigate } from '../router.js';
 import { takeDraft } from '../draft.js';
@@ -59,6 +60,31 @@ function chipGroup(items, selected, onToggle) {
       onToggle(item, c.classList.contains('on'));
     };
     wrap.append(c);
+  });
+  return wrap;
+}
+
+/**
+ * Rangée de pastilles à choix unique, avec pictogramme.
+ * Un second appui sur la pastille active la désélectionne : on ne veut
+ * pas être coincé avec « Pluie » parce qu'on a effleuré l'écran.
+ */
+function pastilles(options, courant, onPick) {
+  const wrap = el('div.pastilles');
+  options.forEach(o => {
+    const b = el('button.pastille', { type: 'button', title: o.label },
+      el('span.pastille-ico', { text: o.icone }),
+      el('span.pastille-txt', { text: o.label }));
+    const actif = () => (o.id === courant || o.label === courant);
+    if (actif()) b.classList.add('on');
+    b.onclick = () => {
+      const etaitActif = b.classList.contains('on');
+      wrap.querySelectorAll('.pastille').forEach(x => x.classList.remove('on'));
+      if (!etaitActif) b.classList.add('on');
+      courant = etaitActif ? '' : o.id;
+      onPick(courant);
+    };
+    wrap.append(b);
   });
   return wrap;
 }
@@ -153,7 +179,7 @@ function observationsPicker(dive) {
       liste.forEach(o => grille.append(carteObservation(o, () => {
         dive[cat.cle] = dive[cat.cle].filter(x => String(x.id) !== String(o.id));
         rendreSelection();
-      })));
+      }, cat.cle)));
     }
 
     const boutons = el('div.btn-row', { style: { marginTop: '10px' } },
@@ -180,12 +206,19 @@ function observationsPicker(dive) {
   return wrap;
 }
 
+/** Icône de repli quand aucune photo n'est disponible. */
+function iconeDe(o, cat) {
+  if (o.source === 'osm') return '⚓';
+  return CATEGORIES.find(c => c.cle === cat)?.icone
+      || (o.source === 'libre' ? '✎' : '🐟');
+}
+
 /** Vignette d'une observation retenue. */
-function carteObservation(o, onRemove) {
+function carteObservation(o, onRemove, cat) {
   return el('div.obs', {},
     o.photo
       ? el('img', { src: o.photo, alt: o.nom, loading: 'lazy' })
-      : el('div.obs-noimg', { text: o.source === 'osm' ? '⚓' : '?' }),
+      : el('div.obs-noimg', { text: iconeDe(o, cat) }),
     el('div.obs-nom', { text: o.nom }),
     onRemove ? el('button.del', { type: 'button', text: '×',
       onclick: e => { e.stopPropagation(); onRemove(); } }) : null,
@@ -424,20 +457,43 @@ async function ouvrirSuggestions(dive, cat, onChange) {
 function ajoutManuel(dive, cat, onChange) {
   openModal(close => {
     const nom = el('input', { type: 'text', placeholder: 'Nom de ce que tu as vu' });
+    const bouton = el('button.btn.primary', { type: 'button', text: 'Ajouter' });
+
+    bouton.onclick = async () => {
+      const v = nom.value.trim();
+      if (!v) return;
+
+      bouton.disabled = true;
+      bouton.textContent = 'Recherche d’une photo…';
+
+      // « Algues » est un nom valable : avant de l'ajouter sans image,
+      // on regarde si le catalogue mondial en connaît une. Une vignette
+      // sans photo n'aide personne à se souvenir.
+      let trouve = null;
+      try {
+        const { chercherEspece } = await import('../species.js');
+        const resultats = await chercherEspece(v);
+        trouve = resultats.find(r => r.photo) || null;
+      } catch { /* hors ligne : on ajoutera sans photo */ }
+
+      dive[cat.cle] = [...dive[cat.cle], trouve
+        ? { id: trouve.id, nom: v, sci: trouve.sci || '', photo: trouve.photo, source: 'inat' }
+        : { id: `libre-${Date.now()}`, nom: v, sci: '', photo: '', source: 'libre' }];
+
+      onChange();
+      close();
+      if (trouve) toast(`Photo trouvée : ${trouve.nom}`);
+    };
+
     return el('div', {},
       el('h3', { text: `${cat.icone} Ajouter à la main` }),
       el('div.field', {}, nom),
-      el('div.hint', { style: { marginTop: 0 }, text: 'Utile pour ce que les listes ne connaissent pas.' }),
+      el('div.hint', { style: { marginTop: 0 },
+        text: 'Utile pour ce que les listes ne connaissent pas. Si le nom existe au '
+            + 'catalogue, la photo est récupérée automatiquement.' }),
       el('div.btn-row', {},
         el('button.btn.ghost', { type: 'button', text: 'Annuler', onclick: close }),
-        el('button.btn.primary', { type: 'button', text: 'Ajouter',
-          onclick: () => {
-            const v = nom.value.trim();
-            if (!v) return;
-            dive[cat.cle] = [...dive[cat.cle],
-              { id: `libre-${Date.now()}`, nom: v, sci: '', photo: '', source: 'libre' }];
-            onChange(); close();
-          } }),
+        bouton,
       ),
     );
   });
@@ -645,12 +701,13 @@ export async function diveFormView({ id }) {
         numInput(dive.tempSurface, v => { set({ tempSurface: v }); majOptionsAuto(); })),
       field('Fond min (°C)', numInput(dive.tempFond, v => set({ tempFond: v }))),
     ),
+    field('Météo en surface', pastilles(METEO, dive.meteo, v => set({ meteo: v }))),
+    field('État de l’eau', pastilles(ETAT_MER, dive.etatMer, v => set({ etatMer: v }))),
     field('Visibilité', segmented(
-      VISIBILITES.map(v => ({ id: v, label: v })),
+      VISIBILITES.map(v => ({ id: v, label: `${VISIBILITE_ICONES[v] || ''} ${v}` })),
       dive.visibilite,
       v => set({ visibilite: dive.visibilite === v ? '' : v }))),
-    field('Courant', input('text', dive.courant, v => set({ courant: v }),
-      { placeholder: 'Nul, faible, soutenu…' })),
+    field('Courant', pastilles(COURANTS, dive.courant, v => set({ courant: v }))),
   );
   blocLieu.id = 'champ-lieu';
   blocLieu.querySelector('.sec-titre').append(el('span.requis', { text: ' •' }));
@@ -726,275 +783,6 @@ export async function diveFormView({ id }) {
     el('div.hint', { style: { marginBottom: 0 },
       text: 'Le palier de sécurité n’est pas un palier de décompression : '
           + 'il ne déclenche pas l’étiquette « Décompression ».' }),
-  ));
-
-  // ---------- 5. Options & objectifs ----------
-  const optionsZone = el('div');
-  const optionsNote = el('div.hint');
-
-  /** Recalcule les étiquettes déduites et redessine les puces. */
-  function majOptionsAuto() {
-    if (!optionsZone.isConnected && !optionsZone.childNodes.length) return;
-    const auto = appliquerOptionsAuto(dive, {
-      altitude: dive.altitude,
-      fosse: /fosse/i.test(`${dive.lieuNom} ${dive.lieuDetail}`),
-    });
-    rendreOptions();
-    optionsNote.innerHTML = '';
-    if (auto.length) {
-      optionsNote.append(el('div', {},
-        '✨ Posées automatiquement : ',
-        ...auto.map((a, i) => el('span', {},
-          i ? ', ' : '', el('b', { text: a.tag }), ` (${a.raison})`)),
-        '. Décoche-les si elles ne collent pas, elles ne reviendront plus.'));
-    }
-  }
-
-  function rendreOptions() {
-    optionsZone.innerHTML = '';
-    const wrap = el('div.chips');
-    DIVE_OPTIONS.forEach(item => {
-      const auto = OPTIONS_AUTO.includes(item);
-      const actif = (dive.options || []).includes(item);
-      const c = el('button.chip', { type: 'button' }, item, auto ? el('span', { text: ' ✨' }) : null);
-      if (actif) c.classList.add('on');
-      c.onclick = () => {
-        const on = !(dive.options || []).includes(item);
-        dive.options = on
-          ? [...(dive.options || []), item]
-          : (dive.options || []).filter(x => x !== item);
-
-        // Mémorise le choix pour que l'automatisme ne le contredise pas.
-        dive.optionsRefusees ||= []; dive.optionsManuelles ||= [];
-        if (on) {
-          dive.optionsManuelles = [...new Set([...dive.optionsManuelles, item])];
-          dive.optionsRefusees = dive.optionsRefusees.filter(x => x !== item);
-        } else if (auto) {
-          dive.optionsRefusees = [...new Set([...dive.optionsRefusees, item])];
-          dive.optionsManuelles = dive.optionsManuelles.filter(x => x !== item);
-        }
-        c.classList.toggle('on', on);
-      };
-      wrap.append(c);
-    });
-    optionsZone.append(wrap);
-  }
-
-  rendreOptions();
-  majOptionsAuto();
-
-  form.append(section('Spécificités & objectifs', { icone: '🏷', ouvert: false },
-    field('Options de la plongée', optionsZone, optionsNote),
-    field('Objectifs',
-      chipGroup(DIVE_GOALS, dive.objectifs, (item, on) => {
-        dive.objectifs = on ? [...dive.objectifs, item] : dive.objectifs.filter(x => x !== item);
-      })),
-    field('Autre', input('text', dive.objectifAutre, v => set({ objectifAutre: v }),
-      { placeholder: 'Un objectif qui n’est pas dans la liste' })),
-  ));
-
-  // ---------- 6. Matériel ----------
-  const combiSeg = segmented(
-    COMBI_TYPES.map(t => ({ id: t, label: t })),
-    dive.combiType, v => set({ combiType: v }));
-
-  const mmSel = el('select');
-  mmSel.append(el('option', { value: '', text: '— mm —' }));
-  COMBI_MM.forEach(m => mmSel.append(el('option', { value: m, text: `${m} mm` })));
-  mmSel.value = dive.combiMm || '';
-  mmSel.onchange = () => set({ combiMm: mmSel.value });
-
-  // --- Bouteille : le gaz caractérise le bloc, pas la plongée ---
-  const gazZone = el('div');
-
-  function rendreGaz() {
-    gazZone.innerHTML = '';
-    const g = gazParId(dive.gazType) || GAZ[0];
-
-    gazZone.append(segmented(
-      GAZ.map(x => ({ id: x.id, label: x.label })),
-      dive.gazType || 'air',
-      id => {
-        const choisi = gazParId(id);
-        set({ gazType: id });
-        // Valeurs courantes pré-remplies : on ajuste si besoin.
-        if (choisi?.o2 != null && dive.gazO2 == null) set({ gazO2: choisi.o2 });
-        if (choisi?.he != null && dive.gazHe == null) set({ gazHe: choisi.he });
-        if (id === 'air') set({ gazO2: null, gazHe: null, gazSetpoint: null });
-        rendreGaz();
-        majOptionsAuto();
-      }));
-
-    const champs = g.champs || [];
-    if (champs.length) {
-      const ligne = el('div.row-3', { style: { marginTop: '10px' } });
-      if (champs.includes('o2')) {
-        ligne.append(field('O₂ (%)', numInput(dive.gazO2,
-          v => { set({ gazO2: v }); rendreInfoGaz(); }, { placeholder: '32' })));
-      }
-      if (champs.includes('he')) {
-        ligne.append(field('He (%)', numInput(dive.gazHe,
-          v => { set({ gazHe: v }); rendreInfoGaz(); }, { placeholder: '35' })));
-      }
-      if (champs.includes('setpoint')) {
-        ligne.append(field('Setpoint', numInput(dive.gazSetpoint,
-          v => set({ gazSetpoint: v }), { placeholder: '1,3' })));
-      }
-      gazZone.append(ligne);
-    }
-    gazZone.append(infoGaz);
-    rendreInfoGaz();
-  }
-
-  const infoGaz = el('div.hint');
-  function rendreInfoGaz() {
-    const bouts = [libelleGaz(dive)];
-    if (dive.gazType === 'nitrox' && dive.gazO2) {
-      const pmu = pmuNitrox(dive.gazO2);
-      if (pmu) bouts.push(`profondeur max ≈ ${pmu} m à 1,4 bar de PpO₂ (indicatif)`);
-    }
-    if (dive.gazType === 'trimix' && dive.gazO2 && dive.gazHe) {
-      bouts.push(`azote ${Math.max(0, 100 - dive.gazO2 - dive.gazHe)} %`);
-    }
-    infoGaz.textContent = bouts.filter(Boolean).join(' — ');
-  }
-
-  rendreGaz();
-
-  const blocTypeSel = el('select');
-  blocTypeSel.append(el('option', { value: '', text: '— type —' }));
-  BLOC_TYPES.forEach(x => blocTypeSel.append(el('option', { value: x, text: x })));
-  blocTypeSel.value = dive.blocType || '';
-  blocTypeSel.onchange = () => set({ blocType: blocTypeSel.value });
-
-  const blocMatSel = el('select');
-  blocMatSel.append(el('option', { value: '', text: '— matière —' }));
-  BLOC_MATIERES.forEach(x => blocMatSel.append(el('option', { value: x, text: x })));
-  blocMatSel.value = dive.blocMatiere || '';
-  blocMatSel.onchange = () => set({ blocMatiere: blocMatSel.value });
-
-  form.append(section('Bouteille', { icone: '🛢', ouvert: false },
-    field('Gaz respiré', gazZone),
-    el('div.row-3', { style: { marginTop: '14px' } },
-      field('Type', blocTypeSel),
-      field('Matière', blocMatSel),
-      field('Volume (L)', numInput(dive.blocLitres, v => set({ blocLitres: v }), { placeholder: '12' })),
-    ),
-    el('div.row', {},
-      field('Pression départ (bar)', numInput(dive.pressionDepart, v => set({ pressionDepart: v }))),
-      field('Pression fin (bar)', numInput(dive.pressionFin, v => set({ pressionFin: v }))),
-    ),
-  ));
-
-  // --- Matériel personnel, repris du profil ---
-  //
-  // Le profil tient la liste ; la plongée ne retient que ce qui a été
-  // réellement emporté. Par défaut : tout.
-  const materielProfil = profil?.materiel || [];
-  const equipZone = el('div');
-
-  /**
-   * On n'affiche que ce qui a été ajouté à CETTE plongée, en lignes.
-   * Deux façons d'en ajouter : reprendre une pièce du profil, ou en
-   * créer une à la volée — elle rejoint alors aussi la fiche plongeur.
-   */
-  function rendreEquipement() {
-    equipZone.innerHTML = '';
-    dive.materielIds ||= [];
-
-    const choisis = dive.materielIds
-      .map(id => materielProfil.find(m => m.id === id))
-      .filter(Boolean);
-
-    if (choisis.length) {
-      choisis.forEach(m => equipZone.append(ligneMateriel(m, {
-        onRetirer: piece => {
-          dive.materielIds = dive.materielIds.filter(x => x !== piece.id);
-          rendreEquipement();
-        },
-      })));
-    } else {
-      equipZone.append(el('div.hint', { style: { marginTop: 0 },
-        text: 'Rien d’ajouté pour cette plongée.' }));
-    }
-
-    const restants = materielProfil.filter(m => !dive.materielIds.includes(m.id));
-
-    equipZone.append(el('div.btn-row', {},
-      el('button.btn.sm', { type: 'button', text: '+ Nouveau matériel',
-        onclick: () => editerMateriel(null, async piece => {
-          // Ajouté à la plongée ET mémorisé sur la fiche plongeur :
-          // on ne le ressaisira jamais.
-          materielProfil.push(piece);
-          dive.materielIds = [...dive.materielIds, piece.id];
-          if (profil) {
-            profil.materiel = materielProfil;
-            try { await store.saveDiver(profil); } catch (e) { toast(e.message, true); }
-          }
-          rendreEquipement();
-        }) }),
-      restants.length
-        ? el('button.btn.sm.ghost', { type: 'button',
-            text: `Reprendre du matériel (${restants.length})`,
-            onclick: () => ouvrirChoixMateriel(restants) })
-        : null,
-    ));
-  }
-
-  /** Reprise depuis la fiche plongeur : on coche, on valide. */
-  function ouvrirChoixMateriel(restants) {
-    const enAttente = new Set();
-
-    openModal(close => {
-      const liste = el('div');
-
-      restants.forEach(m => {
-        const t = typeMateriel(m.type);
-        const c = el('input', { type: 'checkbox' });
-        const ligne = el('div.pl-ligne', { style: { gridTemplateColumns: '22px 24px 1fr' } },
-          c,
-          el('span.mat-icone', { text: t.icone }),
-          el('div.mat-corps', {},
-            el('div.mat-type', { text: t.label }),
-            el('div.mat-detail', { text: libelleMateriel(m) })),
-        );
-        const basculer = () => {
-          enAttente.has(m.id) ? enAttente.delete(m.id) : enAttente.add(m.id);
-          c.checked = enAttente.has(m.id);
-          ligne.classList.toggle('on', enAttente.has(m.id));
-        };
-        ligne.onclick = basculer;
-        c.onclick = e => { e.stopPropagation(); basculer(); };
-        liste.append(ligne);
-      });
-
-      return el('div', {},
-        el('h3', { text: 'Reprendre du matériel' }),
-        el('div.hint', { style: { marginTop: 0 },
-          text: 'Coche ce que tu avais sur cette plongée.' }),
-        liste,
-        el('div.btn-row', {},
-          el('button.btn.ghost', { type: 'button', text: 'Annuler', onclick: close }),
-          el('button.btn.primary', { type: 'button', text: 'Ajouter',
-            onclick: () => {
-              dive.materielIds = [...dive.materielIds, ...enAttente];
-              rendreEquipement();
-              close();
-            } }),
-        ),
-      );
-    });
-  }
-
-  rendreEquipement();
-
-  form.append(section('Mon matériel', { icone: '🎽', ouvert: false },
-    field('Lestage', input('text', dive.lestage, v => set({ lestage: v }),
-      { placeholder: '6 kg ceinture + 2 kg poches' })),
-    field('Combinaison', combiSeg),
-    field('Épaisseur', mmSel),
-    el('div.lbl', { style: { marginTop: '18px' }, text: 'Équipement emporté' }),
-    equipZone,
   ));
 
   // ---------- 8. Palanquée ----------
@@ -1084,7 +872,9 @@ export async function diveFormView({ id }) {
       caseCoche,
       el('div.pl-nom', { text: fullName(b) }),
       el('div.pl-role', {},
-        b.moniteur ? el('span.badge.ens', { text: 'moniteur' }) : el('span.pl-vide', { text: '—' })),
+        b.structure ? el('span.badge.struct', { text: 'club' })
+        : b.moniteur ? el('span.badge.mon', { text: 'moniteur' })
+        : el('span.pl-vide', { text: '—' })),
       celluleTampon,
     );
 
@@ -1299,6 +1089,315 @@ export async function diveFormView({ id }) {
     stampWrap,
   ));
 
+  // ---------- 5. Options & objectifs ----------
+  const optionsZone = el('div');
+  const optionsNote = el('div.hint');
+
+  /** Recalcule les étiquettes déduites et redessine les puces. */
+  function majOptionsAuto() {
+    if (!optionsZone.isConnected && !optionsZone.childNodes.length) return;
+    const auto = appliquerOptionsAuto(dive, {
+      altitude: dive.altitude,
+      fosse: /fosse/i.test(`${dive.lieuNom} ${dive.lieuDetail}`),
+    });
+    rendreOptions();
+    optionsNote.innerHTML = '';
+    if (auto.length) {
+      optionsNote.append(el('div', {},
+        '✨ Posées automatiquement : ',
+        ...auto.map((a, i) => el('span', {},
+          i ? ', ' : '', el('b', { text: a.tag }), ` (${a.raison})`)),
+        '. Décoche-les si elles ne collent pas, elles ne reviendront plus.'));
+    }
+  }
+
+  function rendreOptions() {
+    optionsZone.innerHTML = '';
+    const wrap = el('div.chips');
+    DIVE_OPTIONS.forEach(item => {
+      const auto = OPTIONS_AUTO.includes(item);
+      const actif = (dive.options || []).includes(item);
+      const c = el('button.chip', { type: 'button' }, item, auto ? el('span', { text: ' ✨' }) : null);
+      if (actif) c.classList.add('on');
+      c.onclick = () => {
+        const on = !(dive.options || []).includes(item);
+        dive.options = on
+          ? [...(dive.options || []), item]
+          : (dive.options || []).filter(x => x !== item);
+
+        // Mémorise le choix pour que l'automatisme ne le contredise pas.
+        dive.optionsRefusees ||= []; dive.optionsManuelles ||= [];
+        if (on) {
+          dive.optionsManuelles = [...new Set([...dive.optionsManuelles, item])];
+          dive.optionsRefusees = dive.optionsRefusees.filter(x => x !== item);
+        } else if (auto) {
+          dive.optionsRefusees = [...new Set([...dive.optionsRefusees, item])];
+          dive.optionsManuelles = dive.optionsManuelles.filter(x => x !== item);
+        }
+        c.classList.toggle('on', on);
+      };
+      wrap.append(c);
+    });
+    optionsZone.append(wrap);
+  }
+
+  rendreOptions();
+  majOptionsAuto();
+
+  form.append(section('Spécificités & objectifs', { icone: '🏷', ouvert: false },
+    field('Options de la plongée', optionsZone, optionsNote),
+    field('Objectifs',
+      chipGroup(DIVE_GOALS, dive.objectifs, (item, on) => {
+        dive.objectifs = on ? [...dive.objectifs, item] : dive.objectifs.filter(x => x !== item);
+      })),
+    field('Autre', input('text', dive.objectifAutre, v => set({ objectifAutre: v }),
+      { placeholder: 'Un objectif qui n’est pas dans la liste' })),
+  ));
+
+  // ---------- 6. Matériel ----------
+  const combiSeg = segmented(
+    COMBI_TYPES.map(t => ({ id: t, label: t })),
+    dive.combiType, v => set({ combiType: v }));
+
+  const mmSel = el('select');
+  mmSel.append(el('option', { value: '', text: '— mm —' }));
+  COMBI_MM.forEach(m => mmSel.append(el('option', { value: m, text: `${m} mm` })));
+  mmSel.value = dive.combiMm || '';
+  mmSel.onchange = () => set({ combiMm: mmSel.value });
+
+  // --- Bouteille : le gaz caractérise le bloc, pas la plongée ---
+  const gazZone = el('div');
+
+  function rendreGaz() {
+    gazZone.innerHTML = '';
+    const g = gazParId(dive.gazType) || GAZ[0];
+
+    gazZone.append(segmented(
+      GAZ.map(x => ({ id: x.id, label: x.label })),
+      dive.gazType || 'air',
+      id => {
+        const choisi = gazParId(id);
+        set({ gazType: id });
+        // Valeurs courantes pré-remplies : on ajuste si besoin.
+        if (choisi?.o2 != null && dive.gazO2 == null) set({ gazO2: choisi.o2 });
+        if (choisi?.he != null && dive.gazHe == null) set({ gazHe: choisi.he });
+        if (id === 'air') set({ gazO2: null, gazHe: null, gazSetpoint: null });
+        rendreGaz();
+        majOptionsAuto();
+      }));
+
+    const champs = g.champs || [];
+    if (champs.length) {
+      const ligne = el('div.row-3', { style: { marginTop: '10px' } });
+      if (champs.includes('o2')) {
+        ligne.append(field('O₂ (%)', numInput(dive.gazO2,
+          v => { set({ gazO2: v }); rendreInfoGaz(); }, { placeholder: '32' })));
+      }
+      if (champs.includes('he')) {
+        ligne.append(field('He (%)', numInput(dive.gazHe,
+          v => { set({ gazHe: v }); rendreInfoGaz(); }, { placeholder: '35' })));
+      }
+      if (champs.includes('setpoint')) {
+        ligne.append(field('Setpoint', numInput(dive.gazSetpoint,
+          v => set({ gazSetpoint: v }), { placeholder: '1,3' })));
+      }
+      gazZone.append(ligne);
+    }
+    gazZone.append(infoGaz);
+    rendreInfoGaz();
+  }
+
+  const infoGaz = el('div.hint');
+  function rendreInfoGaz() {
+    const bouts = [libelleGaz(dive)];
+    if (dive.gazType === 'nitrox' && dive.gazO2) {
+      const pmu = pmuNitrox(dive.gazO2);
+      if (pmu) bouts.push(`profondeur max ≈ ${pmu} m à 1,4 bar de PpO₂ (indicatif)`);
+    }
+    if (dive.gazType === 'trimix' && dive.gazO2 && dive.gazHe) {
+      bouts.push(`azote ${Math.max(0, 100 - dive.gazO2 - dive.gazHe)} %`);
+    }
+    infoGaz.textContent = bouts.filter(Boolean).join(' — ');
+  }
+
+  rendreGaz();
+
+  // --- Consommation d'air, déduite des pressions ---
+  const zoneConso = el('div.conso');
+
+  function majConso() {
+    const c = consommation(dive);
+    zoneConso.innerHTML = '';
+    if (!c) {
+      zoneConso.append(el('div.hint', { style: { marginTop: 0 },
+        text: 'Renseigne le volume du bloc et les deux pressions pour connaître '
+            + 'ta consommation.' }));
+      return;
+    }
+
+    zoneConso.append(
+      el('div.conso-chiffres', {},
+        el('div.conso-bloc', {},
+          el('div.conso-val', { text: `${c.surface} L/min` }),
+          el('div.conso-lbl', { text: 'à la surface' })),
+        el('div.conso-bloc', {},
+          el('div.conso-val.secondaire', { text: `${c.brute} L/min` }),
+          el('div.conso-lbl', { text: `à ${c.profMoy} m` })),
+        el('div.conso-bloc', {},
+          el('div.conso-val.secondaire', { text: `${c.litres} L` }),
+          el('div.conso-lbl', { text: 'consommés' })),
+      ),
+      el('div.hint', { style: { marginBottom: 0 },
+        text: c.estime
+          ? `Profondeur moyenne estimée à ${c.profMoy} m (60 % de la profondeur max). `
+          + 'Un import depuis l’ordinateur donnera la vraie valeur.'
+          : 'Calculé sur la profondeur moyenne relevée par l’ordinateur. '
+          + 'Le chiffre « surface » est celui qui permet de comparer deux plongées.' }),
+    );
+  }
+
+  const blocTypeSel = el('select');
+  blocTypeSel.append(el('option', { value: '', text: '— type —' }));
+  BLOC_TYPES.forEach(x => blocTypeSel.append(el('option', { value: x, text: x })));
+  blocTypeSel.value = dive.blocType || '';
+  blocTypeSel.onchange = () => set({ blocType: blocTypeSel.value });
+
+  const blocMatSel = el('select');
+  blocMatSel.append(el('option', { value: '', text: '— matière —' }));
+  BLOC_MATIERES.forEach(x => blocMatSel.append(el('option', { value: x, text: x })));
+  blocMatSel.value = dive.blocMatiere || '';
+  blocMatSel.onchange = () => set({ blocMatiere: blocMatSel.value });
+
+  majConso();
+
+  form.append(section('Bouteille', { icone: '🛢', ouvert: false },
+    field('Gaz respiré', gazZone),
+    el('div.row-3', { style: { marginTop: '14px' } },
+      field('Type', blocTypeSel),
+      field('Matière', blocMatSel),
+      field('Volume (L)', numInput(dive.blocLitres, v => set({ blocLitres: v }), { placeholder: '12' })),
+    ),
+    el('div.row', {},
+      field('Pression départ (bar)',
+        numInput(dive.pressionDepart, v => { set({ pressionDepart: v }); majConso(); })),
+      field('Pression fin (bar)',
+        numInput(dive.pressionFin, v => { set({ pressionFin: v }); majConso(); })),
+    ),
+    zoneConso,
+  ));
+
+  // --- Matériel personnel, repris du profil ---
+  //
+  // Le profil tient la liste ; la plongée ne retient que ce qui a été
+  // réellement emporté. Par défaut : tout.
+  const materielProfil = profil?.materiel || [];
+  const equipZone = el('div');
+
+  /**
+   * On n'affiche que ce qui a été ajouté à CETTE plongée, en lignes.
+   * Deux façons d'en ajouter : reprendre une pièce du profil, ou en
+   * créer une à la volée — elle rejoint alors aussi la fiche plongeur.
+   */
+  function rendreEquipement() {
+    equipZone.innerHTML = '';
+    dive.materielIds ||= [];
+
+    const choisis = dive.materielIds
+      .map(id => materielProfil.find(m => m.id === id))
+      .filter(Boolean);
+
+    if (choisis.length) {
+      choisis.forEach(m => equipZone.append(ligneMateriel(m, {
+        onRetirer: piece => {
+          dive.materielIds = dive.materielIds.filter(x => x !== piece.id);
+          rendreEquipement();
+        },
+      })));
+    } else {
+      equipZone.append(el('div.hint', { style: { marginTop: 0 },
+        text: 'Rien d’ajouté pour cette plongée.' }));
+    }
+
+    const restants = materielProfil.filter(m => !dive.materielIds.includes(m.id));
+
+    equipZone.append(el('div.btn-row', {},
+      el('button.btn.sm', { type: 'button', text: '+ Nouveau matériel',
+        onclick: () => editerMateriel(null, async piece => {
+          // Ajouté à la plongée ET mémorisé sur la fiche plongeur :
+          // on ne le ressaisira jamais.
+          materielProfil.push(piece);
+          dive.materielIds = [...dive.materielIds, piece.id];
+          if (profil) {
+            profil.materiel = materielProfil;
+            try { await store.saveDiver(profil); } catch (e) { toast(e.message, true); }
+          }
+          rendreEquipement();
+        }) }),
+      restants.length
+        ? el('button.btn.sm.ghost', { type: 'button',
+            text: `Reprendre du matériel (${restants.length})`,
+            onclick: () => ouvrirChoixMateriel(restants) })
+        : null,
+    ));
+  }
+
+  /** Reprise depuis la fiche plongeur : on coche, on valide. */
+  function ouvrirChoixMateriel(restants) {
+    const enAttente = new Set();
+
+    openModal(close => {
+      const liste = el('div');
+
+      restants.forEach(m => {
+        const t = typeMateriel(m.type);
+        const c = el('input', { type: 'checkbox' });
+        const ligne = el('div.pl-ligne', { style: { gridTemplateColumns: '22px 24px 1fr' } },
+          c,
+          el('span.mat-icone', { text: t.icone }),
+          el('div.mat-corps', {},
+            el('div.mat-type', { text: t.label }),
+            el('div.mat-detail', { text: libelleMateriel(m) })),
+        );
+        const basculer = () => {
+          enAttente.has(m.id) ? enAttente.delete(m.id) : enAttente.add(m.id);
+          c.checked = enAttente.has(m.id);
+          ligne.classList.toggle('on', enAttente.has(m.id));
+        };
+        ligne.onclick = basculer;
+        c.onclick = e => { e.stopPropagation(); basculer(); };
+        liste.append(ligne);
+      });
+
+      return el('div', {},
+        el('h3', { text: 'Reprendre du matériel' }),
+        el('div.hint', { style: { marginTop: 0 },
+          text: 'Coche ce que tu avais sur cette plongée.' }),
+        liste,
+        el('div.btn-row', {},
+          el('button.btn.ghost', { type: 'button', text: 'Annuler', onclick: close }),
+          el('button.btn.primary', { type: 'button', text: 'Ajouter',
+            onclick: () => {
+              dive.materielIds = [...dive.materielIds, ...enAttente];
+              rendreEquipement();
+              close();
+            } }),
+        ),
+      );
+    });
+  }
+
+  rendreEquipement();
+
+  form.append(section('Mon matériel', { icone: '🎽', ouvert: false },
+    field('Lestage', input('text', dive.lestage, v => set({ lestage: v }),
+      { placeholder: '6 kg ceinture + 2 kg poches' })),
+    field('Combinaison', combiSeg),
+    field('Épaisseur', mmSel),
+    el('div.lbl', { style: { marginTop: '18px' }, text: 'Équipement emporté' }),
+    equipZone,
+  ));
+
+
   // ---------- 9. Ce que j'ai vu ----------
   form.append(section('Ce que j’ai vu', { icone: '🐟', ouvert: false },
     observationsPicker(dive)));
@@ -1369,8 +1468,7 @@ export async function diveFormView({ id }) {
     }
   };
 
-  const buttons = el('div.btn-row', {}, saveBtn);
-  form.append(alerte);
+  const buttons = el('div.btn-row.actions-fiche', {}, saveBtn);
   if (!isNew) {
     buttons.append(el('button.btn.danger', {
       type: 'button', text: 'Supprimer',
@@ -1383,7 +1481,10 @@ export async function diveFormView({ id }) {
       },
     }));
   }
-  form.append(buttons);
+  // Les actions sont construites en dernier (elles dépendent de tout le
+  // formulaire) mais s'affichent en premier. L'alerte les suit : le
+  // message doit être visible depuis le bouton qui le déclenche.
+  form.prepend(buttons, alerte);
 
   return { title: isNew ? 'Nouvelle plongée' : `Plongée n°${dive.numero}`, node: form, back: true };
 }

@@ -71,11 +71,14 @@ export function emptyBuddy() {
     id: uid(), prenom: '', nom: '',
     licence: '',            // identifiant unique du plongeur (FFESSM, etc.)
     club: '',               // sert à regrouper les compagnons
+    // Une structure (centre, club) n'a ni nom de famille ni licence :
+    // c'est une entité, pas une personne. Son « tampon » est son logo.
+    structure: false,
+    siteWeb: '',
     // Le niveau d'un plongeur change avec le temps : le figer sur une fiche
     // serait faux pour toutes les plongées passées. Seule qualité durable :
     // est-ce, ou non, un moniteur.
     moniteur: false,
-    niveau: '',             // ancien champ, conservé pour l'historique
     note: '',
     stamps: [],             // tampons ET signatures : { id, dataUrl, type }
     createdAt: new Date().toISOString(),
@@ -123,6 +126,7 @@ export function emptyDive(diverId, numero) {
 
     tempAir: null, tempSurface: null, tempFond: null,
     visibilite: '', courant: '',
+    meteo: '', etatMer: '',
 
     // Reconnaissance automatique du plan d'eau
     altitude: null, indiceEau: '',
@@ -260,23 +264,35 @@ export function appliquerOptionsAuto(dive, contexte = {}) {
 // ------------------------------------------------------------
 
 /**
- * Niveau courant d'un carnet : le plus élevé jamais saisi.
- * Rien à renseigner sur la fiche du plongeur, il se déduit.
+ * Niveau courant d'un carnet : le plus élevé connu.
+ *
+ * Deux sources, la carte l'emporte : un brevet est une preuve datée,
+ * alors que le niveau porté sur une plongée est déclaratif. Si les
+ * cartes disent N3, le carnet dit N3 — même si aucune plongée ne le
+ * mentionne encore.
+ *
+ * @param {Array} dives         plongées du carnet
+ * @param {Array} certifications cartes et brevets
  */
-export function niveauCourant(dives) {
+export function niveauCourant(dives, certifications = []) {
   let meilleur = '';
   let rang = -1;
   let dernier = '';
   let dateDernier = '';
 
-  for (const d of dives || []) {
-    const n = String(d.niveau || '').trim();
-    if (!n) continue;
+  const retenir = (nom, date) => {
+    const n = String(nom || '').trim();
+    if (!n) return;
     const r = rangNiveau(n);
     if (r > rang) { rang = r; meilleur = n; }
-    if ((d.date || '') >= dateDernier) { dateDernier = d.date || ''; dernier = n; }
-  }
-  // Un niveau hors liste ne se classe pas : on garde alors le plus récent.
+    if ((date || '') >= dateDernier) { dateDernier = date || ''; dernier = n; }
+  };
+
+  // Les cartes d'abord : à rang égal, c'est la plus récente qui gagne.
+  (certifications || []).forEach(c => retenir(c.nom, c.dateObtention));
+  (dives || []).forEach(d => retenir(d.niveau, d.date));
+
+  // Un intitulé hors liste ne se classe pas : on garde alors le plus récent.
   return meilleur || dernier || '';
 }
 
@@ -291,6 +307,51 @@ export function plongeesParNiveau(dives) {
 }
 
 export { NIVEAUX, rangNiveau };
+
+/**
+ * Consommation d'air.
+ *
+ * Deux chiffres, et il faut les distinguer :
+ *  • la consommation RÉELLE, au fond, en litres par minute ;
+ *  • la consommation ramenée à la SURFACE — le « SAC » — qui seule
+ *    permet de comparer deux plongées de profondeurs différentes.
+ *
+ * Le calcul suppose une profondeur moyenne. Si l'ordinateur ne l'a pas
+ * fournie, on l'estime à 60 % de la profondeur max : c'est un ordre de
+ * grandeur, et le résultat est alors marqué comme estimé.
+ *
+ * @returns {{litres, brute, surface, profMoy, estime}|null}
+ */
+export function consommation(dive) {
+  const depart = Number(dive?.pressionDepart);
+  const fin = Number(dive?.pressionFin);
+  const volume = Number(dive?.blocLitres);
+  const duree = Number(dive?.dureeMin);
+
+  if (!depart || !fin || !volume || !duree) return null;
+  const delta = depart - fin;
+  if (delta <= 0) return null;
+
+  // Un bi-bouteilles porte deux fois le volume annoncé par bloc.
+  const facteur = /bi/i.test(dive.blocType || '') ? 2 : 1;
+  const litres = delta * volume * facteur;
+
+  const estime = !dive.profMoy;
+  const profMoy = Number(dive.profMoy) || (Number(dive.profMax) || 0) * 0.6;
+  const pression = 1 + profMoy / 10;      // pression absolue moyenne, en bars
+
+  const brute = litres / duree;
+  const surface = pression > 0 ? brute / pression : null;
+
+  const arrondi = v => (v == null ? null : Math.round(v * 10) / 10);
+  return {
+    litres: Math.round(litres),
+    brute: arrondi(brute),
+    surface: arrondi(surface),
+    profMoy: arrondi(profMoy),
+    estime,
+  };
+}
 
 /** Libellé lisible d'un mélange : « Nitrox 32 », « Trimix 18/45 ». */
 export function libelleGaz(dive) {
@@ -334,7 +395,7 @@ export function guessWater(label = '') {
 }
 
 /** Statistiques d'un carnet — le nombre de plongées n'est jamais saisi. */
-export function computeStats(list) {
+export function computeStats(list, certifications = []) {
   const totalMin = list.reduce((s, d) => s + (Number(d.dureeMin) || 0), 0);
   const profs = list.map(d => Number(d.profMax) || 0).filter(Boolean);
   const byType = {};
@@ -357,7 +418,7 @@ export function computeStats(list) {
     douce: list.filter(d => d.eau === 'douce').length,
     lastDate: list.map(d => d.date).filter(Boolean).sort().pop() || null,
     byType, buddyCount, years,
-    niveau: niveauCourant(list),
+    niveau: niveauCourant(list, certifications),
     parNiveau: plongeesParNiveau(list),
   };
 }
