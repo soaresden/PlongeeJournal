@@ -1,24 +1,22 @@
 # ------------------------------------------------------------
-#  Rien de secret ne doit partir sur GitHub.
-#  Ce dépôt est public : mots de passe, clés et jetons n'y ont
-#  pas leur place. Les identifiants Supabase se saisissent dans
-#  l'app (Profil → Réglages) et restent dans le navigateur.
+#  Le carnet contient tes plongées : il ne part pas sur GitHub.
+#  Le dépôt ne porte que le code ; les données vivent à côté,
+#  dans donnees/, et se sauvegardent avec le reste de pCloud.
 # ------------------------------------------------------------
 
-credentials.json
-database.txt
+donnees/
+PlongeeAImporter/
+plongeeNo*.json
+lot*plongees*.json
+carnet-*.json
+
+# Rien de secret n'a plus lieu d'être ici, mais on garde le filet.
 *.secret
 *.key
 .env
 .env.*
 secrets.json
 config.local.js
-
-# ...mais le modèle, lui, doit rester dans le dépôt
-!credentials.example.json
-
-# Sauvegardes du carnet (contiennent tes plongées)
-carnet-plongee-*.json
 
 # Outils de développement
 node_modules/
@@ -29,3 +27,5 @@ package-lock.json
 Thumbs.db
 desktop.ini
 *.swp
+__pycache__/
+*.pyc

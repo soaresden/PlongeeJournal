@@ -96,8 +96,8 @@ export async function diversView() {
       el('div.hint', { style: { marginTop: '0', marginBottom: '12px' },
         text: local
           ? 'Les plongées sont stockées dans ce navigateur uniquement. Exporte régulièrement '
-          + 'une sauvegarde, ou branche ta base Supabase depuis les réglages.'
-          : 'Tes plongées sont dans ta base Supabase. Un export reste utile comme copie '
+          + 'une sauvegarde depuis les réglages.'
+          : 'Tes plongées sont dans le fichier carnet.json du PC. Un export reste utile comme copie '
           + 'hors ligne, ou pour changer de base.' }),
       el('div.btn-row', { style: { marginTop: '0' } },
         el('button.btn.sm', {

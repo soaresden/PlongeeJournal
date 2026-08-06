@@ -66,6 +66,45 @@ check('ordre : du plus précis au plus large',
 l = p('Calanque d’En-Vau, Cassis');
 check('apostrophe et accents préservés', l[1] === 'Cassis', l.join('|'));
 
+// ============================================================
+//  Cadrage : on part de ce qu'on veut voir, pas d'un niveau de zoom
+// ============================================================
+
+const { zoomPourLargeurKm } = await import(new URL('../js/map.js', import.meta.url).pathname);
+
+/** Largeur réellement couverte par la carte, en km, au zoom rendu. */
+const largeurObtenue = (km, lat, px) => {
+  const z = zoomPourLargeurKm(km, lat, px);
+  return (156543.03392 * Math.cos(lat * Math.PI / 180) / 2 ** z) * px / 1000;
+};
+
+for (const [lat, px] of [[43.2, 360], [43.2, 900], [49.1, 360], [63.4, 500], [-33.9, 700]]) {
+  const obtenu = largeurObtenue(3, lat, px);
+  check(`cadrage 3 km tenu (lat ${lat}, ${px} px)`,
+    Math.abs(obtenu - 3) < 0.25, `${obtenu.toFixed(2)} km`);
+}
+
+// La même consigne doit donner des zooms DIFFÉRENTS selon la latitude et
+// la largeur : c'est précisément ce qu'un « zoom: 13 » figé ne faisait pas.
+check('un écran large exige un zoom plus serré',
+  zoomPourLargeurKm(3, 43.2, 900) > zoomPourLargeurKm(3, 43.2, 360),
+  `${zoomPourLargeurKm(3, 43.2, 900)} vs ${zoomPourLargeurKm(3, 43.2, 360)}`);
+check('la latitude change le zoom nécessaire',
+  zoomPourLargeurKm(3, 63.4, 360) !== zoomPourLargeurKm(3, 43.2, 360),
+  `${zoomPourLargeurKm(3, 63.4, 360)} vs ${zoomPourLargeurKm(3, 43.2, 360)}`);
+check('plus large demandé, zoom plus petit',
+  zoomPourLargeurKm(15, 43.2, 360) < zoomPourLargeurKm(3, 43.2, 360), '');
+check('la vue de situation est bien plus large',
+  zoomPourLargeurKm(400, 43.2, 110) < zoomPourLargeurKm(3, 43.2, 360), '');
+
+// Bornes : les tuiles n'existent pas au-delà.
+check('zoom borné en bas', zoomPourLargeurKm(40000, 0, 320) >= 2,
+  String(zoomPourLargeurKm(40000, 0, 320)));
+check('zoom borné en haut', zoomPourLargeurKm(0.001, 43.2, 320) <= 18,
+  String(zoomPourLargeurKm(0.001, 43.2, 320)));
+check('une largeur absurde ne casse rien',
+  Number.isFinite(zoomPourLargeurKm(0, 43.2, 0)), String(zoomPourLargeurKm(0, 43.2, 0)));
+
 console.log(results.join('\n'));
 const failed = results.filter(r => r.startsWith(' FAIL')).length;
 console.log(failed ? `\n${failed} test(s) en échec` : '\nTous les tests de lieu passent.');

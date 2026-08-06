@@ -3,7 +3,7 @@
 
 // À incrémenter à chaque livraison : un vieux cache sert un vieux
 // index.html, et les changements d'icônes ou de menu ne se voient pas.
-const CACHE = 'plongee-journal-v10';
+const CACHE = 'plongee-journal-v12';
 
 const ASSETS = [
   './',
@@ -15,16 +15,17 @@ const ASSETS = [
   './js/lib.js',
   './js/store.js',
   './js/store-local.js',
-  './js/store-supabase.js',
+  './js/store-base.js',
+  './js/store-fichier.js',
   './js/model.js',
   './js/settings.js',
-  './js/supabase.js',
   './js/sync.js',
   './js/fit.js',
   './js/geo.js',
   './js/species.js',
   './js/stamp.js',
   './js/draft.js',
+  './js/export-plongee.js',
   './js/config.js',
   './js/map.js',
   './js/views/dives.js',
@@ -33,14 +34,12 @@ const ASSETS = [
   './js/views/buddies.js',
   './js/views/stats.js',
   './js/views/calendar.js',
+  './js/views/reglages.js',
   './js/views/carte.js',
   './js/views/materiel.js',
   './js/views/urgence.js',
   './js/urgence.js',
-  './js/views/lock.js',
-  './js/views/setup.js',
   './js/views/suunto.js',
-  './js/biometric.js',
   './assets/icon.svg',
   'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
   'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',
@@ -66,9 +65,11 @@ self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
   if (e.request.method !== 'GET') return;
 
-  // Cartes, recherche de lieux, Supabase, Suunto : réseau uniquement.
-  // Mettre en cache des réponses de base ferait afficher des données périmées.
-  if (/tile|nominatim|arcgisonline|googleapis|supabase\.co|suunto/.test(url.hostname + url.pathname)) return;
+  // Le carnet, l'API locale, les cartes et les recherches de lieux ne
+  // passent jamais par le cache : servir un carnet périmé serait pire
+  // que ne rien servir du tout.
+  if (/^\/api\//.test(url.pathname) || /\/donnees\//.test(url.pathname)) return;
+  if (/tile|nominatim|arcgisonline|googleapis|suunto/.test(url.hostname + url.pathname)) return;
 
   // Réseau d'abord pour le code (mises à jour immédiates), cache en secours.
   e.respondWith(

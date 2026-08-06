@@ -31,7 +31,7 @@ export function el(sel, attrs = {}, ...children) {
 export const $  = (s, root = document) => root.querySelector(s);
 export const $$ = (s, root = document) => Array.from(root.querySelectorAll(s));
 
-/** Identifiant unique (compatible UUID Supabase). */
+/** Identifiant unique, au format UUID. */
 export function uid() {
   if (crypto.randomUUID) return crypto.randomUUID();
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {

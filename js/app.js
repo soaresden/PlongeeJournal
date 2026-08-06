@@ -4,19 +4,16 @@
 
 import { $, $$, el, toast } from './lib.js';
 import { route, onRender, navigate, match, startRouter, currentPath } from './router.js';
-import { initStore, backendKind, resetStore } from './store.js';
-import { isSupabaseConfigured, settings, loadLocalCredentials } from './settings.js';
-import { getSession, consumeRecovery } from './supabase.js';
+import { initStore } from './store.js';
+import { modeActuel, enAttenteDExport, rafraichir } from './store-fichier.js';
 import * as sync from './sync.js';
-import * as bio from './biometric.js';
 
 import { divesView, diveView }            from './views/dives.js';
 import { diveFormView }                   from './views/dive-form.js';
 import { diversView, diverFormView }      from './views/divers.js';
 import { buddiesView, buddyFormView }     from './views/buddies.js';
 import { statsView }                      from './views/stats.js';
-import { lockView, passwordView }         from './views/lock.js';
-import { setupView }                      from './views/setup.js';
+import { reglagesView }                   from './views/reglages.js';
 import { suuntoView }                     from './views/suunto.js';
 import { urgenceView }                    from './views/urgence.js';
 
@@ -32,17 +29,10 @@ route('diver/:id',        diverFormView);
 route('buddies',          buddiesView);
 route('buddy/new',        buddyFormView);
 route('buddy/:id',        buddyFormView);
-route('verrou',           lockView);
-route('login',            lockView);      // ancien lien
-route('motdepasse',       passwordView);
-route('setup',            setupView);
+route('reglages',         reglagesView);
+route('setup',            reglagesView);   // ancien lien
 route('suunto',           suuntoView);
 route('urgence',          urgenceView);
-
-// Écrans accessibles carnet verrouillé
-// « urgence » est public par nécessité : une fiche de secours
-// verrouillée ne sert à rien.
-const PUBLIC = new Set(['verrou', 'login', 'motdepasse', 'setup', 'urgence']);
 
 const viewEl  = $('#view');
 const titleEl = $('#topTitle');
@@ -51,25 +41,25 @@ const actions = $('#topActions');
 const identEl = $('#topIdent');
 
 // ------------------------------------------------------------
-//  Indicateur de synchronisation
+//  Indicateur d'état du carnet
 // ------------------------------------------------------------
 
 const syncBtn = el('button.icon-btn', {
-  title: 'État de la synchronisation',
+  title: 'État du carnet',
   style: { fontSize: '15px', padding: '6px 8px' },
 });
 
-const SYNC_LOOK = {
-  ok:      { icon: '✓',  color: 'var(--ok)',      label: 'Tout est synchronisé' },
-  syncing: { icon: '⟳',  color: 'var(--accent)',  label: 'Envoi en cours…' },
-  pending: { icon: '⇡',  color: 'var(--warn)',    label: 'Écritures en attente' },
-  offline: { icon: '⚡', color: 'var(--warn)',    label: 'Hors ligne — envoi différé' },
-  error:   { icon: '!',  color: 'var(--danger)',  label: 'Échec de synchronisation' },
-  local:   { icon: '▤',  color: 'var(--text-mute)', label: 'Stockage local' },
+const ETATS = {
+  ok:      { icon: '✓',  color: 'var(--ok)',        label: 'Écrit dans le carnet du PC' },
+  syncing: { icon: '⟳',  color: 'var(--accent)',    label: 'Écriture en cours…' },
+  pending: { icon: '⇡',  color: 'var(--warn)',      label: 'Saisies à exporter' },
+  lecture: { icon: '👁', color: 'var(--text-dim)',  label: 'Lecture seule' },
+  local:   { icon: '▤',  color: 'var(--text-mute)', label: 'Hors ligne' },
+  error:   { icon: '!',  color: 'var(--danger)',    label: 'Problème' },
 };
 
 sync.onSyncChange(s => {
-  const look = SYNC_LOOK[s.state] ?? SYNC_LOOK.ok;
+  const look = ETATS[s.state] ?? ETATS.ok;
   syncBtn.textContent = look.icon + (s.pending ? ` ${s.pending}` : '');
   syncBtn.style.color = look.color;
   syncBtn.title = s.detail ? `${look.label} — ${s.detail}` : look.label;
@@ -78,31 +68,24 @@ sync.onSyncChange(s => {
 
 syncBtn.onclick = async () => {
   const s = sync.status();
-  if (s.state === 'local') return toast('Aucune base branchée — ouvre les réglages');
-  if (!s.pending) {
-    try { await initStore({ force: true }); toast('Carnet rechargé depuis la base'); navigate(currentPath(), true); }
-    catch (e) { toast(e.message, true); }
-    return;
-  }
-  toast(`Envoi de ${s.pending} modification(s)…`);
-  const r = await sync.flushNow();
-  toast(r?.done ? `${r.done} envoyée(s)` : 'Toujours en attente', !r?.done);
-};
+  if (s.pending) return navigate('reglages');
 
-const lockBtn = el('button.icon-btn', { text: '🔒', title: 'Verrouiller le carnet' });
-lockBtn.onclick = async () => {
-  const { signOut } = await import('./supabase.js');
-  await signOut();
-  resetStore();
-  booted = false;
-  toast('Carnet verrouillé');
-  navigate('verrou', true);
+  toast('Recherche du carnet…');
+  try {
+    const r = await rafraichir();
+    toast(r.mode === 'serveur'
+      ? `Carnet rechargé — ${r.plongees} plongée(s)`
+      : 'PC non joignable, carnet en lecture seule');
+    navigate(currentPath(), true);
+  } catch (e) {
+    toast(e.message, true);
+  }
 };
 
 const settingsBtn = el('button.icon-btn', { text: '⚙', title: 'Réglages',
-  onclick: () => navigate('setup') });
+  onclick: () => navigate('reglages') });
 
-actions.append(syncBtn, lockBtn, settingsBtn);
+actions.append(syncBtn, settingsBtn);
 
 // ------------------------------------------------------------
 //  Rendu
@@ -113,19 +96,15 @@ let lastPath = null;
 let booted = false;
 
 async function ensureStore() {
-  if (booted) return true;
-  if (!isSupabaseConfigured()) { await initStore(); booted = true; return true; }
-  const session = await getSession().catch(() => null);
-  if (!session) return false;
+  if (booted) return;
   await initStore();
   booted = true;
   await majFicheUrgence();
-  return true;
 }
 
 /**
  * Recopie localement l'essentiel de la fiche plongeur, pour que les
- * secours y accèdent sans mot de passe.
+ * secours y accèdent même sans réseau ni serveur.
  */
 async function majFicheUrgence() {
   try {
@@ -144,31 +123,23 @@ onRender(async path => {
   const m = match(path);
   if (!m) { navigate('dives', true); return; }
 
-  // Garde-fou : rien ne s'affiche tant qu'on n'est pas connecté.
-  if (!PUBLIC.has(path.split('/')[0])) {
-    let ready = false;
-    try { ready = await ensureStore(); }
-    catch (e) {
+  // La fiche d'urgence reste lisible quoi qu'il arrive : elle n'attend
+  // pas le chargement du carnet.
+  if (path.split('/')[0] !== 'urgence') {
+    try {
+      await ensureStore();
+    } catch (e) {
       viewEl.innerHTML = '';
       viewEl.append(el('div.empty', {},
         el('span.big', { text: '⚠️' }),
         'Impossible de charger le carnet.',
         el('div.hint', { text: e.message }),
         el('div', { style: { marginTop: '18px' } },
-          el('button.btn.primary', { text: 'Réglages', onclick: () => navigate('setup') }))));
+          el('button.btn.primary', { text: 'Réglages', onclick: () => navigate('reglages') }))));
       titleEl.textContent = 'Erreur';
       return;
     }
-    if (!ready) {
-      navigate(isSupabaseConfigured() ? 'verrou' : 'setup', true);
-      return;
-    }
   }
-
-  // Barre du haut : boutons masqués tant que le carnet est verrouillé.
-  const ouvert = !PUBLIC.has(path.split('/')[0]);
-  lockBtn.hidden = !ouvert;
-  syncBtn.hidden = !ouvert;
 
   viewEl.setAttribute('aria-busy', 'true');
 
@@ -233,6 +204,33 @@ backBtn.addEventListener('click', () => {
 });
 
 // ------------------------------------------------------------
+//  Retour du serveur
+//
+//  Le PC vient d'être allumé, ou le téléphone a rejoint le Wi-Fi :
+//  on retente le carnet plutôt que d'attendre que l'utilisateur y pense.
+// ------------------------------------------------------------
+
+let dernierEssai = 0;
+async function retenterLeServeur() {
+  if (modeActuel() === 'serveur') return;
+  if (document.hidden || Date.now() - dernierEssai < 20000) return;
+  dernierEssai = Date.now();
+
+  const avant = enAttenteDExport().length;
+  const r = await rafraichir().catch(() => null);
+  if (r?.mode === 'serveur') {
+    const parties = avant - enAttenteDExport().length;
+    toast(parties > 0
+      ? `PC retrouvé — ${parties} saisie(s) enregistrée(s)`
+      : 'PC retrouvé — carnet à jour');
+    navigate(currentPath(), true);
+  }
+}
+
+window.addEventListener('online', retenterLeServeur);
+document.addEventListener('visibilitychange', retenterLeServeur);
+
+// ------------------------------------------------------------
 //  Service worker (mode hors-ligne)
 // ------------------------------------------------------------
 
@@ -245,45 +243,10 @@ if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
 
 window.addEventListener('error', e => {
   if (String(e.message || '').includes('QuotaExceeded')) {
-    toast('Mémoire du navigateur pleine — synchronise puis allège les tampons.', true);
+    toast('Mémoire du navigateur pleine — exporte tes saisies puis allège les tampons.', true);
   }
 });
 
 // ------------------------------------------------------------
-//  Démarrage
-// ------------------------------------------------------------
-
-// credentials.json (local, jamais publié) peut fournir les identifiants
-// avant tout le reste — d'où le await ici.
-await loadLocalCredentials();
-
-// Lien de réinitialisation reçu par mail : à consommer AVANT le routeur,
-// car Supabase place ses jetons dans le hash, là où l'app met ses routes.
-if (isSupabaseConfigured()) {
-  const ressemble = /access_token=|error_description=/.test(location.hash)
-                 || /[?&]code=/.test(location.search);
-  if (ressemble) {
-    try {
-      if (await consumeRecovery()) {
-        booted = false;
-        toast('Choisis ton nouveau mot de passe');
-      }
-    } catch (e) {
-      toast(e.message, true);
-    }
-  }
-}
-
-// Première ouverture sans rien de configuré : on va droit à l'installation.
-if (!isSupabaseConfigured() && !location.hash) {
-  history.replaceState(null, '', '#/setup');
-}
-
-// Carnet verrouillé et empreinte activée : on la propose d'entrée.
-if (isSupabaseConfigured() && bio.isEnrolled() && !location.hash) {
-  history.replaceState(null, '', '#/verrou');
-}
-
-if (backendKind() === 'local') sync.setState('local', 'Données dans ce navigateur uniquement');
 
 startRouter();

@@ -1,11 +1,9 @@
 // ============================================================
 //  Listes de référence et réglages par défaut
 //
-//  ⚠️ Aucune clé ne se met dans ce fichier : les identifiants
-//  Supabase se saisissent dans l'app (onglet Profil → Réglages),
-//  ce qui permet à n'importe qui de recopier ce dépôt et de le
-//  brancher sur SA propre base sans toucher au code.
-//  Voir js/settings.js.
+//  Ces listes sont faites pour être modifiées : ajoute tes propres
+//  types de matériel, niveaux ou conditions, le reste de l'app suit.
+//  Les préférences propres à un appareil vivent dans js/settings.js.
 // ============================================================
 
 import { settings } from './settings.js';
@@ -17,8 +15,6 @@ export const CONFIG = {
 
   // Renseignée depuis l'écran Réglages ; vide = OpenStreetMap.
   get googleMapsKey() { return settings().googleMapsKey || ''; },
-  get supabaseUrl()   { return settings().supabaseUrl || ''; },
-  get supabaseAnonKey() { return settings().supabaseKey || ''; },
 };
 
 // --- Listes de référence, modifiables librement ---------------

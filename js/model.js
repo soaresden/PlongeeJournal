@@ -1,6 +1,6 @@
 // ============================================================
 //  Modèle de données et règles métier
-//  Partagé par les deux adaptateurs (local et Supabase).
+//  Partagé par tous les adaptateurs de stockage.
 // ============================================================
 
 import { uid, timeToMin, minToTime } from './lib.js';

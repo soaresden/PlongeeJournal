@@ -28,7 +28,13 @@ globalThis.URL = window.URL;
 globalThis.requestAnimationFrame = cb => setTimeout(cb, 0);
 Object.defineProperty(globalThis, 'crypto', { configurable: true, value: {
   randomUUID: () => 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/x/g, () => (Math.random()*16|0).toString(16)) } });
-globalThis.fetch = async () => ({ ok: true, json: async () => [] });
+// Doublure de fetch. Elle refuse le carnet et l'API : c'est la situation
+// d'un téléphone loin du PC, celle où le plus de choses peuvent casser.
+globalThis.fetch = async (url) => {
+  const u = String(url);
+  if (/\/api\/|carnet\.json/.test(u)) return { ok: false, status: 404, json: async () => ({}) };
+  return { ok: true, status: 200, json: async () => [] };
+};
 // Leaflet en doublure
 const chain = () => new Proxy(() => {}, { get: () => chain(), apply: () => chain() });
 globalThis.L = chain();
@@ -57,17 +63,16 @@ check('barre du haut : emplacement d’identité présent',
 
 // --- Créer un plongeur -------------------------------------
 const { store, emptyDiver, emptyDive, emptyBuddy, guessWater } = await import(path.join(ROOT, 'js/store.js'));
-const { checkCredentials } = await import(path.join(ROOT, 'js/settings.js'));
 
-// --- Garde-fou sur les clés Supabase -----------------------
-check('clé secrète refusée',
-  checkCredentials('https://abc.supabase.co', 'sb_secret_XXXX').some(e => e.includes('SECRÈTE')));
-check('clé publiable acceptée',
-  checkCredentials('https://abc.supabase.co', 'sb_publishable_XXXX').length === 0);
-check('ancienne clé anon (JWT) acceptée',
-  checkCredentials('https://abc.supabase.co', 'eyJhbGciOi').length === 0);
-check('URL malformée refusée',
-  checkCredentials('abc.supabase.co', 'sb_publishable_X').length > 0);
+// --- Mode de stockage --------------------------------------
+// Aucun serveur en face pendant les tests : l'app doit rester utilisable
+// et le dire, pas planter.
+const { modeActuel } = await import(path.join(ROOT, 'js/store-fichier.js'));
+const etatSync = await import(path.join(ROOT, 'js/sync.js'));
+check('sans serveur ni fichier, le carnet passe hors ligne',
+  modeActuel() === 'hors-ligne', modeActuel());
+check('l’état est annoncé à l’interface',
+  ['local', 'pending'].includes(etatSync.status().state), etatSync.status().state);
 
 const d = emptyDiver();
 Object.assign(d, { prenom: 'Denis', nom: 'Testeur', licence: 'A-12-345678',
@@ -119,8 +124,7 @@ check('plongées de nuit', st.nuit === 1, String(st.nuit));
 // --- Parcours de tous les écrans ---------------------------
 const routes = ['dives', `dive/${dv.id}`, `dive/${dv.id}/edit`, 'dive/new',
                 'divers', `diver/${d.id}`, 'buddies', `buddy/${b.id}`, 'stats',
-                'setup', 'verrou', 'login', 'motdepasse', 'suunto', 'suunto?ok=1', 'urgence',
-                'route/inexistante'];
+                'reglages', 'setup', 'suunto', 'urgence', 'route/inexistante'];
 for (const r of routes) {
   window.location.hash = '#/' + r;
   window.dispatchEvent(new window.Event('hashchange'));
@@ -138,22 +142,16 @@ check('la liste affiche les deux lieux',
   view().includes('Lac de Beaumont-sur-Oise') && view().includes('Calanque de Sormiou'), view().slice(0, 150));
 check('la liste affiche le compagnon', view().includes('Jean Moniteur'), '');
 
-// --- Assistant d'installation : un écran par étape ---
-window.location.hash = '#/setup';
+// --- Réglages : l'état du carnet, en clair ---
+window.location.hash = '#/reglages';
 window.dispatchEvent(new window.Event('hashchange'));
 await tick(150);
-check('installation : barre de progression à 3 étapes',
-  document.querySelectorAll('#view .wiz-etape').length === 3,
-  String(document.querySelectorAll('#view .wiz-etape').length));
-check('installation : une seule étape affichée',
-  document.querySelectorAll('#view .wiz-titre').length === 1,
-  String(document.querySelectorAll('#view .wiz-titre').length));
-check('installation : étapes non atteintes verrouillées',
-  document.querySelectorAll('#view .wiz-puce[disabled]').length === 2,
-  String(document.querySelectorAll('#view .wiz-puce[disabled]').length));
-check('installation : commence à l’étape 1',
-  document.querySelector('#view .wiz-puce.active')?.textContent === '1',
-  document.querySelector('#view .wiz-puce.active')?.textContent);
+check('réglages : l’état du stockage est expliqué',
+  /Hors ligne|Lecture seule|carnet du PC/.test(view()), view().slice(0, 120));
+check('réglages : le chemin d’import est rappelé',
+  view().includes('PlongeeAImporter'), '');
+check('réglages : sauvegarde manuelle proposée',
+  /Exporter tout le carnet/.test(view()), '');
 
 // --- Écran Plongeurs : vignettes, pas des lignes ---
 window.location.hash = '#/buddies';

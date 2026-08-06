@@ -218,7 +218,8 @@ export async function diveView({ id }) {
   // Carte
   if (d.lat != null) {
     wrap.append(el('div.section', {},
-      staticMap(d.lat, d.lng),
+      // 3 km de large : assez pour reconnaître la côte et le port.
+      staticMap(d.lat, d.lng, { km: 3 }),
       el('div.hint', {},
         d.lieuDetail ? el('div', { text: d.lieuDetail }) : null,
         el('div', { text: `${d.lat.toFixed(5)}, ${d.lng.toFixed(5)}` }),

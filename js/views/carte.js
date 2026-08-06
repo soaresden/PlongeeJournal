@@ -10,6 +10,7 @@
 // ============================================================
 
 import { el, fmtDate, fmtDuration, fullName } from '../lib.js';
+import { zoomPourLargeurKm } from '../map.js';
 import { navigate } from '../router.js';
 
 /** Regroupe les plongées par lieu, à ~200 m près. */
@@ -88,8 +89,15 @@ export function carteDesPlongees(dives, { buddies = [] } = {}) {
       couche.addLayer(marqueur);
     });
 
-    const bornes = L.latLngBounds(groupes.map(g => [g.lat, g.lng]));
-    carte.fitBounds(bornes, { padding: [36, 36], maxZoom: 12 });
+    // Un seul lieu : fitBounds collerait au maximum de zoom et on ne
+    // verrait qu'une tache d'eau. On cadre alors sur ~15 km.
+    if (groupes.length === 1) {
+      const g = groupes[0];
+      carte.setView([g.lat, g.lng], zoomPourLargeurKm(15, g.lat, boite.clientWidth));
+    } else {
+      const bornes = L.latLngBounds(groupes.map(g => [g.lat, g.lng]));
+      carte.fitBounds(bornes, { padding: [36, 36], maxZoom: 12 });
+    }
   }
 
   function afficherLieu(g) {
@@ -178,9 +186,13 @@ export function carteDesPlongees(dives, { buddies = [] } = {}) {
              .setView([46.6, 2.4], 5);
 
     const plan = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 });
-    const sat = L.tileLayer(
-      'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-      { maxZoom: 19 });
+    // Satellite seul : de l'eau bleue sans nom. On pose les étiquettes dessus.
+    const sat = L.layerGroup([
+      L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+        { maxZoom: 19 }),
+      L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
+        { maxZoom: 19 }),
+    ]);
     plan.addTo(carte);
     L.control.layers({ Plan: plan, Satellite: sat }, {}, { position: 'topright' }).addTo(carte);
     L.control.scale({ imperial: false, position: 'bottomleft' }).addTo(carte);

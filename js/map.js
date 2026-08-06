@@ -208,7 +208,7 @@ export function locationPicker(value, onChange) {
   // ---- carte ----
   async function initMap() {
     const start = state.lat != null
-      ? { lat: state.lat, lng: state.lng, zoom: 13 }
+      ? { lat: state.lat, lng: state.lng, zoom: 13 }   // recalculé plus bas
       : { ...CONFIG.defaultCenter, zoom: CONFIG.defaultZoom };
 
     if (CONFIG.googleMapsKey) {
@@ -392,29 +392,126 @@ export function locationPicker(value, onChange) {
 }
 
 /**
+ * Le zoom qui donne EXACTEMENT la largeur voulue sur le terrain.
+ *
+ * Fixer « zoom : 13 » ne veut rien dire : à cette valeur, un écran de
+ * téléphone couvre 1,5 km et un écran de PC 5 km, et la même carte est
+ * deux fois plus large à Marseille qu'à Oslo — la résolution d'une tuile
+ * dépend de la latitude. On part donc de ce qu'on veut voir, en km, et
+ * on en déduit le zoom.
+ *
+ * Résolution Web Mercator : 156543,03 × cos(latitude) / 2^zoom mètres
+ * par pixel.
+ */
+export function zoomPourLargeurKm(km, lat, largeurPx) {
+  const metresVoulus = Math.max(0.05, km) * 1000;
+  const largeur = Math.max(120, largeurPx || 320);
+  const parPixel = metresVoulus / largeur;
+  const brut = Math.log2(156543.03392 * Math.cos(lat * Math.PI / 180) / parPixel);
+  // Bornes du fond de carte : au-delà, les tuiles n'existent pas.
+  return Math.max(2, Math.min(18, Math.round(brut * 10) / 10));
+}
+
+const TUILES = {
+  satellite: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+  // Noms de lieux et limites, à poser PAR-DESSUS l'image satellite : une
+  // vue aérienne de plan d'eau est bleue et muette, on n'y reconnaît rien.
+  etiquettes: 'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
+  plan: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+};
+
+/**
  * Carte de la fiche d'une plongée.
  *
- * Zoom 13 : environ 2 à 3 km de large. Au-delà (14, 15…) on ne voit plus
- * qu'une tache d'eau sans repère — impossible de reconnaître l'endroit.
- * Les boutons de zoom et l'échelle restent disponibles pour aller voir
- * de plus près.
+ * `km` est la largeur de terrain visée. 3 km : on voit la côte, le port,
+ * la route — de quoi reconnaître l'endroit. Plus serré, il ne reste
+ * qu'une tache d'eau ; plus large, le point se perd.
+ *
+ * Une vignette de situation, en haut à droite, montre la région : c'est
+ * elle qui répond vraiment à « c'est où, ça ? ».
  */
-export function staticMap(lat, lng, height = 220, zoom = 13) {
-  const box = el('div.map-box', { style: { height: height + 'px' } });
+export function staticMap(lat, lng, options = {}) {
+  // Ancienne signature (lat, lng, hauteur, zoom) : on la tolère.
+  if (typeof options === 'number') options = { hauteur: options };
+
+  const { hauteur = 240, km = 3, situation = true } = options;
+
+  const box = el('div.map-box', { style: { height: hauteur + 'px' } });
+
   requestAnimationFrame(() => {
     if (typeof L === 'undefined') return;
+
+    const zoom = zoomPourLargeurKm(km, lat, box.clientWidth);
+
     const m = L.map(box, {
       zoomControl: true, attributionControl: false,
       dragging: true, scrollWheelZoom: false, doubleClickZoom: true, touchZoom: true,
     }).setView([lat, lng], zoom);
 
-    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-      { maxZoom: 19 }).addTo(m);
+    const satellite = L.layerGroup([
+      L.tileLayer(TUILES.satellite, { maxZoom: 19 }),
+      L.tileLayer(TUILES.etiquettes, { maxZoom: 19 }),
+    ]);
+    const plan = L.tileLayer(TUILES.plan, { maxZoom: 19 });
+    satellite.addTo(m);
+
+    L.control.layers({ 'Satellite': satellite, 'Plan': plan }, {},
+      { position: 'topleft', collapsed: true }).addTo(m);
     L.marker([lat, lng]).addTo(m);
     // Barre d'échelle : sans elle, on ne sait pas ce qu'on regarde.
     L.control.scale({ imperial: false, position: 'bottomleft' }).addTo(m);
 
+    // Revenir au cadrage d'origine après avoir zoomé : sans ça, on se
+    // perd et il faut recharger la fiche.
+    const recadrer = L.control({ position: 'bottomright' });
+    recadrer.onAdd = () => {
+      const b = L.DomUtil.create('button', 'map-recadrer');
+      b.type = 'button';
+      b.textContent = `⊙ ${km} km`;
+      b.title = `Revenir à une vue de ${km} km`;
+      L.DomEvent.disableClickPropagation(b);
+      b.onclick = () => m.setView([lat, lng], zoomPourLargeurKm(km, lat, box.clientWidth));
+      return b;
+    };
+    recadrer.addTo(m);
+
+    if (situation) ajouterSituation(m, lat, lng);
+
     setTimeout(() => m.invalidateSize(), 60);
   });
+
   return box;
+}
+
+/**
+ * Vignette de situation : la même position, mais à 400 km de large.
+ * Non interactive — elle informe, elle ne se manipule pas.
+ */
+function ajouterSituation(carte, lat, lng) {
+  const vignette = L.control({ position: 'topright' });
+
+  vignette.onAdd = () => {
+    const hote = L.DomUtil.create('div', 'map-situation');
+    L.DomEvent.disableClickPropagation(hote);
+
+    // La carte imbriquée doit être créée une fois le noeud dans le DOM.
+    setTimeout(() => {
+      if (!hote.isConnected) return;
+      const mini = L.map(hote, {
+        zoomControl: false, attributionControl: false, dragging: false,
+        scrollWheelZoom: false, doubleClickZoom: false, touchZoom: false,
+        boxZoom: false, keyboard: false,
+      }).setView([lat, lng], zoomPourLargeurKm(400, lat, 110));
+
+      L.tileLayer(TUILES.plan, { maxZoom: 19 }).addTo(mini);
+      L.circleMarker([lat, lng], {
+        radius: 5, color: '#e04b3c', fillColor: '#e04b3c', fillOpacity: 1, weight: 2,
+      }).addTo(mini);
+      setTimeout(() => mini.invalidateSize(), 40);
+    }, 0);
+
+    return hote;
+  };
+
+  vignette.addTo(carte);
 }
