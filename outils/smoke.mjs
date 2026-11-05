@@ -289,8 +289,8 @@ check('réglages : adresse de retour à déclarer affichée', /soaresden\.github
 const { fitPlongee } = await import(__p2u(path.join(ROOT, 'outils/fit-fabrique.mjs')).href);
 const isoLocal = txt => new Date(txt).toISOString();
 const ACTS = [
-  { workoutKey: 'aaaaaaaaaaaaaaaaaaaaaaa1', activityId: 83, iso: isoLocal('2026-06-02T23:40:00'), fit: {} },               // = dv2
-  { workoutKey: 'aaaaaaaaaaaaaaaaaaaaaaa2', activityId: 83, iso: isoLocal('2023-05-10T10:00:00'), fit: {} },               // ancienne
+  { workoutKey: 'aaaaaaaaaaaaaaaaaaaaaaa1', activityId: 78, iso: isoLocal('2026-06-02T23:40:00'), fit: {} },               // = dv2
+  { workoutKey: 'aaaaaaaaaaaaaaaaaaaaaaa2', activityId: 78, iso: isoLocal('2023-05-10T10:00:00'), fit: {} },               // ancienne
   { workoutKey: 'aaaaaaaaaaaaaaaaaaaaaaa3', activityId: 21, iso: isoLocal('2026-07-20T12:00:00'), fit: { sport: 5, sub: 17 } }, // natation
   { workoutKey: 'aaaaaaaaaaaaaaaaaaaaaaa4', activityId: 1, iso: isoLocal('2026-07-21T07:00:00'), fit: { sport: 1, sub: 0 } },  // course
 ];
@@ -298,12 +298,12 @@ let fitsDemandes = [];
 window.Capacitor = { isNativePlatform: () => true, Plugins: { CapacitorHttp: { request: async ({ url, headers, responseType }) => {
   const u = new URL(url);
   if (headers['Ocp-Apim-Subscription-Key'] !== 'abo-smoke' || !/^Bearer /.test(headers.Authorization)) return { status: 401, data: 'refusé', headers: {} };
-  if (u.pathname === '/v2/workouts') {
-    const liste = u.searchParams.get('until') || u.searchParams.get('since') ? [] : ACTS.map(a => ({ workoutKey: a.workoutKey, activityId: a.activityId,
+  if (u.pathname === '/v3/workouts') {
+    const liste = Number(u.searchParams.get('offset')) > 0 || u.searchParams.get('until') ? [] : ACTS.map(a => ({ workoutKey: a.workoutKey, activityId: a.activityId,
       startTime: Date.parse(a.iso), totalTime: 2700 }));
     return { status: 200, data: JSON.stringify({ error: null, payload: liste }), headers: {} };
   }
-  const k = /exportFit\/(\w+)/.exec(u.pathname)?.[1];
+  const k = /^\/v3\/workouts\/(\w+)\/fit$/.exec(u.pathname)?.[1];
   const a = ACTS.find(x => x.workoutKey === k);
   if (!a || responseType !== 'arraybuffer') return { status: 404, data: '', headers: {} };
   fitsDemandes.push(k);
@@ -330,7 +330,7 @@ bouton(/Chercher mes activités/).click();
 await tick(500);
 check('Suunto : 4 activités, la course ignorée', /4 activité\(s\) sur ton compte/.test(view()) && /1 autre\(s\) sport\(s\) ignoré/.test(view()),
   view().slice(view().indexOf('activité(s) sur'), view().indexOf('activité(s) sur') + 160));
-check('Suunto : un seul .fit par type pour apprendre (3 types)', fitsDemandes.length === 3, fitsDemandes.join(','));
+check('Suunto : plongée et natation reconnues sans .fit, la course en un seul', fitsDemandes.length === 1, fitsDemandes.join(','));
 bouton(/Analyser/).click();
 await tick(500);
 const dv2Avant = structuredClone(await store.getDive(dv2.id));

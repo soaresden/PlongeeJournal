@@ -317,14 +317,14 @@ export class ClientSuunto {
   }
 
   /** GET sur l'API, avec renouvellement du jeton et patience sur 429. */
-  async appel(chemin, { binaire = false } = {}) {
+  async appel(chemin, { binaire = false, absentOk = false } = {}) {
     let renouvele = false;
     for (let essai = 0; essai < 6; essai++) {
       const acces = await this.jeton();
       const r = await this.http(`${API}${chemin}`, {
         binaire,
         headers: {
-          Authorization: `Bearer ${acces}`,
+          Authorization: this.authBrute ? acces : `Bearer ${acces}`,
           'Ocp-Apim-Subscription-Key': this.liaison.cleAbonnement,
           Accept: binaire ? 'application/octet-stream' : 'application/json',
         },
@@ -332,11 +332,17 @@ export class ClientSuunto {
       if (r.ok) return r;
       const corps = String(r.texte || '').slice(0, 200);
       this.journal(`GET ${chemin} → ${r.status} ${corps}`);
-      if (r.status === 401 && !renouvele) { renouvele = true; await this.jeton(true); continue; }
-      if (r.status === 401) throw new ErreurSuunto('Suunto refuse l’accès au compte. Reconnecte-le depuis les réglages.', { status: 401, reconnecter: true });
-      if (r.status === 403 || (r.status === 401 && /subscription/i.test(corps))) {
-        throw new ErreurSuunto('Clé d’abonnement refusée (profil API Zone → « Your subscriptions »).', { status: r.status });
+      // La passerelle répond 401 aussi pour une clé d'abonnement absente
+      // ou fausse : à distinguer d'un jeton expiré.
+      if ((r.status === 401 || r.status === 403) && /subscription key/i.test(corps)) {
+        throw new ErreurSuunto('Clé d’abonnement refusée : colle la « Primary key » de ton profil API Zone (Your subscriptions).', { status: r.status });
       }
+      // « Authorization: JWT » : avec ou sans « Bearer » selon les passerelles.
+      if (r.status === 401 && !this.authEssayee) { this.authEssayee = true; this.authBrute = !this.authBrute; continue; }
+      if (r.status === 401 && !renouvele) { renouvele = true; this.authBrute = !this.authBrute; await this.jeton(true); continue; }
+      if (r.status === 401) throw new ErreurSuunto('Suunto refuse l’accès au compte. Reconnecte-le depuis les réglages.', { status: 401, reconnecter: true });
+      if (r.status === 403) throw new ErreurSuunto(`Suunto refuse cette opération (403). ${corps}`, { status: 403 });
+      if (r.status === 404 && absentOk) return r;
       if (r.status === 429) {
         const attente = Math.min(Number(r.entetes?.['retry-after'] ?? r.entetes?.['Retry-After']) || 60, 300);
         if (essai >= 3) throw new ErreurSuunto(`Suunto limite le nombre d’appels. Reprends dans ${Math.ceil(attente / 60)} min : ce qui est fait est gardé.`, { status: 429, attente });
@@ -351,47 +357,74 @@ export class ClientSuunto {
   }
 
   /**
-   * Toutes les activités du compte. On ne sait pas dans quel ordre
-   * l'API les rend : on recule avec « until », puis on avance avec
-   * « since », jusqu'à ne plus rien voir de neuf.
+   * Toutes les activités du compte. API v3 : pages « limit + offset »,
+   * filtrées sur la date de l'activité (par défaut l'API filtre sur la
+   * date de MODIFICATION). On s'arrête sur une page vide ; si le serveur
+   * ignore « offset » (v2), on se rabat sur « until » / « since ».
    */
   async activites({ parPage = 100, progres = () => {} } = {}) {
     const vues = new Map();
     const page = async (params) => {
       const q = new URLSearchParams({ limit: String(parPage), ...params });
-      const r = await this.appel(`/v2/workouts?${q}`);
+      // API Workout v3 ; l'ancienne v2 en secours si la v3 n'est pas là.
+      let r = this.versionListe === 'v2' ? null : await this.appel(`/v3/workouts?${q}`, { absentOk: true });
+      if (!r || r.status === 404) {
+        r = await this.appel(`/v2/workouts?${q}`);
+        if (this.versionListe !== 'v2') this.journal('liste : v3 absente, passage en v2');
+        this.versionListe = 'v2';
+      }
       let j;
       try { j = JSON.parse(r.texte || '{}'); } catch { throw new ErreurSuunto('Liste d’activités illisible.'); }
+      if (j?.error && (j.error.code || j.error.description)) {
+        throw new ErreurSuunto(`Suunto : ${j.error.description || j.error.code}`);
+      }
       const brutes = Array.isArray(j) ? j : (j.payload ?? j.workouts ?? j.data ?? []);
       const lot = brutes.map(normaliserActivite).filter(a => a.cle);
       const neuves = lot.filter(a => !vues.has(a.cle));
       neuves.forEach(a => vues.set(a.cle, a));
       progres(vues.size);
-      this.journal(`liste ${JSON.stringify(params)} : ${lot.length} activité(s), ${neuves.length} nouvelle(s)`);
+      this.journal(`liste ${q.toString().replace(/limit=\d+&?/, '')} : ${lot.length} activité(s), ${neuves.length} nouvelle(s)`
+        + (j.metadata?.workoutcount != null ? ` (compte annoncé : ${j.metadata.workoutcount})` : ''));
       return { lot, neuves };
     };
 
-    let p = await page({});
-    // En arrière
-    for (let i = 0; i < 500 && p.neuves.length && p.lot.length >= parPage; i++) {
-      const plusVieux = Math.min(...p.lot.map(a => a.debut).filter(Number.isFinite));
-      if (!Number.isFinite(plusVieux)) break;
-      p = await page({ until: String(plusVieux - 1) });
+    // Pages successives (offset)
+    let offset = 0;
+    let p;
+    for (let i = 0; i < 2000; i++) {
+      p = await page({ since: '0', offset: String(offset), 'filter-by-modification-time': 'false' });
+      if (!p.lot.length || !p.neuves.length) break;
+      offset += p.lot.length;
     }
-    // En avant (si l'API rend les plus anciennes d'abord)
-    let plusRecent = Math.max(...[...vues.values()].map(a => a.debut).filter(Number.isFinite));
-    for (let i = 0; i < 500 && Number.isFinite(plusRecent); i++) {
-      p = await page({ since: String(plusRecent + 1) });
-      if (!p.neuves.length) break;
-      plusRecent = Math.max(plusRecent, ...p.neuves.map(a => a.debut).filter(Number.isFinite));
-      if (p.lot.length < parPage) break;
+    // Serveur qui ignore « offset » : même page qui revient pleine.
+    if (p.lot.length && !p.neuves.length && p.lot.length >= Math.min(parPage, 50)) {
+      this.journal('« offset » ignoré : pagination par dates');
+      let plusVieux = Math.min(...[...vues.values()].map(a => a.debut).filter(Number.isFinite));
+      for (let i = 0; i < 1000 && Number.isFinite(plusVieux); i++) {
+        const q = await page({ until: String(plusVieux), 'filter-by-modification-time': 'false' });
+        if (!q.neuves.length) break;
+        plusVieux = Math.min(plusVieux, ...q.neuves.map(a => a.debut).filter(Number.isFinite));
+      }
+      let plusRecent = Math.max(...[...vues.values()].map(a => a.debut).filter(Number.isFinite));
+      for (let i = 0; i < 1000 && Number.isFinite(plusRecent); i++) {
+        const q = await page({ since: String(plusRecent + 1), 'filter-by-modification-time': 'false' });
+        if (!q.neuves.length) break;
+        plusRecent = Math.max(plusRecent, ...q.neuves.map(a => a.debut).filter(Number.isFinite));
+      }
     }
     return [...vues.values()].sort((a, b) => (a.debut || 0) - (b.debut || 0));
   }
 
   /** Le .fit d'une activité. */
   async fit(cle) {
-    const r = await this.appel(`/v2/workout/exportFit/${encodeURIComponent(cle)}`, { binaire: true });
+    const k = encodeURIComponent(cle);
+    let r = this.versionFit === 'v2' ? null : await this.appel(`/v3/workouts/${k}/fit`, { binaire: true, absentOk: true });
+    if (!r || r.status === 404) {
+      r = await this.appel(`/v2/workout/exportFit/${k}`, { binaire: true, absentOk: true });
+      if (r.status === 404) throw new ErreurSuunto('Activité introuvable chez Suunto.', { status: 404 });
+      if (this.versionFit !== 'v2') this.journal('.fit : v3 absente, passage en v2');
+      this.versionFit = 'v2';
+    }
     if (!r.octets?.length) throw new ErreurSuunto('Fichier .fit vide.');
     return r.octets;
   }

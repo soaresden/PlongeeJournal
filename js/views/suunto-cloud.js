@@ -22,7 +22,7 @@ import {
   chargerLiaison, sauverLiaison, estRelie, apiAccessible, ClientSuunto,
 } from '../suunto-cloud.js';
 import {
-  CLE_SUUNTO, aExaminer, genreConnu, trouverDansCarnet, proposer, metaSuunto, numerotationChronologique,
+  CLE_SUUNTO, aExaminer, genreConnu, genreActivite, trouverDansCarnet, proposer, metaSuunto, numerotationChronologique,
 } from '../suunto-aligner.js';
 
 const GENRES = {
@@ -199,7 +199,7 @@ export async function suuntoCloudView() {
     return etat.activites.filter(a => {
       if (!aExaminer(a, liaison.types)) return false;
       const d = etat.decodes.get(a.cle);
-      if (d?.dec && d.dec.genre === 'sport') return false;
+      if (d?.dec && genreActivite(a, d.dec) === 'sport') return false;
       return !trouverDansCarnet(a, connues())?.liee;
     });
   }
@@ -337,7 +337,7 @@ export async function suuntoCloudView() {
       coche.onchange = () => { etat.coches.set(a.cle, coche.checked); rendre(); };
       const dec = d?.dec;
       const details = dec
-        ? [GENRES[dec.genre] || null, dec.dureeMin ? fmtDuration(dec.dureeMin) : null, dec.profMax ? `${dec.profMax} m` : null,
+        ? [GENRES[genreActivite(a, dec)] || null, dec.dureeMin ? fmtDuration(dec.dureeMin) : null, dec.profMax ? `${dec.profMax} m` : null,
            dec.tempFond != null ? `${Math.round(dec.tempFond)} °C` : null,
            dec.pressionDepart ? `${dec.pressionDepart} → ${dec.pressionFin ?? '?'} bar` : null].filter(Boolean).join(' · ')
         : [GENRES[genreConnu(liaison.types, a.activite)] || `activité n°${a.activite ?? '?'}`,

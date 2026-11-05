@@ -16,8 +16,29 @@ import { PRE_REMPLI } from './config.js';
 
 export const CLE_SUUNTO = cle => `suunto:${cle}`;
 
-/** Genre appris pour un n° d'activité Suunto, ou null si jamais vu. */
-export const genreConnu = (types, activite) => (activite == null ? null : types?.[String(activite)] ?? null);
+/**
+ * N° d'activité de l'appli Suunto → genre, d'après la liste officielle
+ * (API Zone, « Supported sport types »). Le reste s'apprend avec un .fit.
+ */
+export const ACTIVITES_SUUNTO = {
+  21: 'natation',      // Swimming (piscine)
+  78: 'plongee',       // Scubadiving
+  79: 'apnee',         // Freediving
+  85: 'natation',      // Openwater swimming
+  90: 'natation',      // Snorkeling
+  100: 'apnee',        // Mermaiding
+  101: 'apnee',        // Spearfishing
+};
+
+/** Genre d'un n° d'activité : liste officielle, sinon appris, sinon null. */
+export const genreConnu = (types, activite) => (activite == null ? null
+  : ACTIVITES_SUUNTO[Number(activite)] ?? types?.[String(activite)] ?? null);
+
+/**
+ * Genre d'une activité décodée : le n° Suunto prime (l'apnée sort en
+ * « plongée » dans le .fit), sinon le sport du .fit.
+ */
+export const genreActivite = (act, dec) => ACTIVITES_SUUNTO[Number(act?.activite)] ?? dec?.genre ?? null;
 
 /** Faut-il télécharger le .fit de cette activité ? */
 export function aExaminer(act, types) {
@@ -124,7 +145,8 @@ const genrePourRangement = g => (g === 'apnee' ? 'apnee' : g === 'natation' ? 'a
  */
 export function proposer(act, dec, connues, seances = []) {
   if (!dec) return { action: 'ignorer', comment: 'fichier illisible' };
-  if (dec.genre === 'sport') return { action: 'ignorer', comment: 'autre sport' };
+  const genre = genreActivite(act, dec);
+  if (genre === 'sport') return { action: 'ignorer', comment: 'autre sport' };
   const trouve = trouverDansCarnet(act, connues);
   if (trouve) {
     const c = trouve.entree.seance ? completerSeance(trouve.entree, dec) : completerPlongee(trouve.entree, dec);
@@ -133,7 +155,7 @@ export function proposer(act, dec, connues, seances = []) {
     return { action: 'completer', entree: trouve.entree, champs: c.champs, libelles: c.libelles, comment: trouve.comment };
   }
   const rangement = suggererRangement({
-    genre: genrePourRangement(dec.genre), profMax: dec.profMax, date: dec.start, lieu: dec.lieu,
+    genre: genrePourRangement(genre), profMax: dec.profMax, date: dec.start, lieu: dec.lieu,
   }, seances);
   return { action: 'ajouter', rangement };
 }
@@ -145,7 +167,7 @@ export function metaSuunto(act, dec) {
     source: 'suunto-cloud',
     activite: act.activite,
     lieLe: new Date().toISOString(),
-    genre: dec.genre === 'natation' ? 'autre' : dec.genre,
+    genre: genreActivite(act, dec) === 'natation' ? 'autre' : genreActivite(act, dec),
     gf: dec.gf ? `${dec.gf.bas}/${dec.gf.haut}` : null,
     eau: dec.eau || null,
   };

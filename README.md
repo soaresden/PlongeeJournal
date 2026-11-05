@@ -235,7 +235,7 @@ node outils/lieu-test.mjs        #  30  recherche de lieux, cadrage des cartes
 node outils/ocean-test.mjs       #  69  Suunto Ocean : trames, Heatshrink, décodage, session Bluetooth
 node outils/seance-test.mjs      #  38  séances : stockage, fusion, tri plongée / piscine / fosse
 node outils/maj-apk-test.mjs     #  29  mise à jour de l'APK : numéro embarqué, release GitHub
-node outils/suunto-cloud-test.mjs #  65  compte Suunto : OAuth, jetons, liste, .fit, alignement
+node outils/suunto-cloud-test.mjs #  69  compte Suunto : OAuth, jetons, liste, .fit, alignement
 node outils/fit-test.mjs         #  27  décodage des fichiers .fit
 node outils/geo-test.mjs         #  22  eau douce / salée, altitude
 node outils/stamp-test.mjs       #  13  détourage des tampons

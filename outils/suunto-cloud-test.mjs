@@ -105,24 +105,31 @@ const activitesFaux = Array.from({ length: N }, (_, i) => ({
   totalTime: 3000 + i,
 }));
 
-function fauxSuunto({ ordre = 'recent', exigeBearer = true } = {}) {
+function fauxSuunto({ ordre = 'recent', exigeBearer = true, version = 'v3' } = {}) {
   const journal = [];
   let refus = 0, limite = 0;
   const http = async (url, { headers }) => {
     const u = new URL(url);
     journal.push(u.pathname + u.search);
-    if (headers['Ocp-Apim-Subscription-Key'] !== 'abo-123') return { status: 401, ok: false, texte: '{"message":"Access denied due to missing subscription key"}' };
+    if (headers['Ocp-Apim-Subscription-Key'] !== 'abo-123') return { status: 401, ok: false, texte: 'Access denied due to missing subscription key. Make sure to include subscription key when making requests to an API. (SubscriptionKeyNotFound)' };
     if (http.refuserProchain) { http.refuserProchain = false; refus++; return { status: 401, ok: false, texte: 'jeton expiré' }; }
     if (http.limiterProchain) { http.limiterProchain--; limite++; return { status: 429, ok: false, texte: 'Rate limit', entetes: { 'retry-after': '7' } }; }
     if (exigeBearer && !/^Bearer /.test(headers.Authorization)) return { status: 401, ok: false, texte: 'pas de jeton' };
-    if (u.pathname === '/v2/workouts') {
-      const limit = Number(u.searchParams.get('limit')) || 50;
+    if (u.pathname === `/${version}/workouts`) {
+      // Comme la doc v3 : since inclusif, until exclusif, limit plafonné
+      // (ici à 50), offset ; la v2 du test ignore offset.
+      const limit = Math.min(Number(u.searchParams.get('limit')) || 50, 50);
+      const offset = version === 'v3' ? Number(u.searchParams.get('offset')) || 0 : 0;
       const until = u.searchParams.get('until'), since = u.searchParams.get('since');
-      let liste = activitesFaux.filter(a => (!until || a.startTime <= +until) && (!since || a.startTime >= +since));
-      liste = ordre === 'recent' ? [...liste].reverse().slice(0, limit) : liste.slice(0, limit);
+      if (version === 'v3' && u.searchParams.get('filter-by-modification-time') !== 'false') {
+        return { status: 200, ok: true, texte: JSON.stringify({ error: null, payload: [] }) };   // filtré sur la modif : rien
+      }
+      let liste = activitesFaux.filter(a => (!until || a.startTime < +until) && (!since || a.startTime >= +since));
+      if (ordre === 'recent') liste = [...liste].reverse();
+      liste = liste.slice(offset, offset + limit);
       return { status: 200, ok: true, texte: JSON.stringify({ error: null, payload: liste, metadata: { workoutcount: String(liste.length) } }) };
     }
-    const m = /^\/v2\/workout\/exportFit\/(\w+)$/.exec(u.pathname);
+    const m = version === 'v3' ? /^\/v3\/workouts\/(\w+)\/fit$/.exec(u.pathname) : /^\/v2\/workout\/exportFit\/(\w+)$/.exec(u.pathname);
     if (m) return { status: 200, ok: true, octets: Uint8Array.from([1, 2, 3, m[1].length]), texte: null };
     return { status: 404, ok: false, texte: 'introuvable' };
   };
@@ -139,6 +146,16 @@ function fauxSuunto({ ordre = 'recent', exigeBearer = true } = {}) {
     check(`liste complète (API qui rend les plus ${ordre === 'recent' ? 'récentes' : 'anciennes'} d’abord)`,
       liste.length === N && new Set(liste.map(a => a.cle)).size === N, `${liste.length} — ${faux.journal.join(' ')}`);
     check(`liste triée par date (${ordre})`, liste.every((a, i) => !i || a.debut >= liste[i - 1].debut));
+  }
+  {
+    const v2 = fauxSuunto({ version: 'v2' });
+    const ancien = new C.ClientSuunto(liaison, { http: v2.http, fJeton: async () => { throw new Error('non'); } });
+    const liste = await ancien.activites({ parPage: 100 });
+    const o = await ancien.fit(activitesFaux[3].workoutKey);
+    check('API v2 seulement : on s’y replie (liste et .fit)', liste.length === N && o.length === 4, v2.journal.slice(0, 4).join(' '));
+    const v3 = fauxSuunto();
+    await new C.ClientSuunto(liaison, { http: v3.http }).fit(activitesFaux[3].workoutKey);
+    check('API v3 : adresse /v3/workouts/{clé}/fit', v3.journal[0] === `/v3/workouts/${activitesFaux[3].workoutKey}/fit`, v3.journal.join(' '));
   }
   const faux = fauxSuunto();
   let renouvele = 0, pauses = [];
@@ -158,7 +175,7 @@ function fauxSuunto({ ordre = 'recent', exigeBearer = true } = {}) {
   faux.http.limiterProchain = 5;
   check('429 qui dure → arrêt propre, reprise possible', await attendu(() => client.fit(activitesFaux[2].workoutKey), /limite le nombre d’appels/));
   const sansCle = new C.ClientSuunto({ ...liaison, cleAbonnement: 'faux' }, { http: fauxSuunto().http, fJeton: async () => ({ ok: false, status: 400, text: async () => 'invalid_grant' }) });
-  check('clé d’abonnement refusée expliquée', await attendu(() => sansCle.fit('abc'), /Reconnecte|abonnement/));
+  check('clé d’abonnement refusée expliquée (pas une reconnexion)', await attendu(() => sansCle.fit('abc'), /Primary key/));
   check('activité en secondes ou ms', A && C.normaliserActivite({ workoutKey: 'k', startTime: 1730800000 }).debut === 1730800000000
     && C.normaliserActivite({ workoutKey: 'k', startTime: 1730800000000 }).debut === 1730800000000);
   check('profondeur lue dans les extensions', C.normaliserActivite({ workoutKey: 'k', extensions: [{ type: 'DiveHeaderExtension', maxDepth: 18.4 }] }).profMax === 18.4);
@@ -214,6 +231,9 @@ function fauxSuunto({ ordre = 'recent', exigeBearer = true } = {}) {
   const nage = { ...dec, genre: 'natation', profMax: null };
   check('natation → séance piscine', A.proposer(act, nage, []).rangement === 'piscine');
   check('apnée → séance apnée', A.proposer(act, { ...dec, genre: 'apnee' }, []).rangement === 'apnee');
+  check('n° officiel 79 (apnée) prime sur le .fit « plongée »', A.proposer({ ...act, activite: 79 }, dec, []).rangement === 'apnee');
+  check('n° officiels : plongée 78, natation 21, sans .fit', A.genreConnu({}, 78) === 'plongee' && A.genreConnu({}, 21) === 'natation'
+    && !A.aExaminer({ activite: 1 }, { 1: 'sport' }));
   check('autre sport ignoré', A.proposer(act, { ...dec, genre: 'sport' }, []).action === 'ignorer');
   const seance = { id: 's1', type: 'piscine', date: saisie.date, heureImmersion: saisie.heureImmersion, heure: saisie.heureImmersion,
     seance: true, dureeMin: null, tempEau: null, suuntoKeys: [] };
