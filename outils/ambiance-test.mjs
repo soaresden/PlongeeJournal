@@ -16,6 +16,7 @@ const cas = [
   ['Jale, Albanie',         { lat: 40.13, lng: 19.63, eau: 'salee' }, 'med'],
   ['Hurghada',              { lat: 27.25, lng: 33.83, eau: 'salee' }, 'merRouge'],
   ['Lanzarote',             { lat: 28.86, lng: -13.83, eau: 'salee' }, 'atlantique'],
+  ['Cap-Vert, Santa Maria', { lat: 16.59, lng: -22.9, eau: 'salee' }, 'atlantique'],
   ['Açores',                { lat: 37.74, lng: -25.67, eau: 'salee' }, 'atlantique'],
   ['Cherbourg',             { lat: 49.66, lng: -1.62, eau: 'salee' }, 'nord'],
   ['Beaumont-sur-Oise',     { lat: 49.14, lng: 2.29, eau: 'douce' }, 'douce'],

@@ -12,6 +12,7 @@ import { store, TYPES_SEANCE, typeSeance, emptySeance, statsSeances } from '../s
 import { navigate } from '../router.js';
 import { profileSvg } from '../fit.js';
 import { plongeesARanger } from '../seances.js';
+import { apercuSeance } from '../apercu.js';
 
 const JOURS = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
 
@@ -41,14 +42,14 @@ const pluriel = (n, un, plusieurs) => `${n} ${n > 1 ? plusieurs : un}`;
 //  Le panneau « Séances » de l'écran Plongées
 // ------------------------------------------------------------
 
-export function seancesPanneau({ seances, dives }) {
+export function seancesPanneau({ seances, dives, types = TYPES_SEANCE }) {
   const wrap = el('div');
   const annee = String(new Date().getFullYear());
   const st = statsSeances(seances, annee);
 
   // Compteurs : ce qu'on vient chercher en premier.
   wrap.append(el('div.stat-grid.seances-compteurs', {},
-    ...TYPES_SEANCE.map(t => {
+    ...types.map(t => {
       const p = st.parType[t.id];
       return el('button.stat.seance-stat', {
         type: 'button', class: `s-${t.id}`, onclick: () => { filtre = filtre === t.id ? '' : t.id; rendreListe(); },
@@ -62,7 +63,7 @@ export function seancesPanneau({ seances, dives }) {
   // Pointer une séance : un geste par type, date du jour, le reste
   // pré-rempli d'après la dernière séance du même type.
   wrap.append(el('div.btn-row.seances-ajout', {},
-    ...TYPES_SEANCE.map(t => el('button.btn', {
+    ...types.map(t => el('button.btn', {
       type: 'button', text: `＋ ${t.icone} ${t.label}`,
       onclick: () => navigate(`seance/new?type=${t.id}`),
     }))));
@@ -86,7 +87,7 @@ export function seancesPanneau({ seances, dives }) {
 
   function rendreListe() {
     chips.innerHTML = '';
-    [['', `Toutes · ${seances.length}`], ...TYPES_SEANCE.map(t => [t.id, `${t.icone} ${t.label} · ${st.parType[t.id].total}`])]
+    [['', `Toutes · ${seances.length}`], ...types.map(t => [t.id, `${t.icone} ${t.label} · ${st.parType[t.id].total}`])]
       .forEach(([id, label]) => {
         const c = el('button.chip', { type: 'button', text: label });
         if (id === filtre) c.classList.add('on');
@@ -112,7 +113,7 @@ export function seancesPanneau({ seances, dives }) {
     });
     let premiere = true;
     parAnnee.forEach((lot, y) => {
-      const compte = TYPES_SEANCE.map(t => [t, lot.filter(s => s.type === t.id).length])
+      const compte = types.map(t => [t, lot.filter(s => s.type === t.id).length])
         .filter(([, n]) => n).map(([t, n]) => `${n} ${t.icone}`).join(' · ');
       const groupe = el('details.annee-groupe', { open: premiere },
         el('summary.annee-tete', {},
@@ -132,7 +133,7 @@ export function seancesPanneau({ seances, dives }) {
 function carteSeance(s) {
   const t = typeSeance(s.type);
   const jour = s.date ? JOURS[new Date(`${s.date}T12:00:00`).getDay()] : '';
-  return el('div.card.clickable.seance-carte', { onclick: () => navigate(`seance/${s.id}`) },
+  return el('div.card.clickable.seance-carte', { onclick: () => apercuSeance(s.id) },
     pastilleSeance(s.type, 40),
     el('div', { style: { flex: 1, minWidth: 0 } },
       el('div', { style: { fontWeight: '600' } }, `${t.label} · `, el('span', { text: s.date ? `${jour} ${fmtDate(s.date)}` : 'sans date' })),

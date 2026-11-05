@@ -5,6 +5,7 @@
 import { el, fullName, toast, confirmBox, fileToDataURL, uid, openModal } from '../lib.js';
 import { store, emptyBuddy, parClub } from '../store.js';
 import { navigate } from '../router.js';
+import { ouvrirApercu, ligneApercu, apercuPlongee } from '../apercu.js';
 
 // ------------------------------------------------------------
 //  Signature manuscrite
@@ -107,76 +108,159 @@ export async function buddiesView() {
       el('div', { style: { marginTop: '20px' } },
         el('button.btn.primary', { onclick: () => navigate('buddy/new') }, 'Ajouter un plongeur')),
     ));
-    return { title: '🤿 Plongeurs', node: wrap };
+    return { title: 'Plongeurs', node: wrap };
   }
 
-  const recherche = el('input', { type: 'search', placeholder: 'Filtrer par nom ou club…',
-                                  autocapitalize: 'off' });
+  // Un annuaire : une ligne par plongeur, rangé par club en colonnes.
+  // Tout tient à l'écran sur tablette ; la fiche s'ouvre sur le bord.
+  const CLE_TRI = 'plongee-journal:plongeurs-tri';
+  let tri = (() => { try { return localStorage.getItem(CLE_TRI) || 'club'; } catch { return 'club'; } })();
+
+  const recherche = el('input', { type: 'search', placeholder: 'Nom, club, licence…', autocapitalize: 'off' });
+  const seg = el('div.seg');
   const liste = el('div');
-  wrap.append(el('div.field', {}, recherche), liste);
+  wrap.append(el('div.annuaire-barre', {}, recherche, seg,
+    el('button.btn.primary.sm', { type: 'button', text: '＋ Ajouter', onclick: () => navigate('buddy/new') })), liste);
 
-  /**
-   * Une vignette compacte par plongeur.
-   * Le statut moniteur et le nombre de plongées sont posés SUR l'image :
-   * deux lignes de texte gagnées, donc deux fois plus de monde à l'écran.
-   */
-  function vignette(b) {
-    const n = st.buddyCount[b.id] || 0;
-    const empreinte = (b.stamps || []).find(s => s.type !== 'signature')
-                   || (b.stamps || [])[0];
+  const n = b => st.buddyCount[b.id] || 0;
+  const empreinte = b => (b.stamps || []).find(x => x.type !== 'signature') || (b.stamps || [])[0];
+  const initiales = b => ((b.prenom?.[0] || '') + (b.nom?.[0] || '')).toUpperCase() || '?';
 
-    return el('div.obs.clickable.buddy', {
-      class: `obs clickable buddy${b.moniteur && !b.structure ? ' moniteur' : ''}`
-           + (b.structure ? ' structure' : ''),
-      onclick: () => navigate(`buddy/${b.id}`),
-      title: [fullName(b), b.structure ? 'club / centre' : b.moniteur ? 'moniteur' : null,
-              n ? `${n} plongée${n > 1 ? 's' : ''} ensemble` : null].filter(Boolean).join(' · '),
-    },
-      empreinte
-        ? el('img', { src: empreinte.dataUrl, alt: '', loading: 'lazy' })
-        : el('div.obs-noimg.initiales', {
-            text: ((b.prenom?.[0] || '') + (b.nom?.[0] || '')).toUpperCase() || '?' }),
-      b.structure
-        ? el('span.pastille-struct', { text: '⌂', title: 'Club / centre' })
-        : b.moniteur ? el('span.pastille-mon', { text: 'M', title: 'Moniteur' }) : null,
-      n ? el('span.compteur', { text: String(n) }) : null,
-      el('div.obs-nom', { text: fullName(b) }),
-    );
+  function ligne(b) {
+    const e = empreinte(b);
+    const nb = n(b);
+    return el('button.personne', { type: 'button', onclick: () => apercuPlongeur(b.id, { onClose: recharger }) },
+      el('span.personne-av', {}, e ? el('img', { src: e.dataUrl, alt: '', loading: 'lazy' }) : initiales(b)),
+      el('span.personne-txt', {},
+        el('b', {}, fullName(b) || 'Sans nom',
+          b.structure ? el('span.marque-club', { text: 'CLUB' }) : b.moniteur ? el('span.marque-mon', { text: 'MON' }) : null),
+        el('span', { text: [tri !== 'club' ? b.club : null, b.licence || null].filter(Boolean).join(' · ') || '' })),
+      nb ? el('span.personne-n', { title: `${nb} plongée${nb > 1 ? 's' : ''} ensemble`, text: String(nb) }) : null);
+  }
+
+  function bloc(titre, membres) {
+    return el('div.club-bloc', {},
+      el('div.club-tete', {}, el('b', { text: titre }), el('span', { text: String(membres.length) })),
+      ...membres.map(ligne));
   }
 
   function rendre() {
+    seg.innerHTML = '';
+    [['club', 'Par club'], ['frequents', 'Fréquents'], ['az', 'A–Z']].forEach(([id, label]) => {
+      const bt = el('button', { type: 'button', text: label });
+      if (id === tri) bt.classList.add('on');
+      bt.onclick = () => { tri = id; try { localStorage.setItem(CLE_TRI, id); } catch { /* privé */ } rendre(); };
+      seg.append(bt);
+    });
+
     const q = recherche.value.trim().toLowerCase();
     const filtres = q
-      ? buddies.filter(b => `${fullName(b)} ${b.club || ''} ${b.licence || ''}`
-          .toLowerCase().includes(q))
+      ? buddies.filter(b => `${fullName(b)} ${b.club || ''} ${b.licence || ''}`.toLowerCase().includes(q))
       : buddies;
 
     liste.innerHTML = '';
-    if (!filtres.length) {
-      liste.append(el('div.empty', { text: 'Aucun plongeur ne correspond.' }));
-      return;
-    }
+    if (!filtres.length) { liste.append(el('div.empty', { text: 'Aucun plongeur ne correspond.' })); return; }
 
-    // Regroupement par club : la liste devient lisible dès qu'on plonge
-    // avec plusieurs structures.
-    parClub(filtres).forEach(groupe => {
-      liste.append(el('div.groupe-club', { text: `${groupe.titre} · ${groupe.membres.length}` }));
-      const grille = el('div.obs-grid.dense');
-      groupe.membres
-        .sort((x, y) => (y.moniteur ? 1 : 0) - (x.moniteur ? 1 : 0)
-                     || fullName(x).localeCompare(fullName(y), 'fr'))
-        .forEach(b => grille.append(vignette(b)));
-      liste.append(grille);
-    });
+    const annuaire = el('div.annuaire');
+    if (tri === 'club') {
+      parClub(filtres).forEach(g => annuaire.append(bloc(g.titre,
+        g.membres.sort((x, y) => (y.moniteur ? 1 : 0) - (x.moniteur ? 1 : 0) || n(y) - n(x)
+          || fullName(x).localeCompare(fullName(y), 'fr')))));
+    } else if (tri === 'frequents') {
+      const avec = filtres.filter(n).sort((x, y) => n(y) - n(x));
+      const sans = filtres.filter(b => !n(b));
+      if (avec.length) annuaire.append(bloc('Plongé ensemble', avec));
+      if (sans.length) annuaire.append(bloc('Pas encore de plongée', sans));
+    } else {
+      const parLettre = new Map();
+      filtres.slice().sort((x, y) => fullName(x).localeCompare(fullName(y), 'fr')).forEach(b => {
+        const l = (fullName(b)[0] || '#').toUpperCase();
+        if (!parLettre.has(l)) parLettre.set(l, []);
+        parLettre.get(l).push(b);
+      });
+      parLettre.forEach((m, l) => annuaire.append(bloc(l, m)));
+    }
+    liste.append(annuaire);
+  }
+
+  async function recharger() {
+    buddies.splice(0, buddies.length, ...await store.listBuddies());
+    rendre();
   }
 
   recherche.addEventListener('input', rendre);
   rendre();
 
-  wrap.append(el('button.btn.block', { style: { marginTop: '18px' },
-    onclick: () => navigate('buddy/new') }, '+ Ajouter un plongeur'));
+  return { title: 'Plongeurs', node: wrap };
+}
 
-  return { title: '🤿 Plongeurs', node: wrap };
+/** Aperçu modifiable d'un plongeur, sur le bord de l'écran. */
+export async function apercuPlongeur(id, { onClose = null } = {}) {
+  const b = structuredClone(await store.getBuddy(id));
+  if (!b) return toast('Plongeur introuvable', true);
+  const diverId = await store.getActiveDiverId();
+  const ensemble = diverId ? (await store.listDives(diverId)).filter(d => (d.buddyIds || []).includes(b.id)) : [];
+  const clubs = [...new Set((await store.listBuddies()).map(x => (x.club || '').trim()).filter(Boolean))].sort();
+
+  const temoin = el('span.apercu-temoin');
+  let t = null;
+  const maj = p => {
+    Object.assign(b, p);
+    temoin.textContent = '…';
+    temoin.className = 'apercu-temoin';
+    clearTimeout(t);
+    t = setTimeout(async () => {
+      if (!String(b.prenom || '').trim() && !String(b.nom || '').trim()) { temoin.textContent = 'Il faut un nom'; return; }
+      await store.saveBuddy(b);
+      temoin.textContent = 'Enregistré ✓';
+      temoin.className = 'apercu-temoin ok';
+    }, 500);
+  };
+  const champ = (label, controle, large = false) => el(`label.apercu-champ${large ? '.large' : ''}`, {}, el('span', { text: label }), controle);
+  const saisie = (cle, attrs = {}) => {
+    const i = el('input', { type: 'text', ...attrs });
+    i.value = b[cle] ?? '';
+    i.addEventListener('input', () => maj({ [cle]: i.value }));
+    return i;
+  };
+  const coche = (cle, label) => {
+    const c = el('input', { type: 'checkbox' });
+    c.checked = !!b[cle];
+    c.onchange = () => maj({ [cle]: c.checked });
+    return el('label.switch', {}, c, el('span', { text: label }));
+  };
+  const note = el('textarea', { rows: 3 });
+  note.value = b.note || '';
+  note.addEventListener('input', () => maj({ note: note.value }));
+
+  const e = (b.stamps || []).find(x => x.type !== 'signature') || (b.stamps || [])[0];
+  const tete = el('div.apercu-tete-plongee', {},
+    el('span.personne-av', { style: { width: '52px', height: '52px', flex: '0 0 52px', fontSize: '17px' } },
+      e ? el('img', { src: e.dataUrl, alt: '' }) : ((b.prenom?.[0] || '') + (b.nom?.[0] || '')).toUpperCase() || '?'),
+    el('div', {},
+      el('div.apercu-t1', { text: fullName(b) || 'Sans nom' }),
+      el('div.apercu-t2', { text: [b.club, ensemble.length ? `${ensemble.length} plongée${ensemble.length > 1 ? 's' : ''} ensemble` : 'pas encore plongé ensemble'].filter(Boolean).join(' · ') })));
+
+  const rouvrir = () => apercuPlongeur(id, { onClose });
+  const corps = el('div', {},
+    el('div.apercu-grille', {},
+      champ(b.structure ? 'Nom du club / centre' : 'Prénom', saisie('prenom')),
+      b.structure ? null : champ('Nom', saisie('nom')),
+      champ('Club', saisie('club', { list: 'clubs-apercu' })),
+      b.structure ? null : champ('Licence', saisie('licence')),
+      el('div.apercu-champ.large', {}, coche('moniteur', 'Moniteur'), coche('structure', 'Club / centre de plongée')),
+      champ('Note', note, true)),
+    el('datalist', { id: 'clubs-apercu' }, clubs.map(c => el('option', { value: c }))),
+    (b.stamps || []).length ? el('div.apercu-bloc', {}, el('div.apercu-lbl', { text: 'Tampons et signatures' }),
+      el('div', { style: { display: 'flex', gap: '8px', flexWrap: 'wrap' } },
+        ...b.stamps.map(x => el('img', { src: x.dataUrl, alt: '', style: { height: '64px', background: '#fff', borderRadius: '8px', padding: '4px' } })))) : null,
+    ensemble.length ? el('div.apercu-bloc', {}, el('div.apercu-lbl', { text: 'Plongées ensemble' }),
+      el('div.apercu-liste', {}, ...ensemble.map(d => ligneApercu(d, () => apercuPlongee(d.id, { retour: rouvrir, onClose }))))) : null);
+
+  const pied = el('div.apercu-actions', {}, temoin,
+    el('button.btn.primary.sm', { type: 'button', text: 'Tampons, signature ›', onclick: () => navigate(`buddy/${b.id}`) }));
+
+  ouvrirApercu({ tete, corps, pied }, { onClose });
 }
 
 // ------------------------------------------------------------

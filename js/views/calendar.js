@@ -22,6 +22,7 @@
 
 import { el, fmtDate, fmtDuration, fmtDateLong, fullName, scrollTo } from '../lib.js';
 import { navigate } from '../router.js';
+import { apercuPlongee, apercuSeance } from '../apercu.js';
 import { TYPES_SEANCE, typeSeance } from '../model.js';
 
 // Ce que le calendrier montre : les plongées, et chaque type de séance,
@@ -80,7 +81,7 @@ export function meilleurSens(largeur, hauteur, geo = GEO) {
 
 // ============================================================
 
-export function calendrier(dives, { buddies = [], seances = [] } = {}) {
+export function calendrier(dives, { buddies = [], seances = [], couches: couchesFixes = null } = {}) {
   const wrap = el('div');
 
   const datee = x => /^\d{4}-\d\d-\d\d/.test(x.date || '');
@@ -92,7 +93,8 @@ export function calendrier(dives, { buddies = [], seances = [] } = {}) {
   }
 
   const nomCompagnon = id => fullName(buddies.find(b => b.id === id)) || '?';
-  const couches = lireCouches();
+  // Couches imposées (l'agenda des fosses) : ni choix, ni mémoire.
+  const couches = couchesFixes ? new Set(couchesFixes) : lireCouches();
   const voitPlongees = () => couches.has('plongees');
 
   // Les années couvrent plongées ET séances ; le mois affiché et la
@@ -174,7 +176,7 @@ export function calendrier(dives, { buddies = [], seances = [] } = {}) {
     detail.innerHTML = '';
     detail.append(el('div.card', {},
       el('div.lbl', { text: fmtDateLong(date) }),
-      ...jour.s.map(s => el('div.jour-ligne', { onclick: () => navigate(`seance/${s.id}`) },
+      ...jour.s.map(s => el('div.jour-ligne', { onclick: () => apercuSeance(s.id) },
         el('span.seance-pastille', { class: `s-${s.type}`, style: { width: '38px', height: '38px', flex: '0 0 38px', fontSize: '18px' }, text: typeSeance(s.type).icone }),
         el('div', { style: { flex: 1, minWidth: 0 } },
           el('div', { style: { fontWeight: '600', fontSize: '14.5px' }, text: `${typeSeance(s.type).label}${s.lieu ? ` · ${s.lieu}` : ''}` }),
@@ -183,7 +185,7 @@ export function calendrier(dives, { buddies = [], seances = [] } = {}) {
                    s.distanceM ? `${s.distanceM} m nagés` : null].filter(Boolean).join(' · ') })),
         el('span', { style: { color: 'var(--text-mute)' }, text: '›' }))),
       !duJour.length && !jour.s.length ? el('div.hint', { text: 'Rien ce jour-là.' }) : null,
-      ...duJour.map(d => el('div.jour-ligne', { onclick: () => navigate(`dive/${d.id}`) },
+      ...duJour.map(d => el('div.jour-ligne', { onclick: () => apercuPlongee(d.id) },
         el('div.dive-num', { style: { width: '38px', height: '38px', flex: '0 0 38px',
           fontSize: '13px' }, text: d.numero ?? '—' }),
         el('div', { style: { flex: 1, minWidth: 0 } },
@@ -301,7 +303,13 @@ export function calendrier(dives, { buddies = [], seances = [] } = {}) {
     // rien dire : on garde le sens en place plutôt que d'osciller.
     if (largeur <= 0 || !Number.isFinite(hauteur)) return false;
 
-    const choix = meilleurSens(largeur, hauteur);
+    // Plusieurs années : on ne cherche plus à tout faire tenir dans
+    // l'écran (des carrés de 4 px, illisibles). Chaque année prend toute la
+    // largeur, et on fait défiler. Une seule année : le meilleur des deux sens.
+    const choix = nbAnnees > 1
+      ? { sens: 'h', cote: coteDansLeSens('h', largeur, Infinity) }
+      : meilleurSens(largeur, Math.max(hauteur, 220));
+    choix.cote = Math.min(choix.cote, 40);
     scene.style.setProperty('--cell', `${choix.cote}px`);
 
     if (choix.sens !== sens) { sens = choix.sens; return true; }
@@ -342,13 +350,53 @@ export function calendrier(dives, { buddies = [], seances = [] } = {}) {
     }
   }
 
+  /**
+   * Une seule année : douze petits mois, comme un calendrier mural. La
+   * grille 12 × 31 laissait la moitié de l'écran vide sur tablette.
+   */
+  function anneeEnMois(an, { jours, borne }) {
+    const g = el('div.an-mois');
+    for (let m = 0; m < 12; m++) {
+      const nbJours = new Date(an, m + 1, 0).getDate();
+      const decalage = (new Date(an, m, 1).getDay() + 6) % 7;   // lundi en tête
+      const grille = el('div.mm-grille');
+      JOURS.forEach(j => grille.append(el('div.mm-jn', { text: j })));
+      for (let i = 0; i < decalage; i++) grille.append(el('div'));
+      let n = 0;
+      for (let j = 1; j <= nbJours; j++) {
+        const c = caseDe(an, m, j, jours, borne);
+        const k = cle(an, m, j);
+        const du = jours.get(k);
+        if (du && !(borne && (k < borne.debut || k > borne.fin))) n += du.p.length + du.s.length;
+        c.classList.add('mm-j');
+        c.append(el('span', { text: String(j) }));
+        grille.append(c);
+      }
+      g.append(el('div.mm', { class: n ? 'mm actif' : 'mm' },
+        el('div.mm-titre', {}, el('span', { text: MOIS[m] }), n ? el('b', { text: String(n) }) : null),
+        grille));
+    }
+    return g;
+  }
+
   function vueAnnees(deLAn, aLAn, borne = null) {
     const liste = retenues();
     const jours = parJour(liste);
     const bloc = el('div');
     nbAnnees = Math.max(1, aLAn - deLAn + 1);
 
-    for (let an = deLAn; an <= aLAn; an++) {
+    if (deLAn === aLAn) {
+      const dans = d => d.date.startsWith(String(deLAn))
+        && (!borne || (d.date.slice(0, 10) >= borne.debut && d.date.slice(0, 10) <= borne.fin));
+      const compte = libelleJour({ p: liste.filter(dans), s: seancesVues().filter(dans) });
+      bloc.append(el('div.an12-entete', {},
+        el('span.an12-an', { text: String(deLAn) }),
+        el('span.an12-n', { text: compte || '—' })), anneeEnMois(deLAn, { jours, borne }));
+      return bloc;
+    }
+
+    // La plus récente en haut : c'est elle qu'on vient voir.
+    for (let an = aLAn; an >= deLAn; an--) {
       const dans = d => d.date.startsWith(String(an))
         && (!borne || (d.date.slice(0, 10) >= borne.debut && d.date.slice(0, 10) <= borne.fin));
       const compte = libelleJour({ p: liste.filter(dans), s: seancesVues().filter(dans) });
@@ -533,6 +581,7 @@ export function calendrier(dives, { buddies = [], seances = [] } = {}) {
 
   function rendreCouches() {
     zoneCouches.innerHTML = '';
+    if (couchesFixes) return;
     const lignes = [
       { id: 'plongees', label: 'Plongées', n: avecDate.length, carreClasse: 'j n2' },
       ...TYPES_SEANCE.map(t => ({ id: t.id, label: `${t.icone} ${t.label}`, n: seancesDatees.filter(s => s.type === t.id).length, carreClasse: `j n0 s-${t.id}` })),

@@ -197,6 +197,7 @@ export function proposer(act, dec, connues, seances = []) {
     // La liste Suunto ne donne pas toujours la profondeur : une plongée
     // sans profondeur connue reste une plongée (pas une piscine).
     profMax: dec.profMax ?? (genre === 'plongee' ? 10 : null), date: dec.start, lieu: dec.lieu,
+    samples: dec.samples,
   }, seances);
   return { action: 'ajouter', rangement };
 }

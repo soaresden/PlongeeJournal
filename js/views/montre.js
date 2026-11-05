@@ -213,7 +213,7 @@ export async function montreView() {
             + `gaz ${JSON.stringify(dec.gaz)}, GF ${JSON.stringify(dec.gf)}, heure ${dec.heureDepuisGps ? 'GPS' : 'id'}`);
           etat.decodes.set(f.id, { dive, dec });
           if (!etat.rangement.has(f.id)) {
-            etat.rangement.set(f.id, suggererRangement({ genre: dec.genre, profMax: dive.profMax, date: dive.start, lieu: dive.lieu }, seances));
+            etat.rangement.set(f.id, suggererRangement({ genre: dec.genre, profMax: dive.profMax, date: dive.start, lieu: dive.lieu, samples: dive.samples }, seances));
           }
           journalBle.log(`  activité Suunto n°${dec.sport ?? '?'} (${dec.genre}) → rangée comme « ${etat.rangement.get(f.id)} »`);
         } catch (e) {

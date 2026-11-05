@@ -40,59 +40,68 @@ export async function diversView() {
     return { title: 'Profils', node: wrap };
   }
 
-  for (const d of divers) {
-    const st = await store.stats(d.id);
-    const active = d.id === activeId;
-    wrap.append(el('div.card.clickable', { onclick: () => navigate(`diver/${d.id}`) },
-      el('div', { style: { display: 'flex', alignItems: 'center', gap: '12px' } },
-        el('div.dive-num', { text: st.count }),
-        el('div', { style: { flex: '1', minWidth: '0' } },
-          el('div', { style: { fontWeight: '650' } },
-            fullName(d) || 'Sans nom',
-            active ? el('span.badge.tek', { text: 'actif', style: { marginLeft: '8px' } }) : null),
-          el('div', { style: { color: 'var(--text-dim)', fontSize: '13px' },
-            text: [d.niveau, d.licence && `Licence ${d.licence}`].filter(Boolean).join(' · ')
-                  || 'Profil incomplet' }),
-          el('div', { style: { color: 'var(--text-mute)', fontSize: '12.5px', marginTop: '2px' },
-            text: st.lastDate ? `Dernière plongée ${fmtDate(st.lastDate)}` : 'Carnet vide' }),
-        ),
-        active ? null : el('button.btn.sm', {
-          text: 'Activer',
-          onclick: async e => {
-            e.stopPropagation();
-            await store.setActiveDiver(d.id);
-            toast(`Carnet de ${fullName(d)} activé`);
-            navigate('divers', true);
-          },
-        }),
-      ),
-    ));
+  // Un tableau de bord : qui je suis, mes diplômes, mes raccourcis.
+  const moi = divers.find(d => d.id === activeId) || divers[0];
+  const st = await store.stats(moi.id);
+  const certifs = (await store.listCertifications(moi.id))
+    .slice().sort((a, b) => (a.dateObtention || '').localeCompare(b.dateObtention || ''));
+  const { rangNiveau } = await import('../config.js');
+
+  const tb = el('div.tb');
+  wrap.append(tb);
+
+  tb.append(el('div.tb-carte.plein', {},
+    el('div.profil-tete', {},
+      el('div.profil-av', { text: ((moi.prenom?.[0] || '') + (moi.nom?.[0] || '')).toUpperCase() || '?' }),
+      el('div', { style: { flex: 1, minWidth: 0 } },
+        el('div.profil-nom', { text: fullName(moi) || 'Sans nom' }),
+        el('div.profil-sous', { text: [st.niveau, moi.licence && `licence ${moi.licence}`].filter(Boolean).join(' · ') || 'Profil incomplet' }),
+        el('div.profil-sous', { text: `${st.count} plongée${st.count > 1 ? 's' : ''}${st.lastDate ? ` · dernière le ${fmtDate(st.lastDate)}` : ''}` })),
+      el('button.btn.primary.sm', { type: 'button', text: '✎ Ma fiche', onclick: () => navigate(`diver/${moi.id}`) }))));
+
+  // Les diplômes : d'eux se déduit le niveau de chaque plongée.
+  tb.append(el('div.tb-carte', {},
+    el('div.tb-titre', {}, el('h2', { text: 'Mes diplômes' }), el('span.tb-aide', { text: 'donnent le niveau de chaque plongée' })),
+    certifs.length
+      ? el('div.frise', {}, ...certifs.map(c => el('div.frise-pas', {},
+          el('span.frise-date', { text: c.dateObtention ? fmtDate(c.dateObtention) : '—' }),
+          el('span', { class: `frise-point${rangNiveau(c.nom) < 0 ? ' annexe' : ''}` }),
+          el('span.frise-nom', {}, c.nom, el('small', { text: [c.organisme, c.numero].filter(Boolean).join(' · ') })))))
+      : el('div.hint', { text: 'Aucun diplôme saisi. Ajoute-les dans ta fiche : le niveau de tes plongées en sera déduit.' }),
+    el('button.btn.ghost.sm', { type: 'button', style: { marginTop: '10px' }, text: 'Ajouter ou corriger un diplôme',
+      onclick: () => navigate(`diver/${moi.id}`) })));
+
+  const lien = (ico, titre, sous, onclick) => el('button.lien', { type: 'button', onclick },
+    el('span.lien-ico', { text: ico }), el('span.lien-txt', {}, el('b', { text: titre }), el('span', { text: sous })));
+  tb.append(el('div.tb-carte', {},
+    el('div.tb-titre', {}, el('h2', { text: 'Raccourcis' })),
+    el('div.liens', {},
+      lien('⌚', 'Ma montre', 'Importer les plongées de la Suunto', () => navigate('montre')),
+      lien('☁', 'Compte Suunto', 'Récupérer l’historique en ligne', () => navigate('suunto-cloud')),
+      lien('🎒', 'Mon matériel', 'Combinaison, détendeur, bloc…', () => navigate(`diver/${moi.id}`)),
+      lien('🆘', 'Fiche d’urgence', 'Groupe sanguin, contact à prévenir', () => navigate('urgence')),
+      lien('⚙', 'Réglages', 'GitHub, thème, application', () => navigate('reglages')))));
+
+  // Plusieurs carnets sur l'appareil : on peut changer.
+  if (divers.length > 1) {
+    tb.append(el('div.tb-carte', {},
+      el('div.tb-titre', {}, el('h2', { text: 'Autres carnets' })),
+      el('div.liens', {}, ...divers.filter(d => d.id !== moi.id).map(d => lien('👤', fullName(d) || 'Sans nom', 'Activer ce carnet', async () => {
+        await store.setActiveDiver(d.id);
+        toast(`Carnet de ${fullName(d)} activé`);
+        navigate('divers', true);
+      })))));
   }
-
-  wrap.append(el('button.btn.block', {
-    style: { marginTop: '6px' },
-    onclick: () => navigate('diver/new'),
-  }, '+ Ajouter un plongeur'));
-
-  wrap.append(el('div.section', { style: { marginTop: '22px' } },
-    el('h2', { text: 'Ordinateur de plongée' }),
-    el('div.card.clickable', { onclick: () => navigate('suunto') },
-      el('div', { style: { display: 'flex', alignItems: 'center', gap: '12px' } },
-        el('div', { style: { fontSize: '26px' }, text: '⌚' }),
-        el('div', { style: { flex: 1 } },
-          el('div', { style: { fontWeight: '650' }, text: 'Suunto' }),
-          el('div', { style: { color: 'var(--text-dim)', fontSize: '13px' },
-            text: 'Importer profondeurs, horaires et courbe depuis la montre — optionnel' })),
-        el('span', { style: { color: 'var(--text-mute)' }, text: '›' }),
-      ))));
+  tb.append(el('div.tb-carte', {}, el('div.liens', {},
+    lien('＋', 'Ajouter un plongeur', 'Un autre carnet sur cet appareil', () => navigate('diver/new')))));
 
   // --- Sauvegarde des données ---
   const { backendKind } = await import('../store.js');
   const local = backendKind() === 'local';
 
-  wrap.append(el('div.section', { style: { marginTop: '28px' } },
-    el('h2', { text: 'Mes données' }),
-    el('div.card', {},
+  tb.append(el('div.tb-carte', {},
+    el('div.tb-titre', {}, el('h2', { text: 'Mes données' })),
+    el('div', {},
       el('div.hint', { style: { marginTop: '0', marginBottom: '12px' },
         text: local
           ? 'Mode local : les plongées sont sur cet appareil uniquement. Branche ton dépôt GitHub '
@@ -131,7 +140,7 @@ export async function diversView() {
     ),
   ));
 
-  return { title: 'Profils', node: wrap };
+  return { title: 'Profil', node: wrap };
 }
 
 // ------------------------------------------------------------

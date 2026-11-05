@@ -1,31 +1,23 @@
 // ============================================================
 //  Statistiques du carnet
+//
+//  Un tableau de bord. Tout ce qui se compte se touche : une tuile, une
+//  barre, une année ouvre sur le bord de l'écran la liste des plongées
+//  en question — un filtre, en somme.
 // ============================================================
 
 import { el, fmtDuration, fmtDate, fullName } from '../lib.js';
-import { store } from '../store.js';
+import { store, TYPES_SEANCE, statsSeances, sortDives } from '../store.js';
 import { navigate } from '../router.js';
+import { apercuListe } from '../apercu.js';
+import { ambianceDe, AMBIANCES } from '../ambiance.js';
+import { niveauDeLaPlongee } from '../apercu.js';
+import { rangNiveau } from '../config.js';
 
-const stat = (n, l) => el('div.stat', {}, el('div.n', { text: String(n) }), el('div.l', { text: l }));
-
-function bars(entries, total) {
-  const wrap = el('div');
-  entries.forEach(([label, n]) => {
-    const pct = total ? Math.round(n / total * 100) : 0;
-    wrap.append(el('div', { style: { marginBottom: '10px' } },
-      el('div', { style: { display: 'flex', justifyContent: 'space-between', fontSize: '13.5px', marginBottom: '4px' } },
-        el('span', { text: label }),
-        el('span', { style: { color: 'var(--text-mute)' }, text: `${n} · ${pct}%` }),
-      ),
-      el('div', { style: { height: '7px', background: 'var(--bg-2)', borderRadius: '99px', overflow: 'hidden' } },
-        el('div', { style: {
-          width: pct + '%', height: '100%',
-          background: 'linear-gradient(90deg, var(--accent), var(--accent-2))',
-        } })),
-    ));
-  });
-  return wrap;
-}
+const TRANCHES = [
+  ['0 – 12 m', 0, 12], ['12 – 20 m', 12, 20], ['20 – 30 m', 20, 30],
+  ['30 – 40 m', 30, 40], ['40 m et plus', 40, Infinity],
+];
 
 export async function statsView() {
   const diverId = await store.getActiveDiverId();
@@ -34,10 +26,11 @@ export async function statsView() {
       node: el('div.empty', {}, el('span.big', { text: '📊' }), 'Crée d’abord un profil.') };
   }
 
-  const diver = await store.getDiver(diverId);
   const st = await store.stats(diverId);
+  const dives = sortDives(await store.listDives(diverId));
+  const seances = await store.listSeances(diverId);
+  const certifs = await store.listCertifications(diverId);
   const buddies = await store.listBuddies();
-  const wrap = el('div');
 
   if (!st.count) {
     return { title: 'Statistiques',
@@ -47,70 +40,107 @@ export async function statsView() {
           el('button.btn.primary', { onclick: () => navigate('dive/new') }, 'Saisir une plongée'))) };
   }
 
-  wrap.append(el('div', { style: { color: 'var(--text-dim)', marginBottom: '12px' },
-    text: `Carnet de ${fullName(diver)}` }));
+  /** Ouvre la liste filtrée sur le bord de l'écran. */
+  const montrer = (titre, filtre, tri = null) => {
+    let liste = dives.filter(filtre);
+    if (tri) liste = liste.slice().sort(tri);
+    apercuListe(titre, liste);
+  };
 
-  wrap.append(el('div.stat-grid', {},
-    stat(st.count, 'plongées'),
-    stat(fmtDuration(Math.round(st.totalMin)), 'temps total'),
-    stat(st.maxDepth ? st.maxDepth + ' m' : '—', 'profondeur max'),
-    stat(st.avgDepth ? Math.round(st.avgDepth) + ' m' : '—', 'profondeur moy.'),
-  ));
+  // ---------- Tuiles ----------
+  const tuile = (n, l, onclick) => onclick
+    ? el('button.tuile', { type: 'button', onclick, title: 'Voir les plongées' }, el('div.n', { text: String(n) }), el('div.l', { text: l }))
+    : el('div.tuile', {}, el('div.n', { text: String(n) }), el('div.l', { text: l }));
 
-  wrap.append(el('div.stat-grid', { style: { marginTop: '10px' } },
-    stat(fmtDuration(Math.round(st.avgDuration)), 'durée moyenne'),
-    stat(st.nuit, 'de nuit'),
-    stat(st.salee, 'en eau salée'),
-    stat(st.douce, 'en eau douce'),
-  ));
+  const parProf = (a, b) => (Number(b.profMax) || 0) - (Number(a.profMax) || 0);
+  const parDuree = (a, b) => (Number(b.dureeMin) || 0) - (Number(a.dureeMin) || 0);
+  const nuit = d => (d.type || '').toLowerCase().includes('nuit');
 
-  // Répartition par niveau : déduite des plongées, jamais saisie sur le profil.
-  if (st.parNiveau?.length) {
-    wrap.append(el('div.section', { style: { marginTop: '22px' } },
-      el('h2', { text: 'Par niveau' }),
-      el('div.card', {},
-        st.niveau
-          ? el('div', { style: { marginBottom: '10px' } },
-              el('span', { style: { color: 'var(--text-dim)' }, text: 'Niveau actuel : ' }),
-              el('b', { style: { color: 'var(--accent)' }, text: st.niveau }))
-          : null,
-        bars(st.parNiveau, st.count),
-        el('div.hint', { style: { marginBottom: 0 },
-          text: 'Le niveau actuel est le plus élevé enregistré sur une plongée — '
-              + 'rien à renseigner sur ta fiche.' }),
-      ),
-    ));
-  }
+  const tuiles = el('div.tuiles.plein', {},
+    tuile(st.count, 'plongées', () => montrer('Toutes les plongées', () => true)),
+    tuile(fmtDuration(Math.round(st.totalMin)), 'sous l’eau', () => montrer('Les plus longues', () => true, parDuree)),
+    tuile(st.maxDepth ? `${st.maxDepth} m` : '—', 'profondeur max', () => montrer('Les plus profondes', d => d.profMax, parProf)),
+    tuile(st.avgDepth ? `${Math.round(st.avgDepth)} m` : '—', 'profondeur moyenne', () => montrer('Par profondeur', d => d.profMax, parProf)),
+    tuile(fmtDuration(Math.round(st.avgDuration)), 'durée moyenne', () => montrer('Par durée', d => d.dureeMin, parDuree)),
+    tuile(st.nuit, 'de nuit', () => montrer('Plongées de nuit', nuit)),
+    tuile(st.salee, 'en mer', () => montrer('En mer', d => d.eau === 'salee')),
+    tuile(st.douce, 'en eau douce', () => montrer('En eau douce', d => d.eau === 'douce')),
+  );
 
-  const years = Object.entries(st.years).sort((a, b) => b[0].localeCompare(a[0]));
-  if (years.length) {
-    wrap.append(el('div.section', { style: { marginTop: '22px' } },
-      el('h2', { text: 'Par année' }),
-      el('div.card', {}, bars(years, Math.max(...years.map(y => y[1])))),
-    ));
-  }
+  // ---------- Barres ----------
+  /** entries : [label, n, filtre, {b1,b2}?] */
+  const barres = (entries, max = Math.max(1, ...entries.map(e => e[1]))) => el('div.barres', {},
+    ...entries.map(([label, n, filtre, couleurs]) => el('button.barre', {
+      type: 'button', onclick: () => montrer(label, filtre),
+      style: couleurs ? { '--b1': couleurs.c1, '--b2': couleurs.c2 } : null,
+    },
+      el('span.barre-lbl', { text: label }),
+      el('span.barre-piste', {}, el('span', { style: { width: `${Math.max(2, (n / max) * 100)}%` } })),
+      el('span.barre-n', { text: String(n) }))));
 
-  const types = Object.entries(st.byType).sort((a, b) => b[1] - a[1]);
-  if (types.length) {
-    wrap.append(el('div.section', {},
-      el('h2', { text: 'Par type' }),
-      el('div.card', {}, bars(types, st.count)),
-    ));
-  }
+  const carte = (titre, contenu, { aide = '', classe = '' } = {}) => el(`div.tb-carte${classe}`, {},
+    el('div.tb-titre', {}, el('h2', { text: titre }), aide ? el('span.tb-aide', { text: aide }) : null),
+    contenu);
 
-  const top = Object.entries(st.buddyCount)
-    .map(([id, n]) => [fullName(buddies.find(b => b.id === id)) || '?', n])
-    .sort((a, b) => b[1] - a[1]).slice(0, 8);
-  if (top.length) {
-    wrap.append(el('div.section', {},
-      el('h2', { text: 'Compagnons les plus fréquents' }),
-      el('div.card', {}, bars(top, Math.max(...top.map(t => t[1])))),
-    ));
-  }
+  // Années : un histogramme, chaque colonne ouvre son année.
+  const annees = Object.entries(st.years).sort((a, b) => a[0].localeCompare(b[0]));
+  const maxAn = Math.max(1, ...annees.map(a => a[1]));
+  const histo = el('div.histo', {},
+    ...annees.map(([an, n]) => el('button.histo-col', {
+      type: 'button', title: `${n} plongée${n > 1 ? 's' : ''} en ${an}`,
+      onclick: () => montrer(`Plongées de ${an}`, d => (d.date || '').startsWith(an)),
+    },
+      el('div.histo-barre', { style: { height: `${(n / maxAn) * 100}%` } }, el('b', { text: String(n) })),
+      el('span', { text: `’${an.slice(2)}` }))));
 
-  if (st.lastDate) {
-    wrap.append(el('div.hint', { text: `Dernière plongée enregistrée le ${fmtDate(st.lastDate)}.` }));
-  }
+  // Niveau : déduit des diplômes, sauf s'il a été saisi sur la plongée.
+  const niveauxCompte = {};
+  dives.forEach(d => { const n = niveauDeLaPlongee(d, certifs); if (n) niveauxCompte[n] = (niveauxCompte[n] || 0) + 1; });
+  const niveaux = Object.entries(niveauxCompte).sort((a, b) => rangNiveau(b[0]) - rangNiveau(a[0]))
+    .map(([n, c]) => [n, c, d => niveauDeLaPlongee(d, certifs) === n]);
 
+  // Régions (les ambiances des vignettes)
+  const regionsCompte = {};
+  dives.forEach(d => { const id = ambianceDe(d).id; regionsCompte[id] = (regionsCompte[id] || 0) + 1; });
+  const regions = Object.entries(regionsCompte).sort((a, b) => b[1] - a[1])
+    .map(([id, n]) => [AMBIANCES[id].nom, n, d => ambianceDe(d).id === id, AMBIANCES[id]]);
+
+  // Profondeur par tranche
+  const tranches = TRANCHES.map(([l, a, b]) => {
+    const f = d => { const p = Number(d.profMax) || 0; return p > 0 && p >= a && p < b; };
+    return [l, dives.filter(f).length, f];
+  }).filter(t => t[1]);
+
+  // Compagnons
+  const top = Object.entries(st.buddyCount).sort((a, b) => b[1] - a[1]).slice(0, 10)
+    .map(([id, n]) => [fullName(buddies.find(b => b.id === id)) || '?', n, d => (d.buddyIds || []).includes(id)]);
+
+  // Types
+  const types = Object.entries(st.byType).sort((a, b) => b[1] - a[1])
+    .map(([t, n]) => [t, n, d => d.type === t]);
+
+  // Séances, à part : elles ne sont pas des plongées.
+  const ss = statsSeances(seances);
+  const seancesBloc = el('div.tuiles', {},
+    ...TYPES_SEANCE.map(t => el('button.tuile', { type: 'button', onclick: () => {
+      try { localStorage.setItem('plongee-journal:discipline', t.id === 'fosse' ? 'fosses' : 'seances'); } catch { /* privé */ }
+      navigate('dives');
+    } },
+      el('div.n', { text: `${t.icone} ${ss.parType[t.id].total}` }),
+      el('div.l', { text: `${t.pluriel} · ${ss.parType[t.id].annee} en ${ss.annee}` }))));
+
+  const tb = el('div.tb', {},
+    tuiles,
+    carte('Par année', histo, { aide: 'touche une année', classe: '.plein' }),
+    niveaux.length ? carte('Par niveau', barres(niveaux), { aide: st.niveau ? `aujourd’hui : ${st.niveau}` : '' }) : null,
+    carte('Par région', barres(regions)),
+    tranches.length ? carte('Par profondeur', barres(tranches)) : null,
+    top.length ? carte('Compagnons', barres(top)) : null,
+    types.length ? carte('Par type', barres(types)) : null,
+    carte('Séances', seancesBloc, { aide: 'fosse, piscine, apnée…', classe: '.plein' }),
+  );
+
+  const wrap = el('div', {}, tb,
+    st.lastDate ? el('div.hint', { style: { marginTop: '14px' }, text: `Dernière plongée le ${fmtDate(st.lastDate)}.` }) : null);
   return { title: 'Statistiques', node: wrap };
 }

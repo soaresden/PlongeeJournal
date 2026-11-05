@@ -299,11 +299,37 @@ export function niveauCourant(dives, certifications = []) {
   return meilleur || dernier || '';
 }
 
+/**
+ * Niveau tenu à une date, d'après les diplômes : le plus élevé obtenu
+ * AVANT ce jour-là (le jour de l'examen, on plonge encore en formation).
+ * Seuls les niveaux classés comptent : un RIFAP ou un Nitrox n'en est pas un.
+ */
+export function niveauALaDate(certifications = [], date = '') {
+  let meilleur = '', rang = -1;
+  for (const c of certifications || []) {
+    const r = rangNiveau(c.nom);
+    if (r < 0 || !c.dateObtention || (date && c.dateObtention >= date)) continue;
+    if (r > rang) { rang = r; meilleur = String(c.nom).trim(); }
+  }
+  return meilleur;
+}
+
+/**
+ * Le niveau d'une plongée : celui saisi sur la fiche s'il y en a un (un
+ * PN2, une formation en cours), sinon celui que donnent les diplômes.
+ * @returns {{niveau:string, deduit:boolean}}
+ */
+export function niveauDe(dive, certifications = []) {
+  const saisi = String(dive?.niveau || '').trim();
+  if (saisi) return { niveau: saisi, deduit: false };
+  return { niveau: niveauALaDate(certifications, dive?.date || ''), deduit: true };
+}
+
 /** Répartition des plongées par niveau, du plus élevé au plus bas. */
-export function plongeesParNiveau(dives) {
+export function plongeesParNiveau(dives, certifications = []) {
   const compte = {};
   (dives || []).forEach(d => {
-    const n = String(d.niveau || '').trim();
+    const n = niveauDe(d, certifications).niveau;
     if (n) compte[n] = (compte[n] || 0) + 1;
   });
   return Object.entries(compte).sort((a, b) => rangNiveau(b[0]) - rangNiveau(a[0]));
@@ -422,7 +448,7 @@ export function computeStats(list, certifications = []) {
     lastDate: list.map(d => d.date).filter(Boolean).sort().pop() || null,
     byType, buddyCount, years,
     niveau: niveauCourant(list, certifications),
-    parNiveau: plongeesParNiveau(list),
+    parNiveau: plongeesParNiveau(list, certifications),
   };
 }
 

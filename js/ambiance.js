@@ -35,11 +35,12 @@ export function ambianceId(d = {}) {
   const { lat, lng } = d;
   if (lat == null || lng == null) return 'ocean';
   if (entre(lat, 12, 30.5) && entre(lng, 32, 44)) return 'merRouge';
+  // Canaries, Madère, Açores, Cap-Vert : l'Atlantique, même sous les tropiques.
+  if (entre(lat, 10, 42) && entre(lng, -35, -12)) return 'atlantique';
   if (Math.abs(lat) <= 23.5) {
     return entre(lat, 8, 28) && entre(lng, -90, -55) ? 'caraibes' : 'tropiques';
   }
   if (entre(lat, 30, 46.5) && entre(lng, -5.6, 36.5)) return 'med';
-  if (entre(lat, 25, 42) && entre(lng, -35, -12)) return 'atlantique';
   // Au nord, la mer n'est qu'une bande côtière : sans type d'eau connu, un
   // point en Île-de-France n'a rien de la Manche (une piscine importée
   // de la montre, par exemple).

@@ -5,7 +5,7 @@
 import { el, toast, num, fullName, openModal, fileToDataURL, confirmBox, todayISO,
          minToTime, timeToMin, scrollTo } from '../lib.js';
 import { store, emptyDive, emptyBuddy, reconcileTimes, validerPlongee,
-         appliquerOptionsAuto, niveauCourant, libelleGaz, pmuNitrox,
+         appliquerOptionsAuto, niveauCourant, niveauALaDate, libelleGaz, pmuNitrox,
          libelleMateriel, consommation } from '../store.js';
 import { editerMateriel, ligneMateriel } from './materiel.js';
 import { DIVE_TYPES, DIVE_OPTIONS, DIVE_GOALS, PALANQUEE_MODES,
@@ -601,17 +601,25 @@ export async function diveFormView({ id }) {
   const champDate = field('Date', dateInput, null, true);
   champDate.id = 'champ-date';
 
-  // Niveau au moment de la plongée : proposé d'après le carnet, modifiable.
+  // Niveau au moment de la plongée : déduit des diplômes et de la date.
+  // Le choisir ici ne sert qu'à le forcer (une plongée en formation, PN2…).
   const toutesDives = await store.listDives(diverId);
-  if (isNew && !dive.niveau) dive.niveau = niveauCourant(toutesDives);
+  const certifs = await store.listCertifications(diverId);
 
   const niveauSel = el('select');
-  niveauSel.append(el('option', { value: '', text: '— non précisé —' }));
+  const optionAuto = el('option', { value: '' });
+  const majAuto = () => {
+    const n = niveauALaDate(certifs, dive.date);
+    optionAuto.textContent = n ? `${n} — d'après tes diplômes` : '— non précisé —';
+  };
+  majAuto();
+  niveauSel.append(optionAuto);
   const niveauxConnus = [...new Set([...NIVEAUX,
     ...toutesDives.map(d => d.niveau).filter(Boolean)])];
   niveauxConnus.forEach(n => niveauSel.append(el('option', { value: n, text: n })));
   niveauSel.value = dive.niveau || '';
   niveauSel.onchange = () => set({ niveau: niveauSel.value });
+  dateInput.addEventListener('change', majAuto);
 
   form.append(section('La plongée', { icone: '🤿', ouvert: true },
     el('div.row', {},
@@ -622,8 +630,8 @@ export async function diveFormView({ id }) {
       segmented(DIVE_TYPES.map(t => ({ id: t, label: t.replace('Exploration de ', 'Explo ') })),
                 dive.type, v => set({ type: v }))),
     field('Mon niveau ce jour-là', niveauSel,
-      'Repris de ta dernière plongée. Change-le le jour où tu passes un niveau : '
-    + 'les statistiques suivront.'),
+      'Rien à saisir : il se déduit de tes diplômes (Profil). '
+    + 'Choisis-en un seulement pour une plongée en formation (PN2…).'),
   ));
 
   // ---------- 2. Lieu ----------

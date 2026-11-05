@@ -12,6 +12,7 @@
 import { el, fmtDate, fmtDuration, fullName } from '../lib.js';
 import { zoomPourLargeurKm } from '../map.js';
 import { navigate } from '../router.js';
+import { apercuPlongee } from '../apercu.js';
 
 /** Regroupe les plongées par lieu, à ~200 m près. */
 function grouperParLieu(dives) {
@@ -109,7 +110,7 @@ export function carteDesPlongees(dives, { buddies = [] } = {}) {
       el('div', { style: { fontWeight: '650', fontSize: '16px' }, text: g.nom }),
       el('div.hint', { style: { marginTop: '2px' },
         text: `${g.plongees.length} plongée(s) · ${g.lat.toFixed(4)}, ${g.lng.toFixed(4)}` }),
-      ...triees.map(d => el('div.jour-ligne', { onclick: () => navigate(`dive/${d.id}`) },
+      ...triees.map(d => el('div.jour-ligne', { onclick: () => apercuPlongee(d.id) },
         el('div.dive-num', { style: { width: '38px', height: '38px', flex: '0 0 38px',
           fontSize: '13px' }, text: d.numero ?? '—' }),
         el('div', { style: { flex: 1, minWidth: 0 } },

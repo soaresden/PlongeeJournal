@@ -46,7 +46,7 @@ route('montre',           montreView);
 route('montre-aide',      montreAideView);
 route('urgence',          urgenceView);
 // Les séances s'affichent dans l'écran Plongées (onglet « Séances »).
-route('seances',          () => { try { localStorage.setItem('plongee-journal:vue-dives', 'seances'); } catch { /* privé */ } return divesView(); });
+route('seances',          () => { try { localStorage.setItem('plongee-journal:discipline', 'seances'); } catch { /* privé */ } return divesView(); });
 route('seance/new',       seanceFormView);
 route('seance/:id',       seanceFormView);
 

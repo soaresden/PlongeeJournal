@@ -2,7 +2,8 @@
 //  Liste des plongées + fiche détaillée
 // ============================================================
 
-import { el, fmtDate, fmtDateLong, fmtDuration, fullName, toast, confirmBox, openModal } from '../lib.js';
+import { el, fmtDate, fmtDateLong, fmtDuration, fullName, toast, confirmBox, openModal, debounce } from '../lib.js';
+import { apercuPlongee, apercuSeance } from '../apercu.js';
 import { store, TYPES_SEANCE } from '../store.js';
 import { staticMap } from '../map.js';
 import { navigate } from '../router.js';
@@ -71,93 +72,105 @@ export async function divesView() {
     return { title: 'Plongées', node: wrap, identite };
   }
 
-  // Bascule liste / calendrier
-  const vueMemoire = 'plongee-journal:vue-dives';
-  let vue = localStorage.getItem(vueMemoire) || 'liste';
+  // ------------------------------------------------------------
+  //  Deux niveaux de choix, toujours au même endroit :
+  //   1. la discipline : Plongées · Fosses · Séances (piscine, apnée…)
+  //   2. la vue : Liste · Agenda · Carte
+  // ------------------------------------------------------------
+  const lire = (k, def) => { try { return localStorage.getItem(k) || def; } catch { return def; } };
+  const garder = (k, v) => { try { localStorage.setItem(k, v); } catch { /* privé */ } };
+  const CLE_DISC = 'plongee-journal:discipline', CLE_VUE = 'plongee-journal:vue-dives';
 
+  const fosses = seances.filter(s => s.type === 'fosse');
+  const autres = seances.filter(s => s.type !== 'fosse');
+
+  let discipline = lire(CLE_DISC, 'plongees');
+  let vue = lire(CLE_VUE, 'liste');
+  if (vue === 'seances') { discipline = 'seances'; vue = 'liste'; }      // ancien réglage
+  if (!['plongees', 'fosses', 'seances'].includes(discipline)) discipline = 'plongees';
+  if (!['liste', 'calendrier', 'carte'].includes(vue)) vue = 'liste';
+
+  const segDisc = el('div.seg.seg-discipline');
+  const segVue = el('div.seg.seg-vue');
+  const outils = el('div.dives-outils', {}, segVue);
+  const contenu = el('div.dives-contenu');
   const search = el('input', { type: 'search', placeholder: 'Chercher un lieu, un compagnon, une observation…' });
-  const zoneRecherche = el('div.field', {}, search);
-  const list = el('div.dive-list');
-  const cal = el('div');
 
-  const carteBox = el('div');
-  const seancesBox = el('div');
+  const nb = { plongees: dives.length, fosses: fosses.length, seances: autres.length };
+  function rendreSegments() {
+    segDisc.innerHTML = '';
+    [['plongees', '🤿', 'Plongées'], ['fosses', '🎯', 'Fosses'], ['seances', '🏊', 'Séances']].forEach(([id, ico, label]) => {
+      const b = el('button', { type: 'button' }, el('span.seg-ico', { text: ico }), label, el('span.seg-n', { text: String(nb[id]) }));
+      if (id === discipline) b.classList.add('on');
+      b.onclick = () => { discipline = id; garder(CLE_DISC, id); rendreSegments(); afficher(); };
+      segDisc.append(b);
+    });
 
-  const bascule = el('div.seg.bascule-dives', { style: { marginBottom: '12px' } });
-  function rendreBascule() {
-    bascule.innerHTML = '';
-    [['liste', '☰ Liste'], ['calendrier', '▦ Agenda'], ['carte', '🗺 Carte'], ['seances', '🏊 Séances']].forEach(([id, label]) => {
+    segVue.innerHTML = '';
+    segVue.hidden = discipline === 'seances';
+    const vues = [['liste', '☰ Liste'], ['calendrier', '▦ Agenda'], ...(discipline === 'plongees' ? [['carte', '🗺 Carte']] : [])];
+    if (!vues.some(([id]) => id === vue)) vue = 'liste';
+    vues.forEach(([id, label]) => {
       const b = el('button', { type: 'button', text: label });
       if (id === vue) b.classList.add('on');
-      b.onclick = async () => {
-        vue = id;
-        localStorage.setItem(vueMemoire, id);
-        rendreBascule();
-        await afficherVue();
-      };
-      bascule.append(b);
+      b.onclick = () => { vue = id; garder(CLE_VUE, id); rendreSegments(); afficher(); };
+      segVue.append(b);
     });
+    search.hidden = vue !== 'liste' || discipline === 'seances';
   }
 
-  async function afficherVue() {
-    zoneRecherche.hidden = vue !== 'liste';
-    if (bandeauRanger) bandeauRanger.hidden = vue !== 'liste';
-    list.hidden = vue !== 'liste';
-    cal.hidden = vue !== 'calendrier';
-    carteBox.hidden = vue !== 'carte';
-    seancesBox.hidden = vue !== 'seances';
-
-    if (vue === 'calendrier' && !cal.childNodes.length) {
-      const { calendrier } = await import('./calendar.js');
-      cal.append(calendrier(dives, { buddies, seances }));
-    }
-    if (vue === 'seances' && !seancesBox.childNodes.length) {
-      const { seancesPanneau } = await import('./seances.js');
-      seancesBox.append(seancesPanneau({ seances, dives }));
-    }
-    if (vue === 'carte' && !carteBox.childNodes.length) {
-      const { carteDesPlongees } = await import('./carte.js');
-      carteBox.append(carteDesPlongees(dives, { buddies }));
-    }
-  }
-
-  rendreBascule();
-  // Des « plongées » importées qui étaient des piscines ou des fosses :
-  // on le signale là où elles se voient, dans la liste.
+  // Des « plongées » importées qui étaient des piscines ou des fosses.
   const aRanger = plongeesARanger(dives, seances);
   const bandeauRanger = aRanger.length ? el('div.card.alerte.clickable', {
-    onclick: async () => { vue = 'seances'; localStorage.setItem(vueMemoire, vue); rendreBascule(); await afficherVue(); },
+    onclick: () => { discipline = 'seances'; garder(CLE_DISC, discipline); rendreSegments(); afficher(); },
   },
     el('div', { style: { fontWeight: '650' }, text: `🏊 ${aRanger.length} plongée${aRanger.length > 1 ? 's' : ''} importée${aRanger.length > 1 ? 's' : ''} ressemble${aRanger.length > 1 ? 'nt' : ''} à des séances` }),
     el('div.hint', { text: 'Piscine, fosse : range-les dans Séances pour qu’elles ne comptent plus comme plongées ›' })) : null;
-  wrap.append(bascule, bandeauRanger || '', zoneRecherche, list, cal, carteBox, seancesBox);
+
+  outils.append(search);
+  wrap.append(el('div.dives-barre', {}, segDisc, outils), bandeauRanger || '', contenu);
 
   function matches(d, q) {
     if (!q) return true;
     const hay = [
-      d.lieuNom, d.lieuDetail, d.site, d.type, d.fait, d.vu, d.observations,
+      d.lieuNom, d.lieuDetail, d.site, d.lieu, d.type, d.fait, d.vu, d.observations, d.notes,
       d.objectifAutre, ...(d.options || []), ...(d.objectifs || []),
-      ...(d.buddyIds || []).map(buddyName), String(d.numero),
+      ...(d.buddyIds || []).map(buddyName), String(d.numero ?? ''),
     ].join(' ').toLowerCase();
     return hay.includes(q);
   }
 
-  // Années repliées / dépliées : retenu sur l'appareil. Par défaut,
-  // seule l'année la plus récente est ouverte — fini le défilement infini.
-  const CLE_ANNEES = 'plongee-journal:annees-ouvertes';
-  let ouvertes;
-  try { ouvertes = new Set(JSON.parse(localStorage.getItem(CLE_ANNEES) || 'null')); } catch { ouvertes = null; }
-  if (!ouvertes || !ouvertes.size) ouvertes = new Set([(dives[0]?.date || '').slice(0, 4)]);
-  const garderAnnees = () => {
-    try { localStorage.setItem(CLE_ANNEES, JSON.stringify([...ouvertes])); } catch { /* plein */ }
+  // Années repliées / dépliées : retenu sur l'appareil, par discipline.
+  const ouvertesDe = cle => {
+    let s;
+    try { s = new Set(JSON.parse(localStorage.getItem(cle) || 'null')); } catch { s = null; }
+    return s && s.size ? s : null;
   };
+  const etats = {
+    plongees: { cle: 'plongee-journal:annees-ouvertes' },
+    fosses: { cle: 'plongee-journal:annees-ouvertes-fosses' },
+  };
+  etats.plongees.ouvertes = ouvertesDe(etats.plongees.cle) || new Set([(dives[0]?.date || '').slice(0, 4)]);
+  etats.fosses.ouvertes = ouvertesDe(etats.fosses.cle) || new Set([(fosses[0]?.date || '').slice(0, 4)]);
+
   // Profondeur de référence de la jauge : la plus profonde du carnet (40 m mini).
   const profRef = Math.max(40, ...dives.map(d => Number(d.profMax) || 0));
+  const jauge = prof => prof ? el('div.jauge', { title: `${prof} m` },
+    el('span', { style: { width: `${Math.min(100, (prof / profRef) * 100)}%` } })) : null;
+
+  /** Après une retouche dans l'aperçu : la liste se remet à jour. */
+  async function rafraichir() {
+    const frais = await store.listDives(diverId);
+    dives.splice(0, dives.length, ...frais);
+    const fs = (await store.listSeances(diverId)).filter(s => s.type === 'fosse');
+    fosses.splice(0, fosses.length, ...fs);
+    afficher({ garderScroll: true });
+  }
 
   function carte(d) {
     const a = ambianceDe(d);
     const prof = Number(d.profMax) || 0;
-    return el('div.card.clickable.dive-card', { style: stylesAmbiance(a), onclick: () => navigate(`dive/${d.id}`) },
+    return el('div.card.clickable.dive-card', { style: stylesAmbiance(a), onclick: () => apercuPlongee(d.id, { onClose: rafraichir }) },
       vignetteLieu(d, { boite: 84, contenu: d.numero ?? '—' }),
       el('div.dive-main', {},
         el('div.dive-title', { text: d.lieuNom || d.site || 'Lieu non précisé' }),
@@ -168,8 +181,7 @@ export async function divesView() {
           el('span', {}, el('b', { text: fmtDuration(d.dureeMin) }), ' fond'),
           d.tempFond != null ? el('span', {}, el('b', { text: `${d.tempFond}°` }), ' eau') : null,
         ),
-        prof ? el('div.jauge', { title: `${prof} m` },
-          el('span', { style: { width: `${Math.min(100, (prof / profRef) * 100)}%` } })) : null,
+        jauge(prof),
         (d.buddyIds || []).length
           ? el('div.dive-sub.dive-buddies', { text: '👥 ' + d.buddyIds.map(buddyName).join(', ') })
           : null,
@@ -177,15 +189,38 @@ export async function divesView() {
     );
   }
 
-  function renderList() {
-    const q = search.value.trim().toLowerCase();
-    const shown = dives.filter(d => matches(d, q));
-    list.innerHTML = '';
-    if (!shown.length) {
-      list.append(el('div.empty', { text: dives.length ? 'Aucune plongée ne correspond.' : 'Aucune plongée : tes séances sont dans l’onglet Séances.' }));
-      return;
-    }
+  /** Une fosse, présentée comme une plongée : même carte, mêmes repères. */
+  const JOURS_COURTS = ['dim.', 'lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.'];
+  function carteFosse(s) {
+    const commePlongee = { ...s, lieuNom: s.lieu, options: ['Plongée en fosse'] };
+    const a = ambianceDe(commePlongee);
+    const prof = Number(s.profMax) || 0;
+    const jour = s.date ? new Date(`${s.date}T12:00:00`) : null;
+    return el('div.card.clickable.dive-card', { style: stylesAmbiance(a), onclick: () => apercuSeance(s.id, { onClose: rafraichir }) },
+      vignetteLieu(commePlongee, { boite: 84, contenu: jour ? el('span.vj', {}, el('small', { text: JOURS_COURTS[jour.getDay()] }), String(jour.getDate())) : '—' }),
+      el('div.dive-main', {},
+        el('div.dive-title', { text: s.lieu || 'Fosse' }),
+        el('div.dive-sub', {}, fmtDate(s.date), s.heure ? ` · ${s.heure}` : ''),
+        el('div.dive-metrics', {},
+          el('span', {}, el('b', { text: prof ? `${prof} m` : '—' }), ' prof.'),
+          el('span', {}, el('b', { text: fmtDuration(s.dureeMin) }), ' durée'),
+          s.tempEau != null ? el('span', {}, el('b', { text: `${s.tempEau}°` }), ' eau') : null),
+        jauge(prof),
+        (s.buddyIds || []).length
+          ? el('div.dive-sub.dive-buddies', { text: '👥 ' + s.buddyIds.map(buddyName).join(', ') })
+          : null,
+        s.notes ? el('div.dive-sub.dive-buddies', { text: s.notes }) : null));
+  }
 
+  /** Liste par année, repliable — plongées et fosses partagent le rendu. */
+  function listeParAnnee(elements, { etat, fabrique, mot }) {
+    const q = search.value.trim().toLowerCase();
+    const shown = elements.filter(d => matches(d, q));
+    const box = el('div.dive-list');
+    if (!shown.length) {
+      box.append(el('div.empty', { text: elements.length ? 'Rien ne correspond.' : `Aucune ${mot} pour l’instant.` }));
+      return box;
+    }
     const parAnnee = new Map();
     shown.forEach(d => {
       const y = (d.date || '').slice(0, 4) || 'Sans date';
@@ -193,44 +228,70 @@ export async function divesView() {
       parAnnee.get(y).push(d);
     });
 
-    parAnnee.forEach((liste, y) => {
-      const prof = Math.max(0, ...liste.map(d => Number(d.profMax) || 0));
-      const ambiances = [...new Map(liste.map(d => { const a = ambianceDe(d); return [a.id, a]; })).values()];
-      const ouvert = q ? true : ouvertes.has(y);
+    parAnnee.forEach((lot, y) => {
+      const prof = Math.max(0, ...lot.map(d => Number(d.profMax) || 0));
+      const ambiances = mot === 'plongée'
+        ? [...new Map(lot.map(d => { const a = ambianceDe(d); return [a.id, a]; })).values()] : [];
+      const ouvert = q ? true : etat.ouvertes.has(y);
+      const heures = Math.round(lot.reduce((t, d) => t + (Number(d.dureeMin) || 0), 0) / 60);
 
       const groupe = el('details.annee-groupe', { open: ouvert },
         el('summary.annee-tete', {},
           el('span.annee-num', { text: y }),
           el('span.annee-info', {},
-            `${liste.length} plongée${liste.length > 1 ? 's' : ''}`,
-            prof ? ` · max ${prof} m` : ''),
+            `${lot.length} ${mot}${lot.length > 1 ? 's' : ''}`,
+            prof ? ` · max ${prof} m` : '', heures ? ` · ${heures} h` : ''),
           el('span.annee-pastilles', {}, ambiances.map(a =>
             el('span.amb-point', { style: stylesAmbiance(a), title: a.nom }))),
           el('span.annee-chevron', { 'aria-hidden': 'true', text: '›' })),
         el('div.annee-cartes'));
 
-      // Les cartes ne sont construites qu'à l'ouverture : 66 vignettes
-      // satellite d'un coup, c'est lourd pour un téléphone.
+      // Les cartes ne sont construites qu'à l'ouverture (vignettes satellite).
       const remplir = () => {
         const zone = groupe.querySelector('.annee-cartes');
-        if (!zone.childNodes.length) zone.append(...liste.map(carte));
+        if (!zone.childNodes.length) zone.append(...lot.map(fabrique));
       };
       if (ouvert) remplir();
       groupe.addEventListener('toggle', () => {
         if (groupe.open) remplir();
-        if (q) return;                       // une recherche ne change pas les préférences
-        if (groupe.open) ouvertes.add(y); else ouvertes.delete(y);
-        garderAnnees();
+        if (q) return;
+        if (groupe.open) etat.ouvertes.add(y); else etat.ouvertes.delete(y);
+        garder(etat.cle, JSON.stringify([...etat.ouvertes]));
       });
-      list.append(groupe);
+      box.append(groupe);
     });
-
-    list.append(el('div.hint.credit-sat', { text: 'Vignettes satellite © Esri, Maxar, Earthstar Geographics' }));
+    box.append(el('div.hint.credit-sat', { text: 'Vignettes satellite © Esri, Maxar, Earthstar Geographics' }));
+    return box;
   }
 
-  search.addEventListener('input', renderList);
-  renderList();
-  await afficherVue();
+  async function afficher({ garderScroll = false } = {}) {
+    const vueEl = document.getElementById('view');
+    const y = garderScroll ? vueEl?.scrollTop : 0;
+    if (bandeauRanger) bandeauRanger.hidden = discipline !== 'plongees' || vue !== 'liste';
+    contenu.innerHTML = '';
+
+    if (discipline === 'seances') {
+      const { seancesPanneau } = await import('./seances.js');
+      contenu.append(seancesPanneau({ seances: autres, dives, types: TYPES_SEANCE.filter(t => t.id !== 'fosse') }));
+    } else if (vue === 'calendrier') {
+      const { calendrier } = await import('./calendar.js');
+      contenu.append(discipline === 'fosses'
+        ? calendrier([], { buddies, seances: fosses, couches: ['fosse'] })
+        : calendrier(dives, { buddies, seances }));
+    } else if (vue === 'carte') {
+      const { carteDesPlongees } = await import('./carte.js');
+      contenu.append(carteDesPlongees(dives, { buddies }));
+    } else if (discipline === 'fosses') {
+      contenu.append(listeParAnnee(fosses, { etat: etats.fosses, fabrique: carteFosse, mot: 'fosse' }));
+    } else {
+      contenu.append(listeParAnnee(dives, { etat: etats.plongees, fabrique: carte, mot: 'plongée' }));
+    }
+    if (garderScroll && vueEl) vueEl.scrollTop = y;
+  }
+
+  search.addEventListener('input', debounce(() => afficher(), 200));
+  rendreSegments();
+  await afficher();
 
   return { title: 'Plongées', node: wrap, identite };
 }
@@ -329,11 +390,11 @@ export async function diveView({ id }) {
   }
 
   // Courbe de profondeur (import ordinateur de plongée)
-  if (d.profil?.length) {
+  if ((d.samples || d.profil)?.length) {
     wrap.append(el('div.section', {},
       el('h2', { text: 'Courbe de profondeur' }),
       el('div.card', {},
-        el('div', { html: profileSvg(d.profil) }),
+        el('div', { html: profileSvg(d.samples || d.profil) }),
         (d.suuntoKeys || []).length > 1
           ? el('div.hint', { text: `Fusion de ${d.suuntoKeys.length} enregistrements Suunto.` })
           : null,

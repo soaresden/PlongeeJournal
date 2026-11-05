@@ -29,14 +29,74 @@ function typeDuLieu(lieu, seances) {
 }
 
 /**
+ * Ce que dit la courbe de profondeur, quand la montre l'a enregistrée.
+ * Une « immersion » commence sous 1,2 m et finit en remontant au-dessus.
+ * @returns {{immersions:number, plusLongueS:number, profMax:number, dureeS:number, sonde:boolean}|null}
+ */
+export function lireProfil(samples = []) {
+  if (!samples?.length) return null;
+  const SEUIL = 1.2;
+  const immersions = [];
+  let debut = null;
+  for (const s of samples) {
+    const d = Number(s.d) || 0;
+    if (d > SEUIL && debut === null) debut = s.t;
+    else if (d <= SEUIL && debut !== null) { immersions.push(s.t - debut); debut = null; }
+  }
+  const dernier = samples[samples.length - 1];
+  if (debut !== null) immersions.push(dernier.t - debut);
+  return {
+    immersions: immersions.length,
+    plusLongueS: Math.max(0, ...immersions),
+    profMax: Math.max(0, ...samples.map(s => Number(s.d) || 0)),
+    dureeS: dernier.t - samples[0].t,
+    // La sonde de bouteille : une pression relevée pendant la plongée.
+    sonde: samples.some(s => s.p != null || s.pression != null || s.bar != null),
+  };
+}
+
+/**
+ * Le verdict de la courbe, d'après la façon dont on pratique :
+ *  - la piscine, ce sont des longueurs : pas de profondeur, une séance longue ;
+ *  - l'apnée, des immersions répétées (canards, statique…) de deux ou trois
+ *    minutes au plus, jusqu'à une dizaine de mètres, en fosse ou en bassin ;
+ *  - le snorkeling, pareil mais dehors (la montre a un point GPS) ;
+ *  - une immersion longue, ou la sonde de bouteille : une plongée.
+ * @returns {'plongee'|'piscine'|'apnee'|'snorkeling'|null}  null : la courbe ne tranche pas
+ */
+export function verdictProfil(p, { lieu = null } = {}) {
+  if (!p) return null;
+  if (p.sonde) return 'plongee';
+  if (!p.immersions) return 'piscine';
+  if (p.plusLongueS >= 8 * 60 && p.profMax >= 3) return 'plongee';
+  if (p.immersions >= 3 && p.plusLongueS <= 4 * 60) return lieu ? 'snorkeling' : 'apnee';
+  return null;
+}
+
+/**
  * Plongée ou séance ? D'après ce que la montre en dit.
  * @param {{genre?:string, profMax?:number|null, date?:Date|string, lieu?:{lat,lng}|null}} a
  * @param {object[]} seances  les séances déjà rangées (pour reconnaître le lieu)
  * @returns {'plongee'|'fosse'|'piscine'|'apnee'|'snorkeling'}
  */
-export function suggererRangement({ genre = '', profMax = null, date = null, lieu = null } = {}, seances = []) {
+export function suggererRangement({ genre = '', profMax = null, date = null, lieu = null, samples = null } = {}, seances = []) {
   const prof = Number(profMax) || 0;
   const connu = lieu ? typeDuLieu(lieu, seances) : null;
+
+  // La courbe passe avant le mode choisi sur la montre : on oublie souvent
+  // de le changer, la courbe, elle, ne ment pas.
+  // Seule exception : la montre dit natation ou apnée (le type d'activité
+  // officiel) — il faut alors la sonde de bouteille pour parler de plongée.
+  const profil = lireProfil(samples);
+  let courbe = verdictProfil(profil, { lieu });
+  if (courbe === 'plongee' && (genre === 'apnee' || genre === 'autre') && !profil.sonde) courbe = null;
+  if (courbe === 'plongee') {
+    if (connu === 'fosse') return 'fosse';
+    const jour = date ? new Date(typeof date === 'string' ? `${date}T12:00:00` : date).getDay() : null;
+    return jour === 4 && prof <= 25 ? 'fosse' : 'plongee';
+  }
+  if (courbe === 'piscine') return connu && connu !== 'fosse' ? connu : 'piscine';
+  if (courbe) return connu && connu !== 'piscine' ? connu : courbe;
 
   // Snorkeling : souvent le mode choisi sur la montre pour un
   // entraînement en piscine ou en fosse. Au même endroit qu'une séance

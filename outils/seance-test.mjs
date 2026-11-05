@@ -97,6 +97,20 @@ check('le lieu tranche : là où l’on a déjà rangé des apnées',
   S.suggererRangement({ genre: 'bouteille', profMax: 1.8, lieu: piscineGarenne }, [{ type: 'apnee', ...piscineGarenne }]) === 'apnee');
 check('le lieu tranche : la fosse, même un mardi',
   S.suggererRangement({ genre: 'bouteille', profMax: 19, date: '2026-10-13', lieu: fosseVilleneuve }, [{ type: 'fosse', ...fosseVilleneuve }]) === 'fosse');
+// La courbe tranche (règles de Denis)
+{
+  const pas = (segments) => { const out = []; let t = 0; for (const [d, n] of segments) for (let i = 0; i < n; i++) { out.push({ t, d }); t += 10; } return out; };
+  const longueurs = pas([[0.4, 300]]);                                   // 50 min sans profondeur
+  const canards = pas([[0.3, 6], [4, 6], [0.3, 12], [7, 9], [0.3, 12], [9.5, 10], [0.3, 12], [3, 12], [0.3, 6]]);
+  const plongee = pas([[0.5, 3], [12, 120], [5, 18], [0.3, 3]]);         // 23 min sous l'eau
+  const avecSonde = pas([[0.5, 2], [3, 8], [0.4, 2]]).map(x => ({ ...x, p: 180 }));
+  check('courbe : longueurs sans profondeur → piscine', S.suggererRangement({ genre: 'snorkeling', samples: longueurs }) === 'piscine');
+  check('courbe : canards répétés sans GPS → apnée', S.suggererRangement({ genre: 'snorkeling', samples: canards }) === 'apnee');
+  check('courbe : canards répétés dehors (GPS) → snorkeling', S.suggererRangement({ genre: 'apnee', samples: canards, lieu: { lat: 35.95, lng: 14.33 } }) === 'snorkeling');
+  check('courbe : une immersion longue → plongée', S.suggererRangement({ genre: 'snorkeling', samples: plongee, date: '2026-10-17' }) === 'plongee');
+  check('courbe : la sonde de bouteille → plongée', S.suggererRangement({ genre: 'apnee', samples: avecSonde, date: '2026-10-17' }) === 'plongee');
+  check('courbe : une plongée un jeudi soir sans GPS → fosse', S.suggererRangement({ genre: 'bouteille', samples: plongee, profMax: 12, date: '2026-10-15' }) === 'fosse');
+}
 check('distance : 400 m font la différence', S.distanceM(piscineGarenne, fosseVilleneuve) > 5000 && S.distanceM(piscineGarenne, { lat: 48.9056, lng: 2.2434 }) < 50);
 
 {
