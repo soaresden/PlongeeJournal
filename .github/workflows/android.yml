@@ -56,6 +56,9 @@ jobs:
         run: |
           npm install --no-audit --no-fund
           npm run www
+          # Numéro de version embarqué, pour le bouton « Mise à jour ».
+          cat www/version.json
+          grep -q '"build": ${{ github.run_number }},' www/version.json || { echo "::error::www/version.json sans numéro de build"; exit 1; }
           npx cap add android
           npx cap sync android
           # Import Bluetooth depuis la montre : le module natif doit être là.

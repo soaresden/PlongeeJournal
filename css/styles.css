@@ -1328,3 +1328,14 @@ a.btn { text-decoration: none; }
 @media (max-width: 420px) {
   .bascule-dives button { padding: 8px 2px; font-size: 12px; }
 }
+
+/* ---------- Mise à jour de l'APK ---------- */
+.carte-maj .btn.block { margin-top: 12px; }
+.maj-message { margin-top: 10px; font-size: 14px; line-height: 1.4; }
+.maj-message:empty { display: none; }
+.maj-message.ok { color: var(--ok); font-weight: 600; }
+.maj-message.neuf { font-weight: 650; }
+.maj-message.erreur { color: var(--danger); }
+.maj-nouveautes { margin: 8px 0 0; padding-left: 20px; font-size: 13.5px; color: var(--text-dim); }
+.maj-nouveautes:empty { display: none; }
+.maj-nouveautes li { margin: 3px 0; }

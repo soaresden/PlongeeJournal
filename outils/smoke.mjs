@@ -31,8 +31,22 @@ Object.defineProperty(globalThis, 'crypto', { configurable: true, value: {
   randomUUID: () => 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/x/g, () => (Math.random()*16|0).toString(16)) } });
 // Doublure de fetch. Elle refuse le carnet et l'API : c'est la situation
 // d'un téléphone loin du PC, celle où le plus de choses peuvent casser.
+let fausseRelease = null;   // { installee, publiee } : simule l'APK et GitHub
 globalThis.fetch = async (url) => {
   const u = String(url);
+  if (fausseRelease && u.endsWith('version.json')) {
+    return { ok: true, status: 200, json: async () => ({ build: fausseRelease.installee,
+      version: `2.0.${fausseRelease.installee}`, commit: 'def5678', date: '2026-10-20T08:00:00Z' }) };
+  }
+  if (fausseRelease && u.includes('/releases/tags/android')) {
+    return { ok: true, status: 200, json: async () => ({ name: `Carnet de plongée — APK 2.0.${fausseRelease.publiee}`,
+      body: 'APK Android compilé depuis abc1234.', published_at: '2026-11-05T09:00:00Z',
+      assets: [{ name: 'PlongeeJournal.apk', size: 4404019, updated_at: '2026-11-05T09:01:00Z',
+        browser_download_url: 'https://github.com/soaresden/PlongeeJournal/releases/download/android/PlongeeJournal.apk' }] }) };
+  }
+  if (fausseRelease && u.includes('/compare/')) {
+    return { ok: true, status: 200, json: async () => ({ commits: [{ commit: { message: 'Séances : fosse, piscine, apnée' } }] }) };
+  }
   if (/\/api\/|carnet\.json/.test(u)) return { ok: false, status: 404, json: async () => ({}) };
   return { ok: true, status: 200, json: async () => [] };
 };
@@ -224,6 +238,42 @@ check('réglages : les thèmes sont proposés',
   /Cousteau/.test(view()) && /Abysse/.test(view()) && /Eau turquoise/.test(view()), '');
 check('réglages : sauvegarde manuelle proposée',
   /Exporter le carnet/.test(view()), '');
+check('réglages (site web) : pas de carte de mise à jour de l’APK',
+  !/Dernière sur GitHub/.test(view()), '');
+
+// --- Réglages dans l'APK : mise à jour depuis GitHub ---
+window.Capacitor = { isNativePlatform: () => true };
+fausseRelease = { installee: 40, publiee: 42 };
+window.location.hash = '#/dives';
+window.dispatchEvent(new window.Event('hashchange'));
+await tick(80);
+window.location.hash = '#/reglages';
+window.dispatchEvent(new window.Event('hashchange'));
+await tick(200);
+const boutonMaj = () => document.querySelector('.carte-maj button');
+check('APK : version installée et dernière sur GitHub affichées',
+  /Installée\s*2\.0\.40/.test(view()) && /Dernière sur GitHub\s*2\.0\.42/.test(view()), view().slice(view().indexOf('Appli Android'), view().indexOf('Appli Android') + 160));
+check('APK : bouton de téléchargement de la nouvelle version',
+  /Télécharger la 2\.0\.42 \(4,2 Mo\)/.test(boutonMaj()?.textContent || '') && boutonMaj().classList.contains('primary'),
+  boutonMaj()?.textContent);
+check('APK : nouveautés listées', /Séances : fosse, piscine, apnée/.test(document.querySelector('.maj-nouveautes')?.textContent || ''), '');
+let ouvert = null;
+const clicOrigine = window.HTMLAnchorElement.prototype.click;
+window.HTMLAnchorElement.prototype.click = function () { ouvert = this.href; };
+boutonMaj().click();
+window.HTMLAnchorElement.prototype.click = clicOrigine;
+check('APK : le bouton ouvre l’APK de la release', /releases\/download\/android\/PlongeeJournal\.apk$/.test(ouvert || ''), ouvert);
+fausseRelease = { installee: 42, publiee: 42 };
+window.location.hash = '#/dives';
+window.dispatchEvent(new window.Event('hashchange'));
+await tick(80);
+window.location.hash = '#/reglages';
+window.dispatchEvent(new window.Event('hashchange'));
+await tick(200);
+check('APK : « dernière version » quand c’est à jour',
+  /Tu as la dernière version/.test(view()) && /Vérifier à nouveau/.test(boutonMaj()?.textContent || ''), boutonMaj()?.textContent);
+delete window.Capacitor;
+fausseRelease = null;
 
 // --- Écran Plongeurs : vignettes, pas des lignes ---
 window.location.hash = '#/buddies';

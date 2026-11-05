@@ -135,6 +135,13 @@ fichier, autorise l'installation depuis cette source. Les mises à jour
 s'installent par-dessus (même clé de signature) : les réglages et la copie
 locale sont conservés.
 
+**Mise à jour depuis l'appli.** Réglages → « Appli Android » compare la version
+installée (numéro du build, embarqué dans `www/version.json`) à la release
+« android » du dépôt, et propose « Télécharger la 2.0.N » s'il y a plus récent.
+Une fois par jour, un bandeau l'annonce aussi à l'ouverture (fermé, il ne revient
+plus pour ce numéro). Android demande toujours de confirmer l'installation : une
+appli ne peut pas se remplacer en silence.
+
 L'APK est compilé par **GitHub Actions** (`.github/workflows/android.yml`) à
 chaque modification du code, avec Capacitor : les fichiers de l'app sont
 embarqués, seul le carnet passe par le réseau.
@@ -212,6 +219,7 @@ node outils/github-test.mjs      #  35  synchro GitHub : création, conflits, su
 node outils/lieu-test.mjs        #  30  recherche de lieux, cadrage des cartes
 node outils/ocean-test.mjs       #  69  Suunto Ocean : trames, Heatshrink, décodage, session Bluetooth
 node outils/seance-test.mjs      #  38  séances : stockage, fusion, tri plongée / piscine / fosse
+node outils/maj-apk-test.mjs     #  29  mise à jour de l'APK : numéro embarqué, release GitHub
 node outils/fit-test.mjs         #  27  décodage des fichiers .fit
 node outils/geo-test.mjs         #  22  eau douce / salée, altitude
 node outils/stamp-test.mjs       #  13  détourage des tampons

@@ -9,6 +9,7 @@ import { modeActuel, synchroniser, vider, erreurGitHub } from './store-github.js
 import { configGitHub } from './github.js';
 import { appliquerTheme } from './theme.js';
 import * as sync from './sync.js';
+import { verifierEnFond, ecarter, telechargerApk } from './maj-apk.js';
 
 import { divesView, diveView }            from './views/dives.js';
 import { diveFormView }                   from './views/dive-form.js';
@@ -108,7 +109,7 @@ actions.append(syncBtn, settingsBtn);
 const bandeau = $('#bandeau');
 let minuteurBandeau = null;
 
-function afficherBandeau({ classe, icone, titre, texte, action, duree = 5000 }) {
+function afficherBandeau({ classe, icone, titre, texte, action, duree = 5000, surFermer }) {
   clearTimeout(minuteurBandeau);
   bandeau.className = `bandeau ${classe}`;
   bandeau.replaceChildren(
@@ -116,13 +117,14 @@ function afficherBandeau({ classe, icone, titre, texte, action, duree = 5000 }) 
     el('div.bandeau-txt', {}, el('b', { text: titre }), texte ? el('span', { text: texte }) : null),
     action ? el('button.btn.sm', { type: 'button', text: action.label, onclick: action.onclick }) : null,
     el('button.bandeau-x', { type: 'button', 'aria-label': 'Fermer', text: '×',
-      onclick: () => { bandeau.hidden = true; } }),
+      onclick: () => { bandeau.hidden = true; surFermer?.(); } }),
   );
   bandeau.hidden = false;
   if (duree) minuteurBandeau = setTimeout(() => { bandeau.hidden = true; }, duree);
 }
 
 async function annoncerConnexion() {
+  annoncerMiseAJour().catch(() => {});
   const cfg = configGitHub();
   const depot = `${cfg.owner}/${cfg.repo}`;
   const { store } = await import('./store.js');
@@ -149,6 +151,34 @@ async function annoncerConnexion() {
       action: { label: 'Réglages', onclick: () => { bandeau.hidden = true; navigate('reglages'); } },
       duree: 0 });
   }
+}
+
+// ------------------------------------------------------------
+//  Nouvelle version de l'APK : annoncée une fois par jour au plus,
+//  après le bandeau de connexion pour ne pas le recouvrir.
+// ------------------------------------------------------------
+
+async function annoncerMiseAJour() {
+  const res = await verifierEnFond();
+  if (!res) return;
+  const d = res.derniere;
+  const montrer = () => afficherBandeau({
+    classe: 'ok', icone: 'i-sync', titre: `Nouvelle version de l’appli : ${d.version}`,
+    texte: `Tu as la ${res.installee.version}. Téléchargement depuis ton GitHub, Android te demandera de confirmer.`,
+    action: { label: 'Mettre à jour', onclick: () => {
+      bandeau.hidden = true;
+      telechargerApk(d.url);
+      toast('Téléchargement lancé : ouvre le fichier quand il est arrivé, puis « Installer ».');
+    } },
+    duree: 0,
+    surFermer: () => ecarter(d.build),
+  });
+  // Le bandeau de connexion part tout seul ; une erreur GitHub, elle, reste.
+  const attendre = (essais) => {
+    if (bandeau.hidden) return montrer();
+    if (essais > 0) setTimeout(() => attendre(essais - 1), 1500);
+  };
+  attendre(20);
 }
 
 // ------------------------------------------------------------

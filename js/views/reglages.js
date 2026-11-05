@@ -16,6 +16,9 @@ import {
 } from '../github.js';
 import { modeActuel, rebrancher, synchroniser, derniereSynchro, erreurGitHub } from '../store-github.js';
 import { THEMES, themeChoisi, choisirTheme } from '../theme.js';
+import {
+  estApk, versionInstallee, verifier, nouveautes, telechargerApk, taillePropre,
+} from '../maj-apk.js';
 
 const PAGES = 'https://soaresden.github.io/PlongeeJournal/';
 const APK = 'https://github.com/soaresden/PlongeeJournal/releases/latest/download/PlongeeJournal.apk';
@@ -213,6 +216,9 @@ export async function reglagesView() {
               } catch (err) { toast(err.message, true); }
             } }))))));
 
+  // ---------- Mise à jour de l'APK ----------
+  if (estApk()) wrap.append(carteMiseAJour());
+
   // ---------- Applis ----------
   wrap.append(el('div.section', {},
     el('h2', { text: 'Sur tes autres appareils' }),
@@ -224,6 +230,87 @@ export async function reglagesView() {
       el('div.hint', { text: 'Même carnet partout : il suffit de brancher le même dépôt dans les réglages de chaque appareil.' }))));
 
   return { title: 'Réglages', node: wrap, back: true };
+}
+
+function dateCourte(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return Number.isNaN(+d) ? '' : d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+/** Carte « Appli Android » : version installée, dernière sur GitHub, bouton. */
+function carteMiseAJour() {
+  const vInstallee = el('span.v', { text: '…' });
+  const vGitHub = el('span.v', { text: '…' });
+  const message = el('div.maj-message');
+  const liste = el('ul.maj-nouveautes');
+  const bouton = el('button.btn.block', { type: 'button', text: 'Vérifier les mises à jour' });
+  let installee = null;
+
+  async function lancer() {
+    bouton.disabled = true;
+    bouton.className = 'btn block';
+    bouton.textContent = 'Vérification…';
+    message.className = 'maj-message';
+    message.textContent = '';
+    liste.replaceChildren();
+    try {
+      const res = await verifier();
+      installee = res.installee;
+      const d = res.derniere;
+      vGitHub.textContent = `${d.version}${d.date ? ` · ${dateCourte(d.date)}` : ''}`;
+      if (res.etat === 'a-jour') {
+        message.className = 'maj-message ok';
+        message.textContent = '✓ Tu as la dernière version.';
+        bouton.textContent = 'Vérifier à nouveau';
+        bouton.onclick = lancer;
+      } else {
+        message.className = 'maj-message neuf';
+        message.textContent = res.etat === 'nouvelle'
+          ? `Nouvelle version disponible : ${d.version}.`
+          : 'Impossible de savoir quelle version est installée — tu peux reprendre la dernière par sécurité.';
+        bouton.className = 'btn primary block';
+        bouton.textContent = `Télécharger la ${d.version}${d.taille ? ` (${taillePropre(d.taille)})` : ''}`;
+        bouton.onclick = () => {
+          telechargerApk(d.url);
+          toast('Téléchargement lancé : ouvre le fichier quand il est arrivé, puis « Installer ».');
+        };
+        if (res.etat === 'nouvelle') {
+          const titres = await nouveautes(installee?.commit, d.commit);
+          if (titres.length) {
+            liste.replaceChildren(...titres.slice(0, 8).map(t => el('li', { text: t })),
+              titres.length > 8 ? el('li.hint', { text: `… et ${titres.length - 8} autre${titres.length > 9 ? 's' : ''}` }) : null);
+          }
+        }
+      }
+    } catch (err) {
+      vGitHub.textContent = '—';
+      message.className = 'maj-message erreur';
+      message.textContent = err.message;
+      bouton.textContent = 'Réessayer';
+      bouton.onclick = lancer;
+    } finally {
+      bouton.disabled = false;
+    }
+  }
+
+  versionInstallee().then(v => {
+    installee = v;
+    vInstallee.textContent = v
+      ? `${v.version}${v.date ? ` · ${dateCourte(v.date)}` : ''}`
+      : 'inconnue';
+  });
+  bouton.onclick = lancer;
+  lancer();
+
+  return el('div.section', {},
+    el('h2', { text: 'Appli Android' }),
+    el('div.card.carte-maj', {},
+      el('div.kv', {}, el('span.k', { text: 'Installée' }), vInstallee),
+      el('div.kv', {}, el('span.k', { text: 'Dernière sur GitHub' }), vGitHub),
+      message, liste, bouton,
+      el('div.hint', { text: 'Le fichier se télécharge depuis ton dépôt GitHub ; Android te demande '
+        + 'ensuite de confirmer l’installation. Ton carnet et tes réglages sont conservés.' })));
 }
 
 /** Téléchargement qui marche aussi dans l'APK (où <a download> est ignoré). */
