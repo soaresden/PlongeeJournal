@@ -129,9 +129,6 @@ export function fmtDuration(min) {
 
 // ---------- Divers ----------
 
-export const esc = s => String(s ?? '').replace(/[&<>"']/g,
-  c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-
 export function num(v) {
   if (v === '' || v === null || v === undefined) return null;
   const n = Number(String(v).replace(',', '.'));
@@ -141,10 +138,6 @@ export function num(v) {
 export function fullName(p) {
   if (!p) return '';
   return [p.prenom, p.nom].filter(Boolean).join(' ').trim();
-}
-
-export function initials(p) {
-  return ((p?.prenom?.[0] || '') + (p?.nom?.[0] || '')).toUpperCase() || '?';
 }
 
 /** Lit un fichier image, le redimensionne et renvoie un data-URL. */

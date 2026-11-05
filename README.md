@@ -131,9 +131,8 @@ sans elle, une future version ne pourra plus s'installer par-dessus l'ancienne.
 
 ## Sur le PC
 
-Le plus simple : le site. Sinon, double-clic sur **`lancer.bat`** (demande
-Python) qui sert l'app sur `http://localhost:8080/`. Chaque adresse (site,
-localhost, APK) a sa propre mémoire : branche le jeton une fois dans chacune.
+Ouvre le site, c'est tout : **https://soaresden.github.io/PlongeeJournal/**
+(installable comme une appli depuis Chrome ou Edge). Branche le jeton une fois.
 
 ---
 
@@ -149,7 +148,6 @@ vendor/leaflet/              ← Leaflet 1.9.4, embarqué pour le hors ligne
 capacitor.config.json        ← l'APK
 .github/workflows/android.yml← compilation et publication de l'APK
 outils/                      ← tests, génération www/ et icônes Android
-lancer.bat                   ← l'app sur le PC, sans Internet pour le code
 ```
 
 ---

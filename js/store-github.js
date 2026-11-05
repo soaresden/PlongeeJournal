@@ -34,7 +34,6 @@ let resumeCommit = new Set();
 export const modeActuel = () => mode;
 export const derniereSynchro = () => suivi.derniere;
 export const erreurGitHub = () => derniereErreur;
-export const modifsEnAttente = () => suivi.dirty;
 
 // ------------------------------------------------------------
 //  Persistance locale

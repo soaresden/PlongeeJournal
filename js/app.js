@@ -167,7 +167,7 @@ async function ensureStore() {
 
 /**
  * Recopie localement l'essentiel de la fiche plongeur, pour que les
- * secours y accèdent même sans réseau ni serveur.
+ * secours y accèdent même sans réseau.
  */
 async function majFicheUrgence() {
   try {

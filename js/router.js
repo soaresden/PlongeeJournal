@@ -19,13 +19,6 @@ export function currentPath() {
   return raw.split('?')[0].replace(/\/$/, '') || 'dives';
 }
 
-/** Paramètres après « ? » dans le hash : #/suunto?ok=1 */
-export function currentQuery() {
-  const raw = location.hash.replace(/^#\/?/, '');
-  const i = raw.indexOf('?');
-  return new URLSearchParams(i >= 0 ? raw.slice(i + 1) : '');
-}
-
 /** Navigue vers un chemin. `replace` évite d'empiler dans l'historique. */
 export function navigate(path, replace = false) {
   const target = '#/' + String(path).replace(/^\/+/, '');

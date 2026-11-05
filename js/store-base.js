@@ -35,7 +35,7 @@ export function normaliser(data) {
     divers:   Array.isArray(data.divers)   ? data.divers   : [],
     buddies:  Array.isArray(data.buddies)  ? data.buddies  : [],
     dives:    Array.isArray(data.dives)    ? data.dives    : [],
-    // Le champ s'est appelé « certifications » côté serveur au début :
+    // Le champ s'est appelé « certifications » au début :
     // on accepte les deux pour ne casser aucun fichier existant.
     certifs:  Array.isArray(data.certifs) ? data.certifs
             : Array.isArray(data.certifications) ? data.certifications : [],
@@ -223,8 +223,7 @@ export function creerStore(support) {
       } else {
         const d = db();
         // À identifiant égal, la version la plus récemment modifiée gagne :
-        // même règle que côté serveur, pour que fusionner ici ou là-bas
-        // donne le même résultat.
+        // même règle que la synchro GitHub (voir fusion.js).
         const fondre = (dest, src) => {
           const place = new Map(dest.map((x, i) => [x.id, i]));
           (src || []).forEach(x => {

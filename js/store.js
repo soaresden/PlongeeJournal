@@ -23,8 +23,6 @@ export async function initStore({ force = false } = {}) {
   return initPromise;
 }
 
-export function resetStore() { initPromise = null; }
-
 /**
  * `store.machin(...)` attend l'initialisation puis délègue.
  */

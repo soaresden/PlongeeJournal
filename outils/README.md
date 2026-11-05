@@ -1,15 +1,23 @@
-# Outils de vérification
+# Outils
 
-Ces scripts ne servent qu'au développement — l'app, elle, n'a aucune dépendance.
+Rien ici n'est nécessaire pour utiliser le carnet : ce sont les tests et la
+fabrication de l'APK.
+
+| Script | Rôle |
+|---|---|
+| `dive-test.mjs` | règles métier : durées, paliers, niveaux, consommation, PMU |
+| `github-test.mjs` | synchro GitHub contre un faux GitHub en mémoire |
+| `smoke.mjs` | tous les écrans dans un DOM simulé (`npm i jsdom`) |
+| `fit-test.mjs` | décodage des fichiers `.fit` d'ordinateur de plongée |
+| `geo-test.mjs` | eau douce / salée, altitude |
+| `lieu-test.mjs` | recherche de lieux, cadrage des cartes |
+| `stamp-test.mjs` | détourage des tampons photographiés |
+| `build-www.mjs` | copie l'app dans `www/` pour Capacitor |
+| `android-icones.py` | pose les icônes et l'écran de lancement dans le projet Android |
 
 ```bash
-npm i jsdom          # uniquement pour smoke.mjs
-node outils/fit-test.mjs
+npm test            # tout sauf smoke
 node outils/smoke.mjs
 ```
 
-- `fit-test.mjs` fabrique un vrai fichier FIT de plongée (descente, palier au
-  fond, remontée avec arrêts à 6 puis 3 m), puis vérifie que le décodeur en
-  retire les bonnes valeurs, y compris la fusion de deux enregistrements.
-- `smoke.mjs` charge l'application entière dans un DOM simulé et parcourt tous
-  les écrans, en vérifiant le contenu affiché.
+L'APK lui-même est compilé par GitHub Actions (`.github/workflows/android.yml`).

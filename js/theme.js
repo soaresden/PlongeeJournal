@@ -56,7 +56,6 @@ export function choisirTheme(id) {
   appliquerTheme(id);
 }
 
-export const estSombre = () => SOMBRES.has(themeEffectif());
 
 // « Automatique » suit l'appareil en direct.
 window.matchMedia?.('(prefers-color-scheme: dark)')

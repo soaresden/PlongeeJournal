@@ -14,7 +14,6 @@ import { DIVE_TYPES, DIVE_OPTIONS, DIVE_GOALS, PALANQUEE_MODES,
          VISIBILITE_ICONES, METEO, ETAT_MER, COURANTS } from '../config.js';
 import { locationPicker } from '../map.js';
 import { navigate } from '../router.js';
-import { takeDraft } from '../draft.js';
 import { profileSvg } from '../fit.js';
 
 // --- petits assembleurs de champs ---------------------------
@@ -527,15 +526,6 @@ export async function diveFormView({ id }) {
 
   if (!dive) return { title: 'Introuvable', node: el('div.empty', { text: 'Plongée introuvable.' }) };
 
-  // Données arrivant de l'import Suunto
-  const draft = takeDraft();
-  let suuntoNote = '';
-  if (draft) {
-    suuntoNote = draft._suuntoNote || '';
-    delete draft._suuntoNote;
-    Object.assign(dive, draft);
-  }
-
   if (isNew && !dive.date) dive.date = todayISO();
 
   let buddies = await store.listBuddies();
@@ -578,8 +568,7 @@ export async function diveFormView({ id }) {
       dive.profil?.length
         ? el('div', { html: profileSvg(dive.profil), style: { marginTop: '10px' } })
         : null,
-      el('div.hint', { text: (suuntoNote ? suuntoNote + ' ' : '')
-        + 'Horaires, profondeurs et températures sont pré-remplis. Les paliers sont ESTIMÉS à partir du '
+      el('div.hint', { text: 'Horaires, profondeurs et températures sont pré-remplis. Les paliers sont ESTIMÉS à partir du '
         + 'profil : vérifie-les. Il te reste à saisir le lieu, la palanquée et tes commentaires.' }),
     ));
   }
