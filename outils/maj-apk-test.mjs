@@ -109,6 +109,82 @@ for (const [statut, motif] of [[404, /Aucune version publiée/], [403, /limite/]
   check('site web : aucune vérification', (await M.verifierEnFond(fauxGitHub(), t0)) === null && appels.length === 0 && !M.estApk());
 }
 
+// ---------- Téléchargement dans l'appli, puis installateur Android ----------
+{
+  const URL_REL = 'https://github.com/soaresden/PlongeeJournal/releases/download/android/PlongeeJournal.apk';
+  // Faux téléphone : les deux modules natifs, enregistrés par Capacitor.
+  const telephone = ({ panneTelechargement = false, panneOuverture = false, sansOpener = false } = {}) => {
+    const t = { appels: [], ecouteurs: [], retires: 0, navigateur: [] };
+    const Filesystem = {
+      addListener: async (nom, fn) => { t.ecouteurs.push({ nom, fn }); return { remove: async () => { t.retires++; } }; },
+      downloadFile: async opts => {
+        t.appels.push(['download', opts]);
+        for (const { fn } of t.ecouteurs) {
+          fn({ url: opts.url, bytes: 2_202_009, contentLength: 4_404_019 });
+          fn({ url: 'https://ailleurs/autre.bin', bytes: 1, contentLength: 1 });     // autre téléchargement : ignoré
+          fn({ url: opts.url, bytes: 4_404_019, contentLength: 4_404_019 });
+        }
+        if (panneTelechargement) throw new Error('Error downloading file: timeout');
+        return { path: '/data/user/0/com.soaresden.plongeejournal/cache/PlongeeJournal.apk' };
+      },
+    };
+    const FileOpener = { open: async opts => { t.appels.push(['open', opts]); if (panneOuverture) throw new Error('Activity not found'); } };
+    t.w = { Capacitor: {
+      isNativePlatform: () => true,
+      isPluginAvailable: nom => nom === 'Filesystem' || (nom === 'FileOpener' && !sansOpener),
+      Plugins: { Filesystem, ...(sansOpener ? {} : { FileOpener }) },
+    } };
+    t.etapes = [];
+    t.options = { w: t.w, progres: e => t.etapes.push(e), navigateur: u => t.navigateur.push(u) };
+    return t;
+  };
+
+  check('pourcentage : arrondi', M.pourcentage(2_202_009, 4_404_019) === 50);
+  check('pourcentage : taille inconnue → null', M.pourcentage(100, 0) === null && M.pourcentage(100, undefined) === null);
+
+  const t = telephone();
+  check('modules natifs détectés', !!M.modulesNatifs(t.w));
+  const r = await M.telechargerApk(URL_REL, t.options);
+  const dl = t.appels.find(a => a[0] === 'download')?.[1];
+  const op = t.appels.find(a => a[0] === 'open')?.[1];
+  check('appli : téléchargée puis installateur ouvert', r === 'installateur' && t.navigateur.length === 0, `${r} ${t.navigateur}`);
+  check('appli : rangée dans le cache de l’appli (aucune permission de stockage)',
+    dl?.directory === 'CACHE' && dl.path === 'PlongeeJournal.apk' && dl.progress === true && dl.url === URL_REL, JSON.stringify(dl));
+  check('appli : ouverte comme un APK, depuis le fichier téléchargé',
+    op?.contentType === 'application/vnd.android.package-archive' && /cache\/PlongeeJournal\.apk$/.test(op.filePath), JSON.stringify(op));
+  const pourcents = t.etapes.filter(e => e.etape === 'telechargement').map(e => e.pourcent);
+  check('appli : progression affichée, autres téléchargements ignorés',
+    JSON.stringify(pourcents) === '[0,50,100]', JSON.stringify(pourcents));
+  check('appli : annonce l’installation', t.etapes.at(-1)?.etape === 'installation');
+  check('appli : l’écoute de la progression est retirée', t.retires === 1);
+
+  // Deux appuis rapprochés : un seul téléchargement.
+  const t2 = telephone();
+  const [a, b] = await Promise.all([M.telechargerApk(URL_REL, t2.options), M.telechargerApk(URL_REL, t2.options)]);
+  check('double appui : un seul téléchargement', a === 'installateur' && b === 'installateur'
+    && t2.appels.filter(x => x[0] === 'download').length === 1);
+
+  const t3 = telephone({ panneTelechargement: true });
+  const r3 = await M.telechargerApk(URL_REL, t3.options);
+  check('échec du téléchargement : on passe par le navigateur',
+    r3 === 'navigateur' && t3.navigateur[0] === URL_REL && t3.etapes.at(-1)?.etape === 'secours'
+      && /timeout/.test(t3.etapes.at(-1).message), JSON.stringify(t3.etapes.at(-1)));
+  check('échec : l’écoute est quand même retirée', t3.retires === 1);
+
+  const t4 = telephone({ panneOuverture: true });
+  check('installateur indisponible : navigateur en secours',
+    (await M.telechargerApk(URL_REL, t4.options)) === 'navigateur' && t4.navigateur.length === 1);
+
+  const t5 = telephone({ sansOpener: true });
+  check('ancien APK sans le module : navigateur directement, sans téléchargement',
+    M.modulesNatifs(t5.w) === null && (await M.telechargerApk(URL_REL, t5.options)) === 'navigateur'
+      && t5.appels.length === 0 && t5.etapes.length === 0);
+
+  const web = [];
+  check('site web : simple lien',
+    (await M.telechargerApk(URL_REL, { w: {}, navigateur: u => web.push(u), progres: () => {} })) === 'navigateur' && web.length === 1);
+}
+
 // ---------- Le build www embarque le numéro ----------
 {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'pj-www-'));

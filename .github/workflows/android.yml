@@ -64,6 +64,11 @@ jobs:
           # Import Bluetooth depuis la montre : le module natif doit être là.
           grep -q "capacitor-community-bluetooth-le" android/capacitor.settings.gradle \
             || { echo "::error::Module Bluetooth (@capacitor-community/bluetooth-le) absent du projet Android"; exit 1; }
+          # Mise à jour depuis l'appli : téléchargement, puis installateur d'Android.
+          for MODULE in capacitor-filesystem capacitor-community-file-opener; do
+            grep -q "$MODULE" android/capacitor.settings.gradle \
+              || { echo "::error::Module $MODULE absent du projet Android (mise à jour dans l'appli)"; exit 1; }
+          done
 
       - name: Icônes, permissions, version
         run: |
@@ -76,6 +81,10 @@ jobs:
           # attributs que le manifeste du module, pour une fusion sans conflit.
           sed -i 's#<uses-permission android:name="android.permission.CAMERA" />#<uses-permission android:name="android.permission.CAMERA" />\n    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />\n    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />\n    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />\n    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />\n    <uses-feature android:name="android.hardware.bluetooth_le" android:required="false" />#' "$MANIFEST"
           grep -q "BLUETOOTH_CONNECT" "$MANIFEST" || { echo "::error::Permissions Bluetooth non ajoutées"; exit 1; }
+          # Mise à jour depuis l'appli : sans cette permission, Android refuse
+          # d'ouvrir l'installateur pour un APK téléchargé par l'appli.
+          sed -i 's#<uses-permission android:name="android.permission.CAMERA" />#<uses-permission android:name="android.permission.CAMERA" />\n    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />#' "$MANIFEST"
+          grep -q "REQUEST_INSTALL_PACKAGES" "$MANIFEST" || { echo "::error::Permission d'installation non ajoutée"; exit 1; }
           sed -i "s/versionCode 1$/versionCode ${{ github.run_number }}/; s/versionName \"1.0\"/versionName \"2.0.${{ github.run_number }}\"/" android/app/build.gradle
           grep -n "permission\|uses-feature" "$MANIFEST"
           grep -n "versionCode\|versionName" android/app/build.gradle
@@ -95,6 +104,9 @@ jobs:
           grep -o 'android.permission.BLUETOOTH[A-Z_]*' "$FUSION" | sort -u
           grep -q 'BLUETOOTH_SCAN' "$FUSION" && grep -q 'BLUETOOTH_CONNECT' "$FUSION" \
             || { echo "::error::Permissions Bluetooth absentes de l'APK"; exit 1; }
+          # …et pouvoir installer ses mises à jour (permission + FileProvider du module).
+          grep -q 'REQUEST_INSTALL_PACKAGES' "$FUSION" && grep -q 'file.opener.provider' "$FUSION" \
+            || { echo "::error::Mise à jour dans l'appli impossible : permission ou FileProvider absents de l'APK"; exit 1; }
 
       - name: Signature
         env:

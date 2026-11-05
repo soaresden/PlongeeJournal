@@ -4,10 +4,16 @@
 //  L'APK embarque son numéro (www/version.json, écrit à la
 //  compilation). GitHub Actions publie chaque nouvelle version dans
 //  la release « android » du dépôt, titrée « … APK 2.0.N ». On compare
-//  les deux numéros ; s'il y a plus récent, on ouvre le lien de
-//  téléchargement dans le navigateur du téléphone, qui récupère le
-//  fichier — Android demande ensuite de confirmer l'installation
-//  (il ne laisse jamais une appli s'installer en silence).
+//  les deux numéros ; s'il y a plus récent, l'appli télécharge
+//  elle-même le fichier (avec la progression), puis ouvre
+//  l'installateur d'Android — qui demande de confirmer : il ne laisse
+//  jamais une appli s'installer en silence.
+//
+//  Deux modules natifs font ce travail : @capacitor/filesystem
+//  (téléchargement dans le cache de l'appli) et
+//  @capacitor-community/file-opener (ouverture de l'APK par
+//  l'installateur). S'ils manquent ou échouent, on retombe sur
+//  l'ancien chemin : le lien ouvert dans le navigateur du téléphone.
 //
 //  Le dépôt de l'appli est public : pas de jeton, rien de personnel
 //  n'est envoyé. GitHub tolère 60 vérifications par heure sans
@@ -121,11 +127,97 @@ export async function verifierEnFond(f = fetch, maintenant = Date.now()) {
 /** L'utilisateur ferme l'annonce : on ne la remontre pas pour ce numéro. */
 export function ecarter(build) { ecrireMemo({ ...lireMemo(), ecartee: build }); }
 
-/** Ouvre le téléchargement (dans l'APK, le lien part dans le navigateur du téléphone). */
-export function telechargerApk(url = URL_APK) {
+/** Le lien part dans le navigateur du téléphone, qui récupère le fichier. */
+export function ouvrirDansNavigateur(url = URL_APK) {
   const a = document.createElement('a');
   a.href = url; a.target = '_blank'; a.rel = 'noopener';
   document.body.append(a); a.click(); a.remove();
+}
+
+export const TYPE_APK = 'application/vnd.android.package-archive';
+const NOM_FICHIER = 'PlongeeJournal.apk';
+
+/**
+ * Les deux modules natifs, s'ils sont dans cet APK (un APK plus ancien
+ * ne les a pas). null sinon : on passera par le navigateur.
+ */
+export function modulesNatifs(w = (typeof window !== 'undefined' ? window : undefined)) {
+  const cap = w?.Capacitor;
+  if (!cap?.isNativePlatform?.()) return null;
+  const present = nom => (typeof cap.isPluginAvailable === 'function' ? cap.isPluginAvailable(nom) : true);
+  const fs = cap.Plugins?.Filesystem, opener = cap.Plugins?.FileOpener;
+  if (!present('Filesystem') || !present('FileOpener')) return null;
+  if (typeof fs?.downloadFile !== 'function' || typeof opener?.open !== 'function') return null;
+  return { fs, opener };
+}
+
+/** Pourcentage lisible, ou null si GitHub n'a pas donné la taille. */
+export function pourcentage(octets, total) {
+  if (!total || total <= 0) return null;
+  return Math.max(0, Math.min(100, Math.round(octets * 100 / total)));
+}
+
+/** Messages par défaut : dans le bandeau d'état (toast). */
+async function progresParDefaut(e) {
+  const { toast } = await import('./lib.js');
+  if (e.etape === 'telechargement') {
+    toast(e.pourcent == null ? `Téléchargement de la mise à jour… ${taillePropre(e.octets) || ''}`.trim()
+                             : `Téléchargement de la mise à jour… ${e.pourcent} %`);
+  } else if (e.etape === 'installation') {
+    toast('Téléchargée. Android va te demander de confirmer l’installation.');
+  } else if (e.etape === 'secours') {
+    toast(`Téléchargement dans l’appli impossible (${e.message}). Je passe par le navigateur.`, true);
+  }
+}
+
+let enCours = null;
+
+/**
+ * Télécharge l'APK dans l'appli puis ouvre l'installateur d'Android.
+ * Sans les modules natifs (site web, ancien APK), ou en cas d'échec,
+ * ouvre le lien dans le navigateur.
+ *
+ * @param {string} url
+ * @param {object} options
+ *   - progres(e) : { etape: 'telechargement'|'installation'|'secours', pourcent, octets, message }
+ * @returns {Promise<'installateur'|'navigateur'>}
+ */
+export function telechargerApk(url = URL_APK, { progres = progresParDefaut, w, navigateur = ouvrirDansNavigateur } = {}) {
+  const natif = modulesNatifs(w);
+  if (!natif) { navigateur(url); return Promise.resolve('navigateur'); }
+  // Un deuxième appui pendant le téléchargement ne relance rien.
+  if (enCours) return enCours;
+
+  const signaler = e => { try { Promise.resolve(progres(e)).catch(() => {}); } catch { /* affichage seulement */ } };
+
+  enCours = (async () => {
+    let ecoute = null;
+    try {
+      signaler({ etape: 'telechargement', pourcent: 0, octets: 0 });
+      ecoute = await natif.fs.addListener?.('progress', ev => {
+        if (ev?.url && ev.url !== url) return;
+        signaler({ etape: 'telechargement', pourcent: pourcentage(ev?.bytes, ev?.contentLength), octets: ev?.bytes || 0 });
+      });
+      // Dans le cache de l'appli : aucune permission de stockage à
+      // demander, et Android le vide de lui-même au besoin.
+      const r = await natif.fs.downloadFile({
+        url, path: NOM_FICHIER, directory: 'CACHE', progress: true,
+        connectTimeout: 20000, readTimeout: 120000,
+      });
+      if (!r?.path) throw new Error('fichier introuvable après le téléchargement');
+      signaler({ etape: 'installation' });
+      await natif.opener.open({ filePath: r.path, contentType: TYPE_APK, openWithDefault: true });
+      return 'installateur';
+    } catch (e) {
+      signaler({ etape: 'secours', message: String(e?.message || e || 'erreur inconnue').slice(0, 120) });
+      navigateur(url);
+      return 'navigateur';
+    } finally {
+      try { await ecoute?.remove?.(); } catch { /* déjà retiré */ }
+      enCours = null;
+    }
+  })();
+  return enCours;
 }
 
 /** « 2,4 Mo » */

@@ -171,8 +171,9 @@ async function annoncerMiseAJour() {
     texte: `Tu as la ${res.installee.version}. Téléchargement depuis ton GitHub, Android te demandera de confirmer.`,
     action: { label: 'Mettre à jour', onclick: () => {
       bandeau.hidden = true;
+      // Téléchargée dans l'appli, puis l'installateur d'Android s'ouvre ;
+      // la progression s'affiche en bas de l'écran.
       telechargerApk(d.url);
-      toast('Téléchargement lancé : ouvre le fichier quand il est arrivé, puis « Installer ».');
     } },
     duree: 0,
     surFermer: () => ecarter(d.build),
