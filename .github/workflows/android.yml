@@ -58,6 +58,9 @@ jobs:
           npm run www
           npx cap add android
           npx cap sync android
+          # Import Bluetooth depuis la montre : le module natif doit être là.
+          grep -q "capacitor-community-bluetooth-le" android/capacitor.settings.gradle \
+            || { echo "::error::Module Bluetooth (@capacitor-community/bluetooth-le) absent du projet Android"; exit 1; }
 
       - name: Icônes, permissions, version
         run: |
@@ -65,6 +68,11 @@ jobs:
           python outils/android-icones.py android/app/src/main/res
           MANIFEST=android/app/src/main/AndroidManifest.xml
           sed -i 's#<uses-permission android:name="android.permission.INTERNET" />#<uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-permission android:name="android.permission.CAMERA" />\n    <uses-feature android:name="android.hardware.location.gps" android:required="false" />\n    <uses-feature android:name="android.hardware.camera" android:required="false" />#' "$MANIFEST"
+          # Bluetooth (montre Suunto) : SCAN/CONNECT depuis Android 12, l'ancien
+          # couple BLUETOOTH/ADMIN + la position jusqu'à Android 11. Mêmes
+          # attributs que le manifeste du module, pour une fusion sans conflit.
+          sed -i 's#<uses-permission android:name="android.permission.CAMERA" />#<uses-permission android:name="android.permission.CAMERA" />\n    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />\n    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />\n    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />\n    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />\n    <uses-feature android:name="android.hardware.bluetooth_le" android:required="false" />#' "$MANIFEST"
+          grep -q "BLUETOOTH_CONNECT" "$MANIFEST" || { echo "::error::Permissions Bluetooth non ajoutées"; exit 1; }
           sed -i "s/versionCode 1$/versionCode ${{ github.run_number }}/; s/versionName \"1.0\"/versionName \"2.0.${{ github.run_number }}\"/" android/app/build.gradle
           grep -n "permission\|uses-feature" "$MANIFEST"
           grep -n "versionCode\|versionName" android/app/build.gradle
@@ -78,6 +86,12 @@ jobs:
           else
             ./gradlew --no-daemon assembleDebug
           fi
+          # Le manifeste final (fusionné) doit demander le Bluetooth.
+          FUSION=$(find app/build/intermediates -path '*merged_manifest*' -name AndroidManifest.xml | head -1)
+          echo "Manifeste fusionné : $FUSION"
+          grep -o 'android.permission.BLUETOOTH[A-Z_]*' "$FUSION" | sort -u
+          grep -q 'BLUETOOTH_SCAN' "$FUSION" && grep -q 'BLUETOOTH_CONNECT' "$FUSION" \
+            || { echo "::error::Permissions Bluetooth absentes de l'APK"; exit 1; }
 
       - name: Signature
         env:

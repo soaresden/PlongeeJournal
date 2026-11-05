@@ -17,6 +17,8 @@ import { buddiesView, buddyFormView }     from './views/buddies.js';
 import { statsView }                      from './views/stats.js';
 import { reglagesView }                   from './views/reglages.js';
 import { suuntoView }                     from './views/suunto.js';
+import { montreView }                     from './views/montre.js';
+import { montreAideView }                 from './views/montre-aide.js';
 import { urgenceView }                    from './views/urgence.js';
 
 // ---------- Routes ----------
@@ -34,6 +36,8 @@ route('buddy/:id',        buddyFormView);
 route('reglages',         reglagesView);
 route('setup',            reglagesView);   // ancien lien
 route('suunto',           suuntoView);
+route('montre',           montreView);
+route('montre-aide',      montreAideView);
 route('urgence',          urgenceView);
 
 const viewEl  = $('#view');
@@ -248,7 +252,7 @@ onRender(async path => {
     dives: 'dives', dive: path === 'dive/new' ? 'dive/new' : 'dives',
     divers: 'divers', diver: 'divers',
     buddies: 'buddies', buddy: 'buddies', stats: 'stats',
-    reglages: 'reglages', suunto: 'divers', urgence: 'divers',
+    reglages: 'reglages', suunto: 'divers', montre: 'divers', 'montre-aide': 'divers', urgence: 'divers',
   }[root];
   $$('#tabbar .tab').forEach(t => t.classList.toggle('active', t.dataset.route === tabFor));
 

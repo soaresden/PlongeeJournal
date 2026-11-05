@@ -97,6 +97,12 @@ Shearwater) est décodé dans le navigateur, profil de profondeur inclus.
 Plusieurs fichiers peuvent être fusionnés en une plongée quand un passage en
 surface a coupé l'enregistrement.
 
+**Import depuis la montre (Bluetooth)** — une Suunto Ocean (ou Nautic) est lue
+directement : date, durée, profondeurs, températures, profil, pression du
+Tank POD, gaz, gradients, position GPS de la mise à l'eau. Les plongées déjà
+importées (en `.fit` ou en Bluetooth) sont reconnues. Voir
+[Appairer la montre](#appairer-la-montre-suunto-ocean).
+
 **Calculs** — consommation d'air (brute et ramenée à la surface), profondeur
 maximale opérationnelle d'un nitrox, niveau courant déduit des cartes de
 certification, statistiques du carnet.
@@ -126,6 +132,40 @@ embarqués, seul le carnet passe par le réseau.
 La clé de signature est dans les secrets du dépôt (`ANDROID_KEYSTORE_B64`,
 `ANDROID_KEYSTORE_PASS`). **Garde une copie de `signature-android/`** (hors Git) :
 sans elle, une future version ne pourra plus s'installer par-dessus l'ancienne.
+
+---
+
+## Appairer la montre (Suunto Ocean)
+
+Le même mode d'emploi est dans l'app : Plongées → Importer → « Importer depuis
+la montre (Bluetooth) » → « Mode d'emploi ».
+
+**Où ça marche.** L'APK Android (le plus simple), ou le site dans Chrome / Edge
+sur Android ou PC. Pas sur iPhone : Safari n'a pas de Bluetooth pour les pages.
+
+**L'appli Suunto reste.** Inutile de désappairer quoi que ce soit : l'appairage
+appartient à Android, pas à l'appli Suunto, et le carnet s'en sert tel quel. La
+montre répond aux deux applis sur le même lien. Si une synchro Suunto démarre
+pendant un import, le carnet se met en pause, attend qu'elle ait fini, puis
+reprend là où il en était.
+
+**Première fois**
+1. Montre chargée, écran réveillé, près du téléphone.
+2. Dans le carnet : Importer → « Importer depuis la montre (Bluetooth) ».
+3. APK : autorise « Appareils à proximité » (Android 12+) ou « Position »
+   (Android 11 et avant ; seulement pour le Bluetooth, la position n'est pas lue).
+4. Si la montre est déjà appairée au téléphone, le carnet la retrouve seul.
+   Sinon : « Chercher la montre » → « Suunto Ocean », puis confirme le code
+   affiché, sur le téléphone et sur la montre.
+5. Coche les plongées, « Télécharger », vérifie l'aperçu, « Ajouter au carnet ».
+
+**Si ça coince.** Ouvre « Journal Bluetooth (diagnostic) » en bas de l'écran,
+« Copier le journal », et envoie-le. « Données brutes » enregistre les octets
+reçus de la montre, pour rejouer le décodage sans elle.
+
+Le protocole (« Vaasa » chez Suunto) a été décrit par le pilote Suunto Nautic
+de libdivecomputer ; `js/ocean-*.js` et `js/heatshrink.js` en sont un portage
+(voir [Licence](#licence)).
 
 ---
 
@@ -160,13 +200,16 @@ node outils/dive-test.mjs        # 159  règles métier : durées, paliers, nive
 node outils/smoke.mjs            # 118  tous les écrans, dans un vrai DOM (npm i jsdom)
 node outils/github-test.mjs      #  35  synchro GitHub : création, conflits, suppressions, hors ligne
 node outils/lieu-test.mjs        #  30  recherche de lieux, cadrage des cartes
+node outils/ocean-test.mjs       #  64  Suunto Ocean : trames, Heatshrink, décodage, session Bluetooth
 node outils/fit-test.mjs         #  27  décodage des fichiers .fit
 node outils/geo-test.mjs         #  22  eau douce / salée, altitude
 node outils/stamp-test.mjs       #  13  détourage des tampons
 ```
 
 `github-test.mjs` tourne contre un faux GitHub en mémoire : aucun jeton, aucun
-réseau.
+réseau. `ocean-test.mjs` décode une vraie plongée de référence
+(`outils/fixtures/`) et dialogue avec une fausse montre qui perd des morceaux
+et se fait interrompre par « l'appli Suunto ».
 
 ---
 
@@ -207,7 +250,11 @@ d'iNaturalist et de WoRMS, filtrées sur les indicateurs d'habitat.
 - Le regroupement des lieux sur la carte se fait à ~100 m : deux mouillages
   distincts d'un même site sont fondus en un seul repère.
 - L'**API Suunto** n'est pas utilisée : elle exige un serveur détenant un secret
-  client. L'import `.fit` la remplace.
+  client. L'import `.fit` et l'import Bluetooth la remplacent.
+- L'**import Bluetooth** n'a été testé que sur des enregistrements de
+  référence et une montre simulée : les premiers essais sur une vraie Ocean
+  passeront par le journal de diagnostic. La montre ne garde que ses
+  plongées récentes ; pour les anciennes, reste le `.fit`.
 - **Deux appareils qui modifient la même plongée** hors ligne : à la fusion, la
   dernière modification de la fiche gagne (fiche entière, pas champ par champ).
 - Dans l'APK, **l'export d'un fichier** passe par le menu Partager d'Android.
@@ -217,3 +264,8 @@ d'iNaturalist et de WoRMS, filtrées sur les indicateurs d'habitat.
 ## Licence
 
 Usage personnel. Recopie, modifie, adapte à ton propre carnet.
+
+Exception : `js/ocean-proto.js`, `js/ocean-device.js`, `js/ocean-sbem.js` et
+`js/heatshrink.js` sont portés de libdivecomputer (pilote Suunto Nautic,
+LGPL 2.1 ou ultérieure) et de heatshrink (ISC) ; ils restent sous ces licences.
+Les fichiers de `outils/fixtures/` viennent des mêmes projets.

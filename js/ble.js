@@ -1,0 +1,283 @@
+// ============================================================
+//  Bluetooth Low Energy : une seule interface, deux moteurs
+//
+//    - dans l'APK : le plugin natif @capacitor-community/bluetooth-le
+//      (le WebView Android n'a pas Web Bluetooth) ;
+//    - sur le site : Web Bluetooth (Chrome Android, Chrome/Edge PC).
+//
+//  Les deux rendent le même « lien » :
+//    { nom, id, moteur, ecrire(octets), ecouter(cb), fermer(), surCoupure(cb) }
+//  La session de la montre (ocean-device.js) ne voit que ça.
+//
+//  Cohabitation avec l'appli Suunto : sur Android, l'appairage
+//  appartient au téléphone, pas à une appli. On réutilise donc la
+//  montre déjà appairée (liste des appareils associés) sans rien
+//  désappairer, et on se branche sur le lien existant si l'appli
+//  Suunto l'a déjà ouvert (une montre connectée n'est plus visible
+//  dans un scan).
+// ============================================================
+
+import { OCEAN_SERVICE, OCEAN_NOMS, hex } from './ocean-proto.js';
+
+const CLE_APPAREIL = 'ocean.appareil';
+const TAILLE_ECRITURE_DEFAUT = 20;     // MTU BLE par défaut (23) − 3
+
+const memo = {
+  lire() { try { return JSON.parse(localStorage.getItem(CLE_APPAREIL) || 'null'); } catch { return null; } },
+  ecrire(v) { try { localStorage.setItem(CLE_APPAREIL, JSON.stringify(v)); } catch { /* navigation privée */ } },
+  oublier() { try { localStorage.removeItem(CLE_APPAREIL); } catch { /* idem */ } },
+};
+
+export const oublierMontre = () => memo.oublier();
+export const montreMemorisee = () => memo.lire();
+
+const estOcean = nom => !!nom && OCEAN_NOMS.some(n => nom.startsWith(n));
+
+function pluginNatif() {
+  const cap = typeof window !== 'undefined' ? window.Capacitor : null;
+  if (!cap?.isNativePlatform?.()) return null;
+  return cap.Plugins?.BluetoothLe || null;
+}
+
+/** Ce qui est possible ici, pour l'afficher avant de proposer le bouton. */
+export function bleDisponible() {
+  if (typeof window !== 'undefined' && window.Capacitor?.isNativePlatform?.()) {
+    return pluginNatif()
+      ? { ok: true, moteur: 'capacitor' }
+      : { ok: false, moteur: 'capacitor', raison: 'Le module Bluetooth manque dans cette version de l’APK : installe la dernière.' };
+  }
+  if (typeof navigator !== 'undefined' && navigator.bluetooth?.requestDevice) {
+    return { ok: true, moteur: 'web' };
+  }
+  const ios = typeof navigator !== 'undefined' && /iPhone|iPad|iPod/.test(navigator.userAgent || '');
+  return {
+    ok: false, moteur: 'aucun',
+    raison: ios
+      ? 'Safari sur iPhone/iPad ne permet pas le Bluetooth depuis une page web.'
+      : 'Ce navigateur ne gère pas le Bluetooth. Utilise Chrome (Android ou PC), Edge, ou l’APK Android du carnet.',
+  };
+}
+
+/** Une file d'attente : un seul accès GATT à la fois. */
+function fileUnique() {
+  let derniere = Promise.resolve();
+  return fn => {
+    const p = derniere.then(fn, fn);
+    derniere = p.catch(() => {});
+    return p;
+  };
+}
+
+function choisirCaracteristiques(caracs, journal) {
+  for (const c of caracs) journal(`  caractéristique ${c.uuid} : ${Object.entries(c.props).filter(([, v]) => v).map(([k]) => k).join(', ')}`);
+  const ecriture = caracs.find(c => c.props.writeWithoutResponse) || caracs.find(c => c.props.write);
+  const notif = caracs.find(c => c.props.notify) || caracs.find(c => c.props.indicate);
+  if (!ecriture || !notif) throw new Error('La montre n’expose pas les caractéristiques attendues (écriture + notification).');
+  return { ecriture, notif };
+}
+
+const avecDelai = (p, ms, quoi) => Promise.race([
+  p, new Promise((_, rej) => setTimeout(() => rej(new Error(`${quoi} : pas de réponse après ${Math.round(ms / 1000)} s`)), ms)),
+]);
+
+// ============================================================
+//  Moteur natif (APK)
+// ============================================================
+
+async function ouvrirNatif({ journal, choisirAutre }) {
+  const ble = pluginNatif();
+  const file = fileUnique();
+  journal('moteur : plugin Bluetooth natif (APK)');
+
+  // Demande les autorisations (Bluetooth à proximité ; localisation
+  // jusqu'à Android 11, que Google exigeait pour scanner).
+  await ble.initialize({});
+  try {
+    const { value } = await ble.isEnabled();
+    if (!value) {
+      journal('Bluetooth éteint : demande d’activation');
+      await ble.requestEnable().catch(() => {});
+    }
+  } catch { /* pas grave */ }
+
+  let appareil = null;
+  const connu = memo.lire();
+
+  if (!choisirAutre) {
+    // 1. Déjà connectée (par l'appli Suunto, souvent) : elle n'apparaît
+    //    plus dans un scan, mais Android sait qu'elle est là.
+    try {
+      const { devices = [] } = await ble.getConnectedDevices({ services: [OCEAN_SERVICE] });
+      journal(`appareils déjà connectés : ${devices.map(d => d.name || d.deviceId).join(', ') || 'aucun'}`);
+      appareil = devices.find(d => d.deviceId === connu?.id) || devices.find(d => estOcean(d.name)) || null;
+      if (appareil) journal(`→ montre déjà connectée : ${appareil.name}`);
+    } catch (e) { journal(`getConnectedDevices : ${e.message || e}`); }
+
+    // 2. Appairée au téléphone (par l'appli Suunto) : on s'y connecte
+    //    directement, sans scan et sans nouvel appairage.
+    if (!appareil) {
+      try {
+        const { devices = [] } = await ble.getBondedDevices();
+        journal(`appareils associés : ${devices.map(d => d.name || d.deviceId).join(', ') || 'aucun'}`);
+        appareil = devices.find(d => d.deviceId === connu?.id) || devices.find(d => estOcean(d.name)) || null;
+        if (appareil) journal(`→ montre associée : ${appareil.name} (${appareil.deviceId})`);
+      } catch (e) { journal(`getBondedDevices : ${e.message || e}`); }
+    }
+  }
+
+  // 3. Sinon : fenêtre de recherche d'Android.
+  if (!appareil) {
+    journal('recherche Bluetooth (fenêtre de choix)');
+    appareil = await ble.requestDevice({ namePrefix: 'Suunto', optionalServices: [OCEAN_SERVICE] });
+    journal(`→ choisi : ${appareil.name || '?'} (${appareil.deviceId})`);
+  }
+
+  const id = appareil.deviceId;
+  const coupures = [];
+  ble.addListener(`disconnected|${id}`, () => {
+    journal('⚠ montre déconnectée');
+    coupures.forEach(cb => cb());
+  });
+
+  journal('connexion…');
+  await ble.connect({ deviceId: id, timeout: 20000 });
+  journal('connecté');
+  try { await ble.requestConnectionPriority({ deviceId: id, connectionPriority: 1 }); } catch { /* facultatif */ }
+
+  let mtu = 23;
+  try { ({ value: mtu } = await ble.getMtu({ deviceId: id })); } catch { /* iOS / ancien */ }
+  const morceau = Math.max(TAILLE_ECRITURE_DEFAUT, Math.min(244, (mtu || 23) - 3));
+  journal(`MTU ${mtu} → écritures de ${morceau} o`);
+
+  const { services = [] } = await ble.getServices({ deviceId: id });
+  journal(`services : ${services.map(s => s.uuid).join(', ')}`);
+  const service = services.find(s => s.uuid.toLowerCase() === OCEAN_SERVICE);
+  if (!service) throw new Error('Service Suunto introuvable : est-ce bien une Suunto Ocean ?');
+  const { ecriture, notif } = choisirCaracteristiques(
+    service.characteristics.map(c => ({ uuid: c.uuid.toLowerCase(), props: c.properties || {} })), journal);
+
+  const ecouteurs = [];
+  const cle = `notification|${id}|${service.uuid.toLowerCase()}|${notif.uuid}`;
+  ble.addListener(cle, ev => {
+    const v = ev?.value;
+    const octets = typeof v === 'string'
+      ? Uint8Array.from((v.match(/[0-9a-f]{2}/gi) || []).map(h => parseInt(h, 16)))
+      : new Uint8Array(v?.buffer || []);
+    ecouteurs.forEach(cb => cb(octets));
+  });
+  // L'abonnement peut déclencher l'appairage si la montre ne l'est pas.
+  journal('abonnement aux notifications (peut demander l’appairage)…');
+  await avecDelai(ble.startNotifications({ deviceId: id, service: service.uuid, characteristic: notif.uuid }), 45000, 'abonnement');
+  journal('notifications actives');
+
+  memo.ecrire({ id, nom: appareil.name || 'Suunto Ocean', moteur: 'capacitor' });
+  const sansReponse = !!ecriture.props.writeWithoutResponse;
+
+  return {
+    nom: appareil.name || 'Suunto Ocean',
+    id,
+    moteur: 'capacitor',
+    ecouter: cb => ecouteurs.push(cb),
+    surCoupure: cb => coupures.push(cb),
+    ecrire: octets => file(async () => {
+      for (let o = 0; o < octets.length; o += morceau) {
+        const part = octets.subarray(o, o + morceau);
+        const value = hex(part, Infinity);
+        const opts = { deviceId: id, service: service.uuid, characteristic: ecriture.uuid, value };
+        if (sansReponse) await ble.writeWithoutResponse(opts);
+        else await ble.write(opts);
+      }
+    }),
+    async fermer() {
+      try { await ble.stopNotifications({ deviceId: id, service: service.uuid, characteristic: notif.uuid }); } catch { /* déjà coupé */ }
+      // Ne coupe que NOTRE connexion : l'appli Suunto garde la sienne.
+      try { await ble.disconnect({ deviceId: id }); } catch { /* idem */ }
+    },
+  };
+}
+
+// ============================================================
+//  Moteur Web Bluetooth (site)
+// ============================================================
+
+async function ouvrirWeb({ journal, choisirAutre }) {
+  const bt = navigator.bluetooth;
+  const file = fileUnique();
+  journal(`moteur : Web Bluetooth (${navigator.userAgent})`);
+
+  let appareil = null;
+  if (!choisirAutre && bt.getDevices) {
+    // Montre déjà autorisée sur ce site : pas besoin de la rechoisir.
+    try {
+      const deja = await bt.getDevices();
+      appareil = deja.find(d => estOcean(d.name)) || null;
+      if (appareil) journal(`montre déjà autorisée : ${appareil.name}`);
+    } catch (e) { journal(`getDevices : ${e.message}`); }
+  }
+  if (!appareil) {
+    journal('fenêtre de choix Bluetooth');
+    appareil = await bt.requestDevice({
+      filters: [...OCEAN_NOMS.map(namePrefix => ({ namePrefix })), { services: [OCEAN_SERVICE] }],
+      optionalServices: [OCEAN_SERVICE],
+    });
+    journal(`→ choisi : ${appareil.name || '?'} (${appareil.id})`);
+  }
+
+  const coupures = [];
+  appareil.addEventListener('gattserverdisconnected', () => {
+    journal('⚠ montre déconnectée');
+    coupures.forEach(cb => cb());
+  });
+
+  journal('connexion…');
+  const gatt = await avecDelai(appareil.gatt.connect(), 20000, 'connexion');
+  journal('connecté');
+  const service = await gatt.getPrimaryService(OCEAN_SERVICE);
+  const brutes = await service.getCharacteristics();
+  const { ecriture, notif } = choisirCaracteristiques(brutes.map(c => ({ uuid: c.uuid, props: c.properties, c })), journal);
+
+  const ecouteurs = [];
+  notif.c.addEventListener('characteristicvaluechanged', ev => {
+    const v = ev.target.value;
+    const octets = new Uint8Array(v.buffer.slice(v.byteOffset, v.byteOffset + v.byteLength));
+    ecouteurs.forEach(cb => cb(octets));
+  });
+  journal('abonnement aux notifications (peut demander l’appairage)…');
+  await avecDelai(notif.c.startNotifications(), 45000, 'abonnement');
+  journal('notifications actives');
+
+  memo.ecrire({ id: appareil.id, nom: appareil.name || 'Suunto Ocean', moteur: 'web' });
+  const sansReponse = !!ecriture.props.writeWithoutResponse && !!ecriture.c.writeValueWithoutResponse;
+
+  return {
+    nom: appareil.name || 'Suunto Ocean',
+    id: appareil.id,
+    moteur: 'web',
+    ecouter: cb => ecouteurs.push(cb),
+    surCoupure: cb => coupures.push(cb),
+    ecrire: octets => file(async () => {
+      for (let o = 0; o < octets.length; o += TAILLE_ECRITURE_DEFAUT) {
+        const part = octets.slice(o, o + TAILLE_ECRITURE_DEFAUT);
+        if (sansReponse) await ecriture.c.writeValueWithoutResponse(part);
+        else await ecriture.c.writeValue(part);
+      }
+    }),
+    async fermer() {
+      try { await notif.c.stopNotifications(); } catch { /* déjà coupé */ }
+      try { gatt.disconnect(); } catch { /* idem */ }
+    },
+  };
+}
+
+/**
+ * Trouve la montre et ouvre le lien.
+ * @param {{journal?:(t:string)=>void, choisirAutre?:boolean}} [opts]
+ *   choisirAutre : ignorer la montre mémorisée et rouvrir la recherche.
+ */
+export async function ouvrirLienOcean({ journal = () => {}, choisirAutre = false } = {}) {
+  const dispo = bleDisponible();
+  if (!dispo.ok) throw new Error(dispo.raison);
+  return dispo.moteur === 'capacitor'
+    ? ouvrirNatif({ journal, choisirAutre })
+    : ouvrirWeb({ journal, choisirAutre });
+}

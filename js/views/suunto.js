@@ -32,9 +32,23 @@ export async function suuntoView() {
   const liste = el('div');
   const actions = el('div.btn-row');
 
+  // Directement depuis la montre, sans passer par l'appli Suunto.
   wrap.append(el('div.card', {},
     el('div', { style: { fontWeight: '650', marginBottom: '4px' },
-      text: '⌚ Importer depuis ton ordinateur de plongée' }),
+      text: '📡 Suunto Ocean : directement depuis la montre' }),
+    el('div.hint', {
+      text: 'Le carnet lit les plongées dans la montre en Bluetooth : profil, températures, '
+          + 'pression du Tank POD, gaz. L’appli Suunto peut rester installée et appairée.' }),
+    el('button#btn-montre-ble.btn.primary.block', {
+      type: 'button', style: { marginTop: '10px' },
+      text: '⌚ Importer depuis la montre (Bluetooth)',
+      onclick: () => navigate('montre'),
+    }),
+  ));
+
+  wrap.append(el('div.card', {},
+    el('div', { style: { fontWeight: '650', marginBottom: '4px' },
+      text: '📄 Ou depuis un fichier .fit' }),
     el('div.hint', {
       text: 'Exporte la plongée au format .fit depuis l’application de ta montre, '
           + 'puis dépose le fichier ici. Le décodage se fait dans ce navigateur : '
@@ -138,39 +152,74 @@ export async function suuntoView() {
     const fusion = retenus.length === 1 ? retenus[0].decode
                                         : mergeDives(retenus.map(l => l.decode));
 
-    const numero = await store.nextNumber(diverId);
-    const dive = emptyDive(diverId, numero);
-    dive.id = uid();
-
-    if (fusion.start) {
-      dive.date = fusion.start.toISOString().slice(0, 10);
-      dive.heureImmersion = fusion.start.toTimeString().slice(0, 5);
-    }
-    if (fusion.dureeMin) dive.dureeMin = Math.round(fusion.dureeMin);
-    if (fusion.profMax != null) dive.profMax = fusion.profMax;
-    if (fusion.profMoy != null) dive.profMoy = fusion.profMoy;
-    if (fusion.tempFond != null) dive.tempFond = Math.round(fusion.tempFond);
-    if (fusion.samples?.length) dive.samples = fusion.samples;
-
-    // Les paliers déduits du profil sont une ESTIMATION : la montre
-    // n'enregistre pas « palier », elle enregistre « telle profondeur à
-    // telle seconde ». À vérifier sur la fiche.
-    if (fusion.paliers) {
-      dive.palier3 = fusion.paliers.p3 || 0;
-      dive.palier6 = fusion.paliers.p6 || 0;
-      dive.palier9 = fusion.paliers.p9 || 0;
-      dive.paliersEstimes = true;
-    }
-
     // Le nom de fichier sert de garde-fou contre un double import.
-    dive.suuntoKeys = retenus.map(l => l.nom);
-
-    await store.saveDive(dive);
+    const dive = await creerPlongeeImportee(diverId, fusion, { cles: retenus.map(l => l.nom) });
     toast(retenus.length > 1
-      ? `${retenus.length} fichiers fusionnés en plongée n°${numero}`
-      : `Plongée n°${numero} créée`);
+      ? `${retenus.length} fichiers fusionnés en plongée n°${dive.numero}`
+      : `Plongée n°${dive.numero} créée`);
     navigate(`dive/${dive.id}/edit`);
   }
 
   return { title: 'Importer un .fit', node: wrap, back: true };
+}
+
+/**
+ * Crée et enregistre (donc synchronise) une plongée à partir d'un
+ * import d'ordinateur : .fit décodé (fitToDive) ou montre en Bluetooth
+ * (oceanToDive), qui ont la même forme.
+ * @param {string} diverId
+ * @param {object} fusion   la plongée décodée
+ * @param {{cles:string[], suunto?:object}} opts  clés anti-doublon, détails
+ */
+export async function creerPlongeeImportee(diverId, fusion, { cles, suunto = null }) {
+  const numero = await store.nextNumber(diverId);
+  const dive = emptyDive(diverId, numero);
+  dive.id = uid();
+
+  if (fusion.start) {
+    // Date et heure LOCALES : toISOString() donnerait la date UTC, fausse
+    // pour une plongée de nuit.
+    const d = fusion.start;
+    dive.date = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    dive.heureImmersion = d.toTimeString().slice(0, 5);
+  }
+  if (fusion.dureeMin) dive.dureeMin = Math.round(fusion.dureeMin);
+  if (fusion.profMax != null) dive.profMax = fusion.profMax;
+  if (fusion.profMoy != null) dive.profMoy = fusion.profMoy;
+  if (fusion.tempFond != null) dive.tempFond = Math.round(fusion.tempFond);
+  if (fusion.samples?.length) dive.samples = fusion.samples;
+
+  // Ce que seule la montre en Bluetooth fournit : bloc (Tank POD), gaz,
+  // position GPS de la mise à l'eau.
+  if (fusion.pressionDepart) dive.pressionDepart = fusion.pressionDepart;
+  if (fusion.pressionFin) dive.pressionFin = fusion.pressionFin;
+  if (fusion.blocLitres) dive.blocLitres = fusion.blocLitres;
+  if (fusion.gazO2 && fusion.gazO2 !== 21 && !fusion.gazHe) {
+    dive.gazType = 'nitrox';
+    dive.gazO2 = fusion.gazO2;
+  } else if (fusion.gazHe) {
+    dive.gazType = 'trimix';
+    dive.gazO2 = fusion.gazO2;
+    dive.gazHe = fusion.gazHe;
+  }
+  if (fusion.lieu && dive.lat == null) {
+    dive.lat = fusion.lieu.lat;
+    dive.lng = fusion.lieu.lng;
+  }
+
+  // Les paliers déduits du profil sont une ESTIMATION : la montre
+  // n'enregistre pas « palier », elle enregistre « telle profondeur à
+  // telle seconde ». À vérifier sur la fiche.
+  if (fusion.paliers) {
+    dive.palier3 = fusion.paliers.p3 || 0;
+    dive.palier6 = fusion.paliers.p6 || 0;
+    dive.palier9 = fusion.paliers.p9 || 0;
+    dive.paliersEstimes = true;
+  }
+
+  dive.suuntoKeys = cles;
+  if (suunto) dive.suunto = suunto;
+
+  await store.saveDive(dive);
+  return dive;
 }

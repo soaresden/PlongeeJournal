@@ -129,7 +129,7 @@ check('plongées de nuit', st.nuit === 1, String(st.nuit));
 // --- Parcours de tous les écrans ---------------------------
 const routes = ['dives', `dive/${dv.id}`, `dive/${dv.id}/edit`, 'dive/new',
                 'divers', `diver/${d.id}`, 'buddies', `buddy/${b.id}`, 'stats',
-                'reglages', 'setup', 'suunto', 'urgence', 'route/inexistante'];
+                'reglages', 'setup', 'suunto', 'montre', 'montre-aide', 'urgence', 'route/inexistante'];
 for (const r of routes) {
   window.location.hash = '#/' + r;
   window.dispatchEvent(new window.Event('hashchange'));
@@ -138,6 +138,22 @@ for (const r of routes) {
   check(`route « ${r} » rend du contenu`, txt.length > 20 && !title().includes('Erreur'),
         title() + ' | ' + txt.slice(0, 100));
 }
+
+// --- Import depuis la montre (Bluetooth) ---
+window.location.hash = '#/suunto';
+window.dispatchEvent(new window.Event('hashchange'));
+await tick(90);
+check('import : bouton « Importer depuis la montre (Bluetooth) »',
+  !!window.document.querySelector('#btn-montre-ble'), view().slice(0, 150));
+window.location.hash = '#/montre';
+window.dispatchEvent(new window.Event('hashchange'));
+await tick(120);
+check('montre : sans Bluetooth, le navigateur est signalé', /ne gère pas le Bluetooth/.test(view()), view().slice(0, 200));
+check('montre : journal de diagnostic présent', /Journal Bluetooth/.test(view()), view().slice(0, 200));
+window.location.hash = '#/montre-aide';
+window.dispatchEvent(new window.Event('hashchange'));
+await tick(90);
+check('montre : mode d’emploi de l’appairage', /appairage/i.test(view()) && /Ne désappaire surtout rien/.test(view()), view().slice(0, 200));
 
 // --- Contrôles de contenu ----------------------------------
 window.location.hash = '#/dives';

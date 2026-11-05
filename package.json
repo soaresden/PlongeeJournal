@@ -5,11 +5,12 @@
   "type": "module",
   "description": "Carnet de plongée — PWA + APK Android, synchronisé dans un dépôt GitHub privé.",
   "scripts": {
-    "test": "node outils/dive-test.mjs && node outils/fit-test.mjs && node outils/geo-test.mjs && node outils/lieu-test.mjs && node outils/stamp-test.mjs && node outils/github-test.mjs && node outils/ambiance-test.mjs",
+    "test": "node outils/dive-test.mjs && node outils/fit-test.mjs && node outils/geo-test.mjs && node outils/lieu-test.mjs && node outils/stamp-test.mjs && node outils/github-test.mjs && node outils/ambiance-test.mjs && node outils/ocean-test.mjs",
     "www": "node outils/build-www.mjs",
     "android:sync": "npm run www && npx cap sync android"
   },
   "devDependencies": {
+    "@capacitor-community/bluetooth-le": "6.1.0",
     "@capacitor/android": "6.2.0",
     "@capacitor/cli": "6.2.0",
     "@capacitor/core": "6.2.0"
