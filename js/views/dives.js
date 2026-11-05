@@ -209,6 +209,14 @@ export async function divesView() {
     afficher({ garderScroll: true });
   }
 
+  /** Les compagnons, toujours là : « à compléter » tant qu'il n'y en a pas. */
+  const palanquee = ids => {
+    const noms = (ids || []).map(buddyName).filter(Boolean);
+    return el(`div.dive-sub.dive-buddies${noms.length ? '' : '.vide'}`, { title: noms.join(', ') || 'Palanquée à compléter' },
+      el('span.metr-ico', { html: '<svg class="ico-m" viewBox="0 0 24 24"><use href="#i-buddies"/></svg>' }),
+      el('span', { text: noms.length ? noms.join(', ') : 'Palanquée à compléter' }));
+  };
+
   function carte(d) {
     const a = ambianceDe(d);
     const prof = Number(d.profMax) || 0;
@@ -224,9 +232,7 @@ export async function divesView() {
             chiffre('duree', fmtDuration(d.dureeMin), 'Durée'),
             d.tempFond != null ? chiffre('eau', `${d.tempFond}°`, 'Eau au fond') : null),
           miniCourbe(d.samples || d.profil, { prof, duree: Number(d.dureeMin) || 0, profRef })),
-        (d.buddyIds || []).length
-          ? el('div.dive-sub.dive-buddies', { text: '👥 ' + d.buddyIds.map(buddyName).join(', ') })
-          : null,
+        palanquee(d.buddyIds),
       ),
     );
   }
@@ -249,9 +255,7 @@ export async function divesView() {
             chiffre('duree', fmtDuration(s.dureeMin), 'Durée'),
             s.tempEau != null ? chiffre('eau', `${s.tempEau}°`, 'Eau') : null),
           miniCourbe(s.samples, { prof, duree: Number(s.dureeMin) || 0, profRef })),
-        (s.buddyIds || []).length
-          ? el('div.dive-sub.dive-buddies', { text: '👥 ' + s.buddyIds.map(buddyName).join(', ') })
-          : null,
+        palanquee(s.buddyIds),
         s.notes ? el('div.dive-sub.dive-buddies', { text: s.notes }) : null));
   }
 

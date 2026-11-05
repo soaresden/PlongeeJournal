@@ -268,3 +268,8 @@ button.tuile:hover { border-color: var(--accent); }
 .dc-eau.type { fill: color-mix(in srgb, var(--amb1) 10%, transparent); }
 .dc-ligne { fill: none; stroke: var(--amb1); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
 .dc-ligne.type { stroke-dasharray: 4 3; opacity: .7; }
+
+.dive-card .dive-buddies { display: flex; align-items: center; gap: 5px; margin-top: 6px !important; }
+.dive-card .dive-buddies > span:last-child { overflow: hidden; text-overflow: ellipsis; }
+.dive-card .dive-buddies.vide { color: var(--text-mute); font-style: italic; }
+.dive-card .dive-buddies.vide .metr-ico { opacity: .55; }
