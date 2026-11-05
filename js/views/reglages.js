@@ -294,24 +294,30 @@ function carteSuunto() {
         ? 'Les clés et la connexion sont gardées dans ton dépôt privé (suunto.json, à côté du carnet, pas dedans) : '
           + 'le téléphone les retrouve tout seul.'
         : 'Sans dépôt GitHub branché, elles restent sur cet appareil.' }),
+      // Dans l'APK, Suunto renverrait vers le site dans le navigateur du
+      // téléphone, pas dans l'appli : on y enregistre seulement les clés
+      // (suunto.json), et la connexion se termine sur le site, au PC.
       el('button.btn.primary.block', { type: 'button', style: { marginTop: '12px' },
-        disabled: estApk(),
-        text: 'Connecter mon compte Suunto',
+        text: estApk() ? 'Enregistrer les clés' : 'Connecter mon compte Suunto',
         onclick: async (e) => {
           if (!liaison.clientId || !liaison.clientSecret || !liaison.cleAbonnement) {
             toast('Il manque une des trois clés', true); return;
           }
-          e.currentTarget.disabled = true;
+          const b = e.currentTarget;
+          b.disabled = true;
           try {
             ({ liaison, sha } = await sauverLiaison({ ...liaison, redirectUri: retour }, { sha, message: 'Suunto : clés de l’appli' }));
-            location.href = lienAutorisation(liaison, nouvelEtat());
+            if (!estApk()) { location.href = lienAutorisation(liaison, nouvelEtat()); return; }
+            toast(estConfigure() ? 'Clés enregistrées dans ton dépôt — termine la connexion sur le PC'
+              : 'Clés enregistrées sur ce téléphone seulement : branche GitHub pour les retrouver sur le PC', !estConfigure());
           } catch (err) {
             toast(err.message, true);
-            e.currentTarget.disabled = false;
           }
+          b.disabled = false;
         } }),
-      estApk() ? el('div.hint', { text: 'La connexion se fait depuis le site, sur le PC : c’est là que Suunto renvoie '
-        + 'après la connexion. Le téléphone récupère ensuite la liaison tout seul.' }) : null);
+      estApk() ? el('div.hint', { text: 'Ensuite, sur le PC, ouvre le site → Réglages → Compte Suunto : les clés y sont déjà, '
+        + 'clique « Connecter mon compte Suunto ». Suunto renvoie vers le site, pas vers l’appli ; '
+        + 'le téléphone récupère ensuite la liaison tout seul.' }) : null);
   };
 
   chargerLiaison()
