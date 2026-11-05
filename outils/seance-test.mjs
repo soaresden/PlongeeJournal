@@ -111,6 +111,12 @@ check('le lieu tranche : la fosse, même un mardi',
   check('courbe : la sonde de bouteille → plongée', S.suggererRangement({ genre: 'apnee', samples: avecSonde, date: '2026-10-17' }) === 'plongee');
   check('courbe : une plongée un jeudi soir sans GPS → fosse', S.suggererRangement({ genre: 'bouteille', samples: plongee, profMax: 12, date: '2026-10-15' }) === 'fosse');
 }
+// Baptêmes : -2, -1, hors du compte
+{
+  const liste = [{ numero: -2, date: '2018-09-24' }, { numero: -1, date: '2019-08-28' }, { numero: 1, date: '2019-12-29' }, { numero: null, date: '2020-01-01' }];
+  check('baptême : numéroté 0 ou moins', M.estBapteme(liste[0]) && !M.estBapteme(liste[2]) && !M.estBapteme(liste[3]));
+  check('baptême : hors du nombre de plongées', M.computeStats(liste).count === 2 && M.computeStats(liste).baptemes === 2);
+}
 check('distance : 400 m font la différence', S.distanceM(piscineGarenne, fosseVilleneuve) > 5000 && S.distanceM(piscineGarenne, { lat: 48.9056, lng: 2.2434 }) < 50);
 
 {

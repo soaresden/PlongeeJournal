@@ -8,7 +8,7 @@
 // ============================================================
 
 import { TABLES as TABLES_ENTITES } from './fusion.js';
-import { computeStats, sortDives, sortPeople, reconcileTimes, sortSeances, seanceDepuisPlongee } from './model.js';
+import { computeStats, sortDives, sortPeople, reconcileTimes, sortSeances, seanceDepuisPlongee, estBapteme } from './model.js';
 
 export const CARNET_VIDE = {
   version: 1,
@@ -174,7 +174,7 @@ export function creerStore(support) {
     async getDive(id) { return db().dives.find(d => d.id === id) || null; },
 
     async nextNumber(diverId) {
-      const list = db().dives.filter(d => d.diverId === diverId);
+      const list = db().dives.filter(d => d.diverId === diverId && !estBapteme(d));
       const max = list.reduce((m, d) => Math.max(m, Number(d.numero) || 0), 0);
       return Math.max(max + 1, list.length + 1);
     },

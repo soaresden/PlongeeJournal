@@ -423,6 +423,13 @@ export function guessWater(label = '') {
   return '';
 }
 
+/**
+ * Un baptême ne compte pas dans le carnet : numéroté 0 ou moins (-2, -1…),
+ * ou marqué « Baptême » comme niveau. La n°1, c'est la première plongée.
+ */
+export const estBapteme = d => (typeof d?.numero === 'number' && d.numero <= 0)
+  || String(d?.niveau || '').trim() === 'Baptême';
+
 /** Statistiques d'un carnet — le nombre de plongées n'est jamais saisi. */
 export function computeStats(list, certifications = []) {
   const totalMin = list.reduce((s, d) => s + (Number(d.dureeMin) || 0), 0);
@@ -437,7 +444,8 @@ export function computeStats(list, certifications = []) {
   list.forEach(d => { const y = (d.date || '').slice(0, 4); if (y) years[y] = (years[y] || 0) + 1; });
 
   return {
-    count: list.length,
+    count: list.filter(d => !estBapteme(d)).length,
+    baptemes: list.filter(estBapteme).length,
     totalMin,
     maxDepth: profs.length ? Math.max(...profs) : 0,
     avgDepth: profs.length ? profs.reduce((a, b) => a + b, 0) / profs.length : 0,

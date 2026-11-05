@@ -13,6 +13,7 @@
 
 import { suggererRangement } from './seances.js';
 import { PRE_REMPLI } from './config.js';
+import { estBapteme } from './model.js';
 
 export const CLE_SUUNTO = cle => `suunto:${cle}`;
 
@@ -220,7 +221,9 @@ export function metaSuunto(act, dec) {
  * carnet (s'il commence au n°12, il recommence au n°12).
  * @returns {Map<id, numero>} seulement ceux qui changent
  */
-export function numerotationChronologique(dives) {
+export function numerotationChronologique(toutes) {
+  // Les baptêmes (-2, -1…) gardent leur numéro : le carnet commence après.
+  const dives = toutes.filter(d => !estBapteme(d));
   const cle = d => `${d.date || '9999-99-99'}T${d.heureImmersion || '99:99'}`;
   const tri = [...dives].sort((a, b) => (cle(a) < cle(b) ? -1 : cle(a) > cle(b) ? 1 : (Number(a.numero) || 0) - (Number(b.numero) || 0)));
   const nums = dives.map(d => Number(d.numero)).filter(n => Number.isFinite(n) && n > 0);
