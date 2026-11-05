@@ -6,7 +6,7 @@ import { $, $$, el, toast } from './lib.js';
 import { route, onRender, navigate, match, startRouter, currentPath } from './router.js';
 import { initStore } from './store.js';
 import { modeActuel, synchroniser, vider, erreurGitHub } from './store-github.js';
-import { configGitHub } from './github.js';
+import { configGitHub, estConfigure } from './github.js';
 import { appliquerTheme } from './theme.js';
 import * as sync from './sync.js';
 import { verifierEnFond, ecarter, telechargerApk } from './maj-apk.js';
@@ -376,13 +376,20 @@ async function retourSuunto() {
   history.replaceState(null, '', `${location.pathname}#/reglages`);
   if (refus) { toast(`Suunto : connexion refusée (${refus})`, true); return; }
   if (!etatOk) { toast('Retour de Suunto inattendu ou trop ancien : relance « Connecter mon compte ».', true); return; }
+  let reliee = null;
   try {
     const { liaison, sha } = await chargerLiaison();
-    const reliee = await echangerCode(liaison, code);
+    reliee = await echangerCode(liaison, code);
     await sauverLiaison(reliee, { sha, message: 'Suunto : compte relié' });
-    toast(`Compte Suunto relié${reliee.compte ? ` (${reliee.compte})` : ''} ✓`);
+    toast(estConfigure()
+      ? `Compte Suunto relié${reliee.compte ? ` (${reliee.compte})` : ''} ✓`
+      : 'Compte Suunto relié sur cet appareil seulement : branche GitHub ici pour que le téléphone le retrouve.',
+      !estConfigure());
   } catch (e) {
-    toast(`Suunto : ${e.message}`, true);
+    // Relié ici, mais l'écriture sur GitHub a échoué : la copie locale
+    // sera remontée au prochain chargement des réglages.
+    toast(reliee ? `Compte Suunto relié ici, mais pas encore sur GitHub (${e.message}) : rouvre les réglages.`
+      : `Suunto : ${e.message}`, true);
   }
   if (currentPath() === 'reglages') navigate('reglages', true);
 }

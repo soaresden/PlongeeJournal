@@ -89,6 +89,21 @@ const T0 = Date.parse('2026-11-05T10:00:00Z');
   check('fusion : types appris des deux côtés', f.types[1] === 'sport' && f.types[83] === 'plongee');
   const deliee = { ...pc, jeton: null, compte: null, delieLe: '2026-11-05T11:00:00Z', majLe: '2026-11-05T11:00:00Z' };
   check('fusion : un compte délié ne ressuscite pas', C.fusionnerLiaisons(tel, deliee).jeton === null);
+
+  // PC relié, mais l'écriture sur GitHub a échoué : GitHub n'a que les clés.
+  const github = { ...C.liaisonVide(), ...cles, majLe: '2026-11-05T16:39:28Z' };
+  const pcRelie = { ...C.liaisonVide(), ...cles, jeton: { acces: 'A', refresh: 'R1', expire: 300 },
+    compte: 'denis', lieLe: '2026-11-05T16:40:10Z', majLe: '2026-11-05T16:40:10Z' };
+  const surPc = C.fusionnerLiaisons(pcRelie, github);
+  check('remontée : le PC relié pousse sa copie sur GitHub', C.estRelie(surPc) && C.enAvanceSurGitHub(surPc, github));
+  const telAncien = { ...C.liaisonVide(), ...cles, majLe: '2026-11-05T16:38:57Z' };
+  const surTel = C.fusionnerLiaisons(telAncien, { ...C.liaisonVide(), ...surPc });
+  check('remontée : la tablette récupère la liaison sans rien réécrire',
+    C.estRelie(surTel) && !C.enAvanceSurGitHub(surTel, { ...C.liaisonVide(), ...surPc }));
+  check('remontée : mêmes types dans un autre ordre = rien à écrire',
+    !C.enAvanceSurGitHub({ ...github, types: { 1: 'a', 2: 'b' } }, { ...github, types: { 2: 'b', 1: 'a' } }));
+  check('remontée : GitHub sans fichier, clés saisies ici → on crée',
+    C.enAvanceSurGitHub(telAncien, null) && !C.enAvanceSurGitHub(C.liaisonVide(), null));
   memoire.clear();
   const { liaison } = await C.chargerLiaison({ github: false });
   check('sans GitHub : liaison vide sur l’appareil', !C.estRelie(liaison) && liaison.redirectUri === C.RETOUR_DEFAUT);

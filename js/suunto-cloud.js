@@ -91,11 +91,37 @@ export async function chargerLiaison({ github = estConfigure() } = {}) {
     try {
       const r = await lireCarnet(cfgFichier());
       sha = r.sha;
-      if (r.data) l = fusionnerLiaisons(l, { ...liaisonVide(), ...r.data });
+      const distante = r.data ? { ...liaisonVide(), ...r.data } : null;
+      if (distante) l = fusionnerLiaisons(l, distante);
       ecrireLocale(l);
+      // Cet appareil en sait plus que GitHub (compte relié alors que
+      // l'écriture avait échoué, ou GitHub branché après coup) : on
+      // remonte sa copie, sinon l'autre appareil ne la verrait jamais.
+      if (enAvanceSurGitHub(l, distante)) {
+        try { sha = await ecrireCarnet(l, sha, 'Suunto : liaison de cet appareil', cfgFichier()); }
+        catch { /* on réessaiera au prochain chargement */ }
+      }
     } catch { /* hors ligne : on garde la copie locale */ }
   }
   return { liaison: l, sha };
+}
+
+const CHAMPS_UTILES = ['clientId', 'clientSecret', 'cleAbonnement', 'redirectUri', 'jeton', 'compte',
+  'lieLe', 'delieLe', 'types', 'derniereRecup'];
+
+/** JSON aux clés triées : deux copies égales donnent la même chaîne. */
+function stable(v) {
+  if (Array.isArray(v)) return `[${v.map(stable).join(',')}]`;
+  if (v && typeof v === 'object') {
+    return `{${Object.keys(v).sort().filter(k => v[k] !== undefined).map(k => `${JSON.stringify(k)}:${stable(v[k])}`).join(',')}}`;
+  }
+  return JSON.stringify(v ?? null);
+}
+
+/** La copie fusionnée `l` apporte-t-elle quelque chose que GitHub n'a pas ? */
+export function enAvanceSurGitHub(l, distante) {
+  if (!distante) return !!(l.clientId || l.clientSecret || l.cleAbonnement || l.jeton);
+  return CHAMPS_UTILES.some(k => stable(l[k]) !== stable(distante[k]));
 }
 
 /** Enregistre la liaison sur l'appareil et, si possible, sur GitHub. */
