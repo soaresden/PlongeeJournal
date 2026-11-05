@@ -22,9 +22,12 @@ export const THEMES = [
   { id: 'kelp',      nom: 'Forêt de kelp', sous: 'Vert océan, lumière filtrée',     apercu: ['#071612', '#0f2620', '#5fd39a'] },
   { id: 'dauphin',   nom: 'Dauphin',       sous: 'Coucher de soleil : rose, violet, orangé', apercu: ['#f4f1fb', '#ffffff', '#f0427a'], barre: 'linear-gradient(105deg, #6e48f0, #ec4886 58%, #ff9254)' },
   { id: 'tortue',    nom: 'Tortue',        sous: 'Carapace verte et ambrée, eau turquoise', apercu: ['#f1f4e3', '#fffef6', '#1f8f5b'], barre: 'linear-gradient(105deg, #19684a, #4a843a 55%, #b87c22)' },
+  { id: 'holi',      nom: 'Holi',          sous: 'La fête des couleurs : poudres magenta, safran, vert, indigo', apercu: ['#fff8f2', '#ffffff', '#e0157f'], barre: 'linear-gradient(105deg, #d6157f, #ef6c00 34%, #10965a 68%, #2d55dc)' },
+  { id: 'clown',     nom: 'Poisson-clown', sous: 'Orange vif et blanc, dans son anémone', apercu: ['#fff6ee', '#ffffff', '#f2600c'], barre: 'linear-gradient(105deg, #ff7a1f, #f05a00)' },
+  { id: 'nudibranche', nom: 'Nudibranche', sous: 'Nuit violette, orange fluo, bleu électrique', apercu: ['#140a24', '#22133b', '#ff8a1f'], barre: 'linear-gradient(105deg, #461a96, #2448cd)' },
 ];
 
-const SOMBRES = new Set(['plongee', 'abysse', 'corail', 'epave', 'kelp']);
+const SOMBRES = new Set(['plongee', 'abysse', 'corail', 'epave', 'kelp', 'nudibranche']);
 
 export function themeChoisi() {
   try { return localStorage.getItem(CLE) || 'plongee'; } catch { return 'plongee'; }

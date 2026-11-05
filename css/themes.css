@@ -212,3 +212,77 @@
   --cal-0: #e3e9cd;  --cal-we: #d4ddb6;  --cal-hors: #f6f8ec;  --cal-hors-we: #eef2df;
   --shadow: 0 6px 22px rgba(40,80,30,.13);
 }
+
+:root[data-theme="holi"] {
+  /* La fête des couleurs : des nuages de poudre magenta, safran, vert, indigo. */
+  --bg: #fff8f2;  --bg-2: #ffffff;
+  --surface: #ffffff;  --surface-2: #fdeef4;  --deep: #fbe1ec;
+  --line: #f3d9e3;
+  --text: #2b1638;  --text-dim: #6a4a72;  --text-mute: #a184a6;
+  --accent: #e0157f;  --accent-2: #ff7a00;  --accent-rgb: 224,21,127;
+  --on-accent: #ffffff;
+  --warn: #e07b00;  --danger: #d81b45;  --ok: #12996a;  --or: #e8a200;
+  --bar: linear-gradient(105deg, rgba(214,21,127,.95) 0%, rgba(239,108,0,.95) 34%, rgba(16,150,90,.95) 68%, rgba(45,85,220,.95) 100%);
+  --bar-text: #ffffff;  --bar-mute: rgba(255,255,255,.82);
+  --tab-actif: #fff36b;  --tab-actif-fond: rgba(255,255,255,.22);
+  --add-fond: linear-gradient(150deg, #ffe14d, #ff9f1c);  --add-text: #4a1d00;
+  --status: #d6157f;
+  --bg-image:
+    radial-gradient(32% 22% at 6% 10%, rgba(232,24,140,.20) 0%, transparent 70%),
+    radial-gradient(30% 20% at 94% 24%, rgba(255,196,0,.24) 0%, transparent 70%),
+    radial-gradient(34% 24% at 18% 66%, rgba(22,178,107,.16) 0%, transparent 70%),
+    radial-gradient(32% 24% at 88% 86%, rgba(45,85,220,.16) 0%, transparent 70%),
+    radial-gradient(26% 18% at 56% 44%, rgba(255,122,0,.12) 0%, transparent 70%),
+    radial-gradient(22% 16% at 70% 4%, rgba(150,60,230,.12) 0%, transparent 70%),
+    linear-gradient(#fff9f3, #fff3ea);
+  --overlay: rgba(43,22,56,.42);
+  --cal-0: #f8e6ee;  --cal-we: #f1d3e1;  --cal-hors: #fffaf6;  --cal-hors-we: #fbf0f4;
+  --shadow: 0 6px 22px rgba(150,30,100,.13);
+}
+
+:root[data-theme="clown"] {
+  /* Le poisson-clown dans son anémone : orange vif, blanc, liseré noir, mauve. */
+  --bg: #fff6ee;  --bg-2: #ffffff;
+  --surface: #ffffff;  --surface-2: #ffeadb;  --deep: #ffdcc3;
+  --line: #f3d4bd;
+  --text: #1d1410;  --text-dim: #5e4a3e;  --text-mute: #9c8576;
+  --accent: #f2600c;  --accent-2: #c2185b;  --accent-rgb: 242,96,12;
+  --on-accent: #ffffff;
+  --warn: #d98200;  --danger: #d32f2f;  --ok: #1b9e6e;  --or: #e8a317;
+  --bar: linear-gradient(105deg, rgba(255,122,31,.97) 0%, rgba(240,90,0,.97) 100%);
+  --bar-text: #ffffff;  --bar-mute: rgba(255,255,255,.8);
+  --tab-actif: #ffffff;  --tab-actif-fond: rgba(255,255,255,.24);
+  --add-fond: #ffffff;  --add-text: #f2600c;
+  --status: #f05a00;
+  --bg-image:
+    radial-gradient(70% 32% at 50% 112%, rgba(186,60,170,.20) 0%, transparent 72%),
+    radial-gradient(40% 25% at 100% 0%, rgba(255,140,60,.16) 0%, transparent 70%),
+    linear-gradient(#fff8f1, #fff1e6);
+  --overlay: rgba(29,20,16,.45);
+  --cal-0: #ffe7d6;  --cal-we: #fdd5b8;  --cal-hors: #fffaf5;  --cal-hors-we: #fff1e5;
+  --shadow: 0 6px 22px rgba(200,90,20,.14);
+}
+
+:root[data-theme="nudibranche"] {
+  /* Une nuit sur le récif : violet profond, bords orange fluo, bleu électrique. */
+  --bg: #140a24;  --bg-2: #1b0f30;
+  --surface: #22133b;  --surface-2: #2c1a4a;  --deep: #1a0e2e;
+  --line: #3d2763;
+  --text: #f4ecff;  --text-dim: #bba6dc;  --text-mute: #8270a6;
+  --accent: #ff8a1f;  --accent-2: #3d7dff;  --accent-rgb: 255,138,31;
+  --on-accent: #1a0a00;
+  --warn: #ffc15e;  --danger: #ff5c8a;  --ok: #4be3a8;  --or: #ffc94d;
+  --bar: linear-gradient(105deg, rgba(70,26,150,.94) 0%, rgba(36,72,205,.94) 100%);
+  --bar-text: #ffffff;  --bar-mute: rgba(255,255,255,.72);
+  --tab-actif: #ffb15c;  --tab-actif-fond: rgba(255,255,255,.14);
+  --add-fond: linear-gradient(150deg, #ffb15c, #ff6a1f);  --add-text: #2a0d00;
+  --status: #461a96;
+  --bg-image:
+    radial-gradient(45% 30% at 8% 92%, rgba(255,138,31,.13) 0%, transparent 70%),
+    radial-gradient(45% 30% at 92% 8%, rgba(61,125,255,.18) 0%, transparent 70%),
+    radial-gradient(40% 28% at 62% 55%, rgba(170,90,255,.11) 0%, transparent 70%),
+    linear-gradient(#170c2a, #120822);
+  --overlay: rgba(8,3,16,.74);
+  --cal-0: #26163f;  --cal-we: #31204f;  --cal-hors: #170d29;  --cal-hors-we: #1c1131;
+  --shadow: 0 8px 28px rgba(0,0,0,.5);
+}
