@@ -958,6 +958,12 @@ input[type=time]::-webkit-date-and-time-value { text-align: left; }
 /* En gouttière les mois sont à droite ; en règle ils sont centrés. */
 .an12.sens-h .an12-mois { justify-content: flex-end; padding-right: 3px; }
 .an12.sens-v .an12-mois { justify-content: center; font-size: 8.5px; }
+/* Le nom du mois suit la taille du carré : il ne déborde plus sur la
+   ligne voisine quand les carrés sont petits, et se lit mieux quand ils
+   sont grands (tablette). La règle reste à 11 px de haut. */
+.an12.sens-h .an12-mois { font-size: clamp(7px, calc(var(--cell, 10px) * .85), 11px); }
+.an12.sens-v .an12-mois { font-size: clamp(8.5px, calc(var(--cell, 10px) * .45), 10.5px); }
+.an12-num { font-size: clamp(8px, calc(var(--cell, 10px) * .5), 9.5px); }
 .an12.sens-v .an12-num { text-align: right; padding-right: 3px; line-height: var(--cell, 10px); }
 
 .an12-entete {
@@ -1329,6 +1335,49 @@ a.btn { text-decoration: none; }
 @media (min-width: 560px) {
   .cal-panneau .cal-couches { flex-direction: column; gap: 0; }
   .cal-panneau .cal-couche-n { margin-left: auto; }
+}
+
+/* --- Tablette en portrait : les commandes au-dessus, la grille en grand --- */
+/*  Une colonne à droite ne laissait à la grille qu'un tiers de la largeur,
+    et la moitié basse de la colonne restait vide. En portrait la hauteur
+    abonde : les commandes passent en bandeau au-dessus, la grille prend
+    toute la largeur, et la fiche du jour s'ouvre dessous.                */
+@media (min-width: 600px) and (orientation: portrait) {
+  .cal-wrap { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .cal-panneau { display: contents; }
+  .cal-barre { order: 1; }
+  .cal-zone-couches { order: 2; }
+  .cal-filtre { order: 3; }
+  .cal-carte { order: 4; margin-bottom: 10px; }
+  .cal-detail { order: 5; }
+
+  /* Navigation d'année / de mois sur une ligne : ‹ sélecteurs › */
+  .cal-panneau .cal-nav { flex-wrap: nowrap; gap: 8px; margin-bottom: 10px; }
+  .cal-panneau .cal-nav > select,
+  .cal-panneau .cal-nav > div { order: 0; flex: 1 1 auto; }
+  .cal-panneau .cal-nav > .btn { flex: 0 0 auto; min-width: 48px; }
+  .cal-panneau select { padding: 9px 10px; font-size: 14.5px; }
+  .cal-panneau .seg button { padding: 9px 6px; font-size: 13.5px; }
+
+  /* Période : « par dates / par numéros » et les deux champs côte à côte */
+  .cal-barre:has(.cal-champs) {
+    display: flex; align-items: flex-end; gap: 12px; margin-bottom: 10px;
+  }
+  .cal-barre > .seg { flex: 0 0 auto; }
+  .cal-barre > .seg button { white-space: nowrap; padding: 9px 12px; }
+  .cal-barre > .cal-champs { flex: 1; margin: 0; }
+  .cal-paire input { padding: 8px 9px; font-size: 14px; }
+
+  /* Les couches en une rangée de cases, plus grandes sous le doigt */
+  .cal-panneau .cal-couches {
+    flex-direction: row; flex-wrap: wrap; gap: 2px 22px;
+    padding: 8px 14px;
+  }
+  .cal-panneau .cal-couche { font-size: 14.5px; padding: 6px 0; gap: 8px; }
+  .cal-panneau .cal-couche input { width: 19px; height: 19px; }
+  .cal-panneau .cal-couche .j { width: 13px; height: 13px; flex-basis: 13px; }
+  .cal-panneau .cal-couche-n { margin-left: 0; }
+  .cal-filtre .filtre-card { padding: 9px 14px; }
 }
 
 .seance-pastille {

@@ -637,6 +637,12 @@ if (versCal) {
     /getBoundingClientRect/.test(src) && !/\d+svh/.test(src), '');
   check('cal : la barre d’onglets est déduite de la place utile',
     /getElementById\('tabbar'\)/.test(src), '');
+  // Sur tablette la barre d'onglets devient un rail à gauche (haut = 0) :
+  // la prendre pour le bas de l'écran réduisait la grille à 4 px.
+  check('cal : un rail à gauche n’est pas pris pour le bas de l’écran',
+    /innerHeight\s*\/\s*2/.test(src), '');
+  check('cal : en tablette portrait, les commandes passent au-dessus',
+    /@media \(min-width: 600px\) and \(orientation: portrait\)[\s\S]{0,300}\.cal-panneau\s*\{\s*display:\s*contents/.test(css), '');
   check('cal : la grille se recalcule au redimensionnement',
     /addEventListener\('resize'/.test(src) && /orientationchange/.test(src), '');
 }

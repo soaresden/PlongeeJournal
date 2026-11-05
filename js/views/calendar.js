@@ -111,12 +111,12 @@ export function calendrier(dives, { buddies = [], seances = [] } = {}) {
   let fin = dernier;
   const compagnonsFiltre = new Set();
 
-  const echelles = el('div.cal-tete');   // Tout / Année / Mois / Période
-  const barre = el('div');               // commandes propres à l'échelle
-  const zoneCouches = el('div');         // plongées / fosse / piscine / apnée
-  const filtre = el('div');
+  const echelles = el('div.cal-tete');        // Tout / Année / Mois / Période
+  const barre = el('div.cal-barre');          // commandes propres à l'échelle
+  const zoneCouches = el('div.cal-zone-couches');   // plongées / fosse / piscine / apnée
+  const filtre = el('div.cal-filtre');
   const scene = el('div');
-  const detail = el('div');
+  const detail = el('div.cal-detail');
 
   /** Plongées après application du filtre par compagnon (et de la case « Plongées »). */
   const retenues = () => (!voitPlongees() ? []
@@ -266,10 +266,21 @@ export function calendrier(dives, { buddies = [], seances = [] } = {}) {
   let sens = 'h';
   let nbAnnees = 1;
 
+  /**
+   * Le bas de la place utile. Sur téléphone la barre d'onglets est en bas :
+   * c'est son bord haut. Sur tablette elle devient un rail à gauche, dont le
+   * bord haut vaut 0 — le prendre réduisait la grille à des carrés de 4 px.
+   * On ne la compte donc que si elle est bien dans la moitié basse.
+   */
+  function basUtile() {
+    const tabs = document.getElementById('tabbar');
+    const haut = tabs ? tabs.getBoundingClientRect().top : Infinity;
+    return haut > window.innerHeight / 2 ? Math.min(haut, window.innerHeight) : window.innerHeight;
+  }
+
   function placeDisponible() {
     const repere = scene.querySelector('.an12-entete') || scene.querySelector('.an12') || scene;
-    const tabs = document.getElementById('tabbar');
-    const bas = tabs ? tabs.getBoundingClientRect().top : window.innerHeight;
+    const bas = basUtile();
 
     return {
       largeur: scene.clientWidth,
@@ -309,8 +320,7 @@ export function calendrier(dives, { buddies = [], seances = [] } = {}) {
     const largeur = scene.clientWidth;
     if (largeur <= 0) return;
 
-    const tabs = document.getElementById('tabbar');
-    const bas = tabs ? tabs.getBoundingClientRect().top : window.innerHeight;
+    const bas = basUtile();
     // 34 px : la ligne de résumé sous la grille, plus la marge basse.
     const hauteur = bas - grille.getBoundingClientRect().top - 34;
 
