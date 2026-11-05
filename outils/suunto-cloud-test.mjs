@@ -226,6 +226,19 @@ function fauxSuunto({ ordre = 'recent', exigeBearer = true, version = 'v3' } = {
   check('déjà liée par la clé Suunto', A.trouverDansCarnet(act, [{ id: 'c', suuntoKeys: [A.CLE_SUUNTO(act.cle)] }])?.liee === true);
   check('une heure d’écart : pas la même', A.trouverDansCarnet(act, [{ ...saisie, heureImmersion: hhmm(new Date(debut + 3600e3)) }]) === null);
 
+  // Doublons : ancien export (clé sans préfixe), plongée à l'étranger.
+  const ancien = A.trouverDansCarnet(act, [{ id: 'st', suuntoKeys: [act.cle] }]);
+  check('doublon : clé de l’ancien export reconnue, puis liée', ancien?.entree.id === 'st' && !ancien.liee);
+  const decalage = -new Date(debut).getTimezoneOffset() + 180;               // lieu à +3 h de l'appareil
+  const surPlace = new Date(debut + decalage * 60e3);
+  const iso = surPlace.toISOString();
+  const etranger = { id: 'eg', date: iso.slice(0, 10), heureImmersion: iso.slice(11, 16), suuntoKeys: [] };
+  check('doublon : plongée à l’étranger reconnue à l’heure du lieu',
+    A.trouverDansCarnet({ ...act, decalageMin: decalage }, [etranger])?.entree.id === 'eg');
+  check('doublon : sans fuseau Suunto, l’heure du lieu ne suffit pas', A.trouverDansCarnet(act, [etranger]) === null);
+  check('fuseau lu dans la liste Suunto', C.normaliserActivite({ workoutKey: 'k', startTime: debut, timeOffsetInMinutes: 120 }).decalageMin === 120
+    && C.normaliserActivite({ workoutKey: 'k', startTime: debut }).decalageMin === null);
+
   const p = A.proposer(act, dec, [saisie]);
   check('plongée saisie à la main : complétée', p.action === 'completer' && p.entree.id === 'd1');
   check('ce qui est saisi n’est pas écrasé', !('profMax' in p.champs), JSON.stringify(p.champs));

@@ -305,8 +305,12 @@ export function normaliserActivite(w) {
   const ext = Array.isArray(w.extensions) ? w.extensions : [];
   const plongee = ext.find(e => /dive/i.test(e.type || '')) || {};
   const prof = Number(w.maxDepth ?? w.diveMaxDepth ?? plongee.maxDepth ?? NaN);
+  const decalage = w.timeOffsetInMinutes == null ? NaN : Number(w.timeOffsetInMinutes);
   return {
     cle,
+    // Fuseau du lieu de l'activité (minutes) : l'heure saisie au carnet
+    // est celle du lieu, pas forcément celle de l'appareil.
+    decalageMin: Number.isFinite(decalage) ? decalage : null,
     activite: w.activityId ?? w.activityType ?? null,
     debut: Number.isFinite(debut) ? debut : null,
     dureeS: Number.isFinite(duree) ? duree : null,

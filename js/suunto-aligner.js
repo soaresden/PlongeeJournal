@@ -61,6 +61,11 @@ function heureCleFit(cle) {
 export function trouverDansCarnet(act, connues) {
   const cle = CLE_SUUNTO(act.cle);
   for (const d of connues) if ((d.suuntoKeys || []).includes(cle)) return { entree: d, comment: 'déjà liée à Suunto', liee: true };
+  // Même clé, sans préfixe : plongées venues de l'ancien export Sports
+  // Tracker / Suunto, qui partage les identifiants d'activité.
+  if (act.cle) {
+    for (const d of connues) if ((d.suuntoKeys || []).includes(act.cle)) return { entree: d, comment: 'même activité (ancien export)' };
+  }
   if (!Number.isFinite(act.debut)) return null;
   const t = act.debut / 1000;
   for (const d of connues) {
@@ -71,10 +76,18 @@ export function trouverDansCarnet(act, connues) {
       if (f !== null && Math.abs(f - t) <= 300) return { entree: d, comment: 'importée depuis un .fit' };
     }
   }
+  // Date et heure saisies : lues à l'heure de l'appareil, et à l'heure du
+  // lieu de l'activité quand Suunto la donne (plongée à l'étranger).
+  const tLieu = Number.isFinite(act.decalageMin) ? t + act.decalageMin * 60 : null;
   for (const d of connues) {
-    if (!d.date || !d.heureImmersion) continue;
-    const td = new Date(`${d.date}T${d.heureImmersion}:00`).getTime() / 1000;
-    if (Math.abs(td - t) <= 600) return { entree: d, comment: 'même date et même heure' };
+    if (!d.date || !/^\d\d:\d\d/.test(d.heureImmersion || '')) continue;
+    const td = new Date(`${d.date}T${d.heureImmersion.slice(0, 5)}:00`).getTime() / 1000;
+    const [a, m, j] = d.date.split('-').map(Number);
+    const [h, mi] = d.heureImmersion.split(':').map(Number);
+    const murale = Date.UTC(a, m - 1, j, h, mi) / 1000;
+    if (Math.abs(td - t) <= 600 || (tLieu !== null && Math.abs(murale - tLieu) <= 600)) {
+      return { entree: d, comment: 'même date et même heure' };
+    }
   }
   return null;
 }
