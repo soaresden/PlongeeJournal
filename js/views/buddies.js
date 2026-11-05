@@ -111,8 +111,9 @@ export async function buddiesView() {
     return { title: 'Plongeurs', node: wrap };
   }
 
-  // Tout le monde mélangé, en cartes. Les catégories (OGN, Cap-Vert,
-  // Cherbourg…) sont celles que tu donnes : elles servent de filtre.
+  // Tout le monde mélangé, en cartes. Les tags (OGN, Cap-Vert,
+  // Cherbourg…) sont ceux que tu donnes, plusieurs par personne : ils
+  // servent de filtre. (Le champ « categories » du carnet les garde.)
   // Un centre de plongée, c'est « un moniteur du centre », nom ou pas.
   const CLE_TRI = 'plongee-journal:plongeurs-tri';
   const CLE_FILTRE = 'plongee-journal:plongeurs-filtre';
@@ -121,12 +122,13 @@ export async function buddiesView() {
   if (!['frequents', 'az'].includes(tri)) tri = 'frequents';
   let filtre = lireCle(CLE_FILTRE, '');
 
-  const recherche = el('input', { type: 'search', placeholder: 'Nom, catégorie, club…', autocapitalize: 'off' });
+  const recherche = el('input', { type: 'search', placeholder: 'Nom, tag, licence…', autocapitalize: 'off' });
   const seg = el('div.seg');
   const puces = el('div.cat-filtres');
+  const outilTag = el('div.tag-outil');
   const liste = el('div');
   wrap.append(el('div.annuaire-barre', {}, recherche, seg,
-    el('button.btn.primary.sm', { type: 'button', text: '＋ Ajouter', onclick: () => navigate('buddy/new') })), puces, liste);
+    el('button.btn.primary.sm', { type: 'button', text: '＋ Ajouter', onclick: () => navigate('buddy/new') })), puces, outilTag, liste);
 
   const n = b => st.buddyCount[b.id] || 0;
   const empreinte = b => (b.stamps || []).find(x => x.type !== 'signature') || (b.stamps || [])[0];
@@ -137,9 +139,7 @@ export async function buddiesView() {
   function carte(b) {
     const e = empreinte(b);
     const nb = n(b);
-    const sous = b.structure
-      ? (nomPlongeur(b) === `Moniteur · ${b.prenom}` ? 'nom pas noté' : '')
-      : [b.club, b.licence].filter(Boolean).join(' · ');
+    const sous = b.structure ? 'nom pas noté' : (b.licence ? `licence ${b.licence}` : '');
     return el(`button.pcarte${estMoniteur(b) ? '.mon' : ''}`, { type: 'button', onclick: () => apercuPlongeur(b.id, { onClose: recharger }) },
       el('span.personne-av', {}, e ? el('img', { src: e.dataUrl, alt: '', loading: 'lazy' }) : initiales(b)),
       el('span.pcarte-txt', {},
@@ -169,7 +169,7 @@ export async function buddiesView() {
       ['', 'Tous', buddies.length, null],
       ['mon', 'Moniteurs', buddies.filter(estMoniteur).length, null],
       ...categories.map(c => [`cat:${c}`, c, compte.get(c), couleurCategorie(c)]),
-      ['sans', 'Sans catégorie', buddies.filter(b => !cats(b).length).length, null],
+      ['sans', 'Sans tag', buddies.filter(b => !cats(b).length).length, null],
     ];
     puces.replaceChildren(...choix.filter(([id, , nb]) => nb || !id).map(([id, label, nb, couleur]) => {
       const p = el(`button.cat-filtre${id === filtre ? '.on' : ''}`, { type: 'button',
@@ -179,12 +179,35 @@ export async function buddiesView() {
       return p;
     }));
 
+    // Un tag choisi : on peut le renommer pour tout le monde.
+    outilTag.replaceChildren();
+    if (filtre.startsWith('cat:')) {
+      const tag = filtre.slice(4);
+      const champ = el('input', { type: 'text', value: tag, enterkeyhint: 'done' });
+      const renommer = async () => {
+        const nv = champ.value.trim();
+        if (!nv || nv === tag) return;
+        for (const b of buddies.filter(x => cats(x).includes(tag))) {
+          const frais = await store.getBuddy(b.id);
+          frais.categories = [...new Set((frais.categories || []).map(c => (c === tag ? nv : c)))];
+          await store.saveBuddy(frais);
+        }
+        filtre = `cat:${nv}`;
+        try { localStorage.setItem(CLE_FILTRE, filtre); } catch { /* privé */ }
+        toast(`« ${tag} » devient « ${nv} »`);
+        recharger();
+      };
+      champ.addEventListener('keydown', ev => { if (ev.key === 'Enter') { ev.preventDefault(); renommer(); } });
+      outilTag.append(el('span', { text: 'Renommer ce tag pour tout le monde :' }), champ,
+        el('button.btn.sm', { type: 'button', text: 'Renommer', onclick: renommer }));
+    }
+
     const q = recherche.value.trim().toLowerCase();
     let filtres = buddies.filter(b => {
       if (filtre === 'mon' && !estMoniteur(b)) return false;
       if (filtre === 'sans' && cats(b).length) return false;
       if (filtre.startsWith('cat:') && !cats(b).includes(filtre.slice(4))) return false;
-      return !q || `${nomPlongeur(b)} ${fullName(b)} ${b.club || ''} ${b.licence || ''} ${cats(b).join(' ')}`.toLowerCase().includes(q);
+      return !q || `${nomPlongeur(b)} ${fullName(b)} ${b.licence || ''} ${cats(b).join(' ')}`.toLowerCase().includes(q);
     });
     filtres = tri === 'az'
       ? filtres.sort((x, y) => nomPlongeur(x).localeCompare(nomPlongeur(y), 'fr'))
@@ -213,7 +236,6 @@ export async function apercuPlongeur(id, { onClose = null } = {}) {
   const diverId = await store.getActiveDiverId();
   const ensemble = diverId ? (await store.listDives(diverId)).filter(d => (d.buddyIds || []).includes(b.id)) : [];
   const tous = await store.listBuddies();
-  const clubs = [...new Set(tous.map(x => (x.club || '').trim()).filter(Boolean))].sort();
   const connues = [...new Set(tous.flatMap(x => x.categories || []).filter(Boolean))].sort((x, y) => x.localeCompare(y, 'fr'));
 
   const temoin = el('span.apercu-temoin');
@@ -247,12 +269,12 @@ export async function apercuPlongeur(id, { onClose = null } = {}) {
   note.value = b.note || '';
   note.addEventListener('input', () => maj({ note: note.value }));
 
-  // Catégories : celles déjà données à quelqu'un, à cocher ; ou une nouvelle.
+  // Tags : ceux déjà donnés à quelqu'un, à cocher ; ou un nouveau.
   const zoneCats = el('div.cat-edition');
   const rendreCats = () => {
     const mes = new Set(b.categories || []);
     const toutes = [...new Set([...connues, ...mes])].sort((x, y) => x.localeCompare(y, 'fr'));
-    const nouvelle = el('input', { type: 'text', placeholder: 'Nouvelle : OGN, Cap-Vert…', enterkeyhint: 'done' });
+    const nouvelle = el('input', { type: 'text', placeholder: 'Nouveau tag : OGN, Cap-Vert…', enterkeyhint: 'done' });
     const ajouter = () => {
       const v = nouvelle.value.trim();
       if (!v) return;
@@ -280,19 +302,17 @@ export async function apercuPlongeur(id, { onClose = null } = {}) {
       e ? el('img', { src: e.dataUrl, alt: '' }) : ((b.prenom?.[0] || '') + (b.nom?.[0] || '')).toUpperCase() || '?'),
     el('div', {},
       el('div.apercu-t1', { text: b.structure ? (b.prenom || 'Centre') : (nomPlongeur(b) || 'Sans nom') }),
-      el('div.apercu-t2', { text: [b.club, ensemble.length ? `${ensemble.length} plongée${ensemble.length > 1 ? 's' : ''} ensemble` : 'pas encore plongé ensemble'].filter(Boolean).join(' · ') })));
+      el('div.apercu-t2', { text: [ensemble.length ? `${ensemble.length} plongée${ensemble.length > 1 ? 's' : ''} ensemble` : 'pas encore plongé ensemble'].filter(Boolean).join(' · ') })));
 
   const rouvrir = () => apercuPlongeur(id, { onClose });
   const corps = el('div', {},
     el('div.apercu-grille', {},
       champ(b.structure ? 'Centre de plongée' : 'Prénom', saisie('prenom')),
       b.structure ? null : champ('Nom', saisie('nom')),
-      b.structure ? null : champ('Club / centre', saisie('club', { list: 'clubs-apercu' })),
       b.structure ? null : champ('Licence', saisie('licence')),
       el('div.apercu-champ.large', {}, coche('moniteur', 'Moniteur'), coche('structure', 'Un moniteur du centre, sans son nom')),
-      el('div.apercu-champ.large', {}, el('span', { text: 'Catégories' }), zoneCats),
+      el('div.apercu-champ.large', {}, el('span', { text: 'Tags' }), zoneCats),
       champ('Note', note, true)),
-    el('datalist', { id: 'clubs-apercu' }, clubs.map(c => el('option', { value: c }))),
     (b.stamps || []).length ? el('div.apercu-bloc', {}, el('div.apercu-lbl', { text: 'Tampons et signatures' }),
       el('div', { style: { display: 'flex', gap: '8px', flexWrap: 'wrap' } },
         ...b.stamps.map(x => el('img', { src: x.dataUrl, alt: '', style: { height: '64px', background: '#fff', borderRadius: '8px', padding: '4px' } })))) : null,
