@@ -61,7 +61,8 @@ jobs:
       - name: Projet Android (Capacitor)
         run: |
           npm install --no-audit --no-fund
-          npm run www
+          MN90_REQUIS=1 npm run www
+          test -f www/mn90/planner/index.html || { echo "::error::MN90 absent de www/mn90"; exit 1; }
           # Numéro de version embarqué, pour le bouton « Mise à jour ».
           cat www/version.json
           grep -q '"build": ${{ github.run_number }},' www/version.json || { echo "::error::www/version.json sans numéro de build"; exit 1; }

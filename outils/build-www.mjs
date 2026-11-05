@@ -39,7 +39,7 @@ if (MN90) {
 <a href="https://soaresden.github.io/MN90Mobile/3dassist/index.html">Ouvrir le simulateur</a> · <a href="../index.html">Retour</a></p></body></html>
 `);
   console.log(`mn90/ embarqué depuis ${path.relative(ROOT, MN90) || '.'}`);
-} else if (process.env.CI) {
+} else if (process.env.MN90_REQUIS) {
   console.error('MN90 introuvable (mn90src/ ou ../MN90Mobile) : l’onglet MN90 ne marcherait pas hors ligne.');
   process.exit(1);
 } else {
