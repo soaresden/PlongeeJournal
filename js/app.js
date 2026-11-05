@@ -133,7 +133,7 @@ async function annoncerConnexion() {
   const depot = `${cfg.owner}/${cfg.repo}`;
   const { store } = await import('./store.js');
   const id = await store.getActiveDiverId();
-  const n = id ? (await store.listDives(id)).length : 0;
+  const n = id ? (await store.stats(id)).count : 0;      // baptêmes non comptés
   const plongees = `${n} plongée${n > 1 ? 's' : ''}`;
   const m = modeActuel();
 

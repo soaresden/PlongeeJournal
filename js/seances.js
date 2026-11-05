@@ -47,12 +47,40 @@ export function lireProfil(samples = []) {
   if (debut !== null) immersions.push(dernier.t - debut);
   return {
     immersions: immersions.length,
+    sousLEauS: immersions.reduce((a, b) => a + b, 0),
     plusLongueS: Math.max(0, ...immersions),
     profMax: Math.max(0, ...samples.map(s => Number(s.d) || 0)),
     dureeS: dernier.t - samples[0].t,
     // La sonde de bouteille : une pression relevée pendant la plongée.
     sonde: samples.some(s => s.p != null || s.pression != null || s.bar != null),
   };
+}
+
+/**
+ * L'apnée, vraiment sous l'eau : le temps passé en immersion (sous 1,2 m),
+ * d'après la courbe de la montre, sur toutes les séances sans bouteille.
+ * Une immersion de plus de 8 minutes n'est pas une apnée : écartée.
+ * La montre relève la profondeur toutes les 10 s : les durées sont à 10 s près.
+ * @returns {{seances:number, immersions:number, sousLEauS:number,
+ *            record:{s:number, seance:object}|null, profond:{m:number, seance:object}|null}}
+ */
+export function statsApnee(seances = []) {
+  const out = { seances: 0, immersions: 0, sousLEauS: 0, record: null, profond: null };
+  for (const s of seances) {
+    if (s.type === 'fosse') continue;
+    const p = lireProfil(s.samples);
+    if (p && p.immersions && p.plusLongueS < 8 * 60) {
+      out.seances++;
+      out.immersions += p.immersions;
+      out.sousLEauS += p.sousLEauS;
+      if (!out.record || p.plusLongueS > out.record.s) out.record = { s: p.plusLongueS, seance: s };
+      if (!out.profond || p.profMax > out.profond.m) out.profond = { m: p.profMax, seance: s };
+    }
+    // Une statique chronométrée et saisie à la main compte aussi.
+    const saisie = Number(s.apneeMaxS) || 0;
+    if (saisie && (!out.record || saisie > out.record.s)) out.record = { s: saisie, seance: s };
+  }
+  return out;
 }
 
 /**

@@ -111,6 +111,17 @@ check('le lieu tranche : la fosse, même un mardi',
   check('courbe : la sonde de bouteille → plongée', S.suggererRangement({ genre: 'apnee', samples: avecSonde, date: '2026-10-17' }) === 'plongee');
   check('courbe : une plongée un jeudi soir sans GPS → fosse', S.suggererRangement({ genre: 'bouteille', samples: plongee, profMax: 12, date: '2026-10-15' }) === 'fosse');
 }
+// Apnée vraiment sous l'eau
+{
+  const pas = (segments) => { const out = []; let t = 0; for (const [d, n] of segments) for (let i = 0; i < n; i++) { out.push({ t, d }); t += 10; } return out; };
+  const a = { id: 'a', type: 'piscine', date: '2026-10-12', samples: pas([[0.3, 3], [1.8, 3], [0.3, 6], [1.8, 5], [0.3, 3]]) };   // 30 s + 50 s
+  const b = { id: 'b', type: 'snorkeling', date: '2023-06-05', samples: pas([[0.3, 2], [6, 4], [0.3, 2]]) };                     // 40 s à 6 m
+  const f = { id: 'f', type: 'fosse', samples: pas([[0.3, 2], [18, 200], [0.3, 2]]) };
+  const st = S.statsApnee([a, b, f, { id: 'c', type: 'apnee', apneeMaxS: 95 }]);
+  check('apnée : temps cumulé sous l’eau (fosse exclue)', st.sousLEauS === 120 && st.immersions === 3 && st.seances === 2, JSON.stringify(st));
+  check('apnée : record = la statique saisie (95 s)', st.record?.s === 95 && st.record.seance.id === 'c');
+  check('apnée : le plus profond', st.profond?.m === 6 && st.profond.seance.id === 'b');
+}
 // Baptêmes : -2, -1, hors du compte
 {
   const liste = [{ numero: -2, date: '2018-09-24' }, { numero: -1, date: '2019-08-28' }, { numero: 1, date: '2019-12-29' }, { numero: null, date: '2020-01-01' }];

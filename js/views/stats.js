@@ -9,7 +9,8 @@
 import { el, fmtDuration, fmtDate, fullName } from '../lib.js';
 import { store, TYPES_SEANCE, statsSeances, sortDives } from '../store.js';
 import { navigate } from '../router.js';
-import { apercuListe } from '../apercu.js';
+import { apercuListe, apercuSeance } from '../apercu.js';
+import { statsApnee } from '../seances.js';
 import { ambianceDe, AMBIANCES } from '../ambiance.js';
 import { niveauDeLaPlongee } from '../apercu.js';
 import { rangNiveau } from '../config.js';
@@ -129,6 +130,20 @@ export async function statsView() {
       el('div.n', { text: `${t.icone} ${ss.parType[t.id].total}` }),
       el('div.l', { text: `${t.pluriel} · ${ss.parType[t.id].annee} en ${ss.annee}` }))));
 
+  // Apnée : le temps vraiment passé sous l'eau, d'après les courbes.
+  const ap = statsApnee(seances);
+  const mmss = s => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`;
+  const hms = s => (s >= 3600 ? `${Math.floor(s / 3600)} h ${String(Math.floor((s % 3600) / 60)).padStart(2, '0')}` : `${Math.floor(s / 60)} min ${String(s % 60).padStart(2, '0')}`);
+  const apneeBloc = ap.seances || ap.record ? el('div', {},
+    el('div.tuiles', {},
+      tuile(hms(ap.sousLEauS), 'cumulés vraiment sous l’eau'),
+      ap.record ? tuile(mmss(ap.record.s), `record · ${fmtDate(ap.record.seance.date)}`, () => apercuSeance(ap.record.seance.id)) : null,
+      ap.profond ? tuile(`${ap.profond.m.toFixed(1)} m`, `plus profond · ${fmtDate(ap.profond.seance.date)}`, () => apercuSeance(ap.profond.seance.id)) : null,
+      tuile(ap.immersions, `immersions en ${ap.seances} séance${ap.seances > 1 ? 's' : ''}`)),
+    el('div.hint', { style: { marginBottom: 0 },
+      text: 'D’après la courbe de la montre, sous 1,2 m, relevée toutes les 10 s : à 10 s près. La statique en surface ne se mesure pas.' }))
+    : el('div.hint', { text: 'Aucune séance avec la courbe de la montre pour l’instant.' });
+
   const tb = el('div.tb', {},
     tuiles,
     carte('Par année', histo, { aide: 'touche une année', classe: '.plein' }),
@@ -137,6 +152,7 @@ export async function statsView() {
     tranches.length ? carte('Par profondeur', barres(tranches)) : null,
     top.length ? carte('Compagnons', barres(top)) : null,
     types.length ? carte('Par type', barres(types)) : null,
+    carte('Apnée', apneeBloc, { aide: 'vraiment sous l’eau', classe: '.plein' }),
     carte('Séances', seancesBloc, { aide: 'fosse, piscine, apnée…', classe: '.plein' }),
   );
 
