@@ -41,3 +41,6 @@ desktop.ini
 *.swp
 __pycache__/
 *.pyc
+
+# Copies locales du carnet (données perso)
+sauvegardes/
