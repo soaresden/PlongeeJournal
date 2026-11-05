@@ -253,3 +253,18 @@ button.tuile:hover { border-color: var(--accent); }
 .agenda-ev-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .agenda-ev-txt b { font-size: 14px; }
 .agenda-ev-txt span { font-size: 12px; color: var(--text-mute); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ---------- Carte d'une plongée : les chiffres en pictos, la courbe à leur droite ---------- */
+.dive-bas { display: flex; align-items: center; gap: 12px; margin-top: 7px; }
+.dive-card .dive-bas .dive-metrics { flex: 0 0 auto; flex-direction: column; gap: 3px; margin-top: 0; }
+.metr { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+.metr-ico { display: inline-flex; color: var(--amb1); }
+.ico-m { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2.1; stroke-linecap: round; stroke-linejoin: round; }
+.dive-courbe { flex: 1 1 auto; min-width: 60px; height: 58px; border-radius: 10px; overflow: hidden;
+  background: color-mix(in srgb, var(--amb1) 7%, transparent); }
+.dive-courbe svg { display: block; width: 100%; height: 100%; }
+.dc-surface { stroke: color-mix(in srgb, var(--amb1) 45%, transparent); stroke-width: 1; stroke-dasharray: 3 3; }
+.dc-eau { fill: color-mix(in srgb, var(--amb1) 24%, transparent); }
+.dc-eau.type { fill: color-mix(in srgb, var(--amb1) 10%, transparent); }
+.dc-ligne { fill: none; stroke: var(--amb1); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.dc-ligne.type { stroke-dasharray: 4 3; opacity: .7; }

@@ -13,6 +13,50 @@ import { METEO, ETAT_MER, COURANTS, VISIBILITE_ICONES } from '../config.js';
 import { ambianceDe, stylesAmbiance, vignetteLieu, etiquetteAmbiance } from '../ambiance.js';
 import { plongeesARanger } from '../seances.js';
 import { photoCarnetFiche } from './carnet-photo.js';
+
+// ------------------------------------------------------------
+//  Sur la carte d'une plongée : la courbe, et les chiffres en pictos
+// ------------------------------------------------------------
+
+const PICTO = {
+  prof: '<svg class="ico-m" viewBox="0 0 24 24"><path d="M12 3v18M7.5 7.5 12 3l4.5 4.5M7.5 16.5 12 21l4.5-4.5"/></svg>',
+  duree: '<svg class="ico-m" viewBox="0 0 24 24"><use href="#i-montre"/></svg>',
+  eau: '<svg class="ico-m" viewBox="0 0 24 24"><path d="M10 13.6V5a2 2 0 1 1 4 0v8.6a4 4 0 1 1-4 0z"/><path d="M12 10.5v5"/></svg>',
+};
+
+/** « ↕ 21,4 m » : un picto et sa valeur. */
+const chiffre = (picto, valeur, titre) => el('span.metr', { title: titre },
+  el('span.metr-ico', { html: PICTO[picto] }), el('b', { text: valeur }));
+
+/**
+ * La plongée en petit, à droite de la carte. Même échelle de profondeur
+ * pour toutes (la plus profonde du carnet) : une plongée à 12 m paraît
+ * moins profonde qu'une à 40 m. Sans courbe de la montre, un profil type
+ * en pointillés, d'après la profondeur et la durée.
+ */
+function miniCourbe(samples, { prof, duree, profRef }) {
+  const H = 56, W = 100, HAUT = 3;
+  const y = d => (HAUT + (Math.min(d, profRef) / profRef) * (H - HAUT - 3)).toFixed(1);
+  let pts, type = false;
+  if (samples?.length > 3) {
+    const pas = Math.max(1, Math.ceil(samples.length / 90));
+    const garde = samples.filter((_, i) => i % pas === 0 || i === samples.length - 1);
+    const maxT = garde[garde.length - 1].t || 1;
+    pts = garde.map(s => `${((s.t / maxT) * W).toFixed(1)},${y(s.d)}`);
+  } else if (prof > 0 && duree > 0) {
+    type = true;
+    const palier = prof > 8 ? 4 : 0;
+    pts = [[0, 0], [12, prof], [58, prof], [78, palier || prof * 0.4], [93, palier || prof * 0.2], [100, 0]]
+      .map(([x, d]) => `${x},${y(d)}`);
+  } else return null;
+  const ligne = pts.join(' ');
+  return el('div.dive-courbe', { title: type ? 'Profil type : pas de courbe de la montre' : 'Courbe de la montre',
+    html: `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">
+      <line x1="0" y1="${HAUT}" x2="${W}" y2="${HAUT}" class="dc-surface" vector-effect="non-scaling-stroke"/>
+      <polygon points="0,${HAUT} ${ligne} ${W},${HAUT}" class="dc-eau${type ? ' type' : ''}"/>
+      <polyline points="${ligne}" class="dc-ligne${type ? ' type' : ''}" vector-effect="non-scaling-stroke"/>
+    </svg>` });
+}
 import { oublierPhoto } from '../photos.js';
 
 /** Retrouve le pictogramme d'une condition à partir de sa valeur stockée. */
@@ -153,10 +197,8 @@ export async function divesView() {
   etats.plongees.ouvertes = ouvertesDe(etats.plongees.cle) || new Set([(dives[0]?.date || '').slice(0, 4)]);
   etats.fosses.ouvertes = ouvertesDe(etats.fosses.cle) || new Set([(fosses[0]?.date || '').slice(0, 4)]);
 
-  // Profondeur de référence de la jauge : la plus profonde du carnet (40 m mini).
+  // Profondeur de référence des courbes : la plus profonde du carnet (40 m mini).
   const profRef = Math.max(40, ...dives.map(d => Number(d.profMax) || 0));
-  const jauge = prof => prof ? el('div.jauge', { title: `${prof} m` },
-    el('span', { style: { width: `${Math.min(100, (prof / profRef) * 100)}%` } })) : null;
 
   /** Après une retouche dans l'aperçu : la liste se remet à jour. */
   async function rafraichir() {
@@ -176,12 +218,12 @@ export async function divesView() {
         el('div.dive-title', { text: d.lieuNom || d.site || 'Lieu non précisé' }),
         el('div.dive-sub', {}, fmtDate(d.date), d.heureImmersion ? ` · ${d.heureImmersion}` : ''),
         el('div.dive-tags', {}, etiquetteAmbiance(d), d.type ? typeBadge(d.type) : null),
-        el('div.dive-metrics', {},
-          el('span', {}, el('b', { text: prof ? `${prof} m` : '—' }), ' prof.'),
-          el('span', {}, el('b', { text: fmtDuration(d.dureeMin) }), ' fond'),
-          d.tempFond != null ? el('span', {}, el('b', { text: `${d.tempFond}°` }), ' eau') : null,
-        ),
-        jauge(prof),
+        el('div.dive-bas', {},
+          el('div.dive-metrics', {},
+            chiffre('prof', prof ? `${prof} m` : '—', 'Profondeur max'),
+            chiffre('duree', fmtDuration(d.dureeMin), 'Durée'),
+            d.tempFond != null ? chiffre('eau', `${d.tempFond}°`, 'Eau au fond') : null),
+          miniCourbe(d.samples || d.profil, { prof, duree: Number(d.dureeMin) || 0, profRef })),
         (d.buddyIds || []).length
           ? el('div.dive-sub.dive-buddies', { text: '👥 ' + d.buddyIds.map(buddyName).join(', ') })
           : null,
@@ -201,11 +243,12 @@ export async function divesView() {
       el('div.dive-main', {},
         el('div.dive-title', { text: s.lieu || 'Fosse' }),
         el('div.dive-sub', {}, fmtDate(s.date), s.heure ? ` · ${s.heure}` : ''),
-        el('div.dive-metrics', {},
-          el('span', {}, el('b', { text: prof ? `${prof} m` : '—' }), ' prof.'),
-          el('span', {}, el('b', { text: fmtDuration(s.dureeMin) }), ' durée'),
-          s.tempEau != null ? el('span', {}, el('b', { text: `${s.tempEau}°` }), ' eau') : null),
-        jauge(prof),
+        el('div.dive-bas', {},
+          el('div.dive-metrics', {},
+            chiffre('prof', prof ? `${prof} m` : '—', 'Profondeur max'),
+            chiffre('duree', fmtDuration(s.dureeMin), 'Durée'),
+            s.tempEau != null ? chiffre('eau', `${s.tempEau}°`, 'Eau') : null),
+          miniCourbe(s.samples, { prof, duree: Number(s.dureeMin) || 0, profRef })),
         (s.buddyIds || []).length
           ? el('div.dive-sub.dive-buddies', { text: '👥 ' + s.buddyIds.map(buddyName).join(', ') })
           : null,
