@@ -428,8 +428,8 @@ await tick(150);
 
 const ident = document.getElementById('topIdent');
 check('barre du haut : le nom du plongeur y est affiché',
-  !ident.hidden && ident.querySelector('.ident-nom')?.textContent === 'Denis Testeur',
-  ident.querySelector('.ident-nom')?.textContent);
+  !ident.hidden && ident.querySelector('.ident-long')?.textContent === 'Denis Testeur' && ident.querySelector('.ident-court')?.textContent === 'Denis',
+  ident.querySelector('.ident-long')?.textContent);
 check('barre du haut : le compte et la dernière date suivent',
   /^2 plongées · /.test(ident.querySelector('.ident-sous')?.textContent || ''),
   ident.querySelector('.ident-sous')?.textContent);
