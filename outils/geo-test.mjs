@@ -1,7 +1,8 @@
 // Vérifie la décision « eau douce / eau salée » à partir de ce qui est
 // réellement cartographié au point choisi, et de l'altitude.
 import path from 'node:path';
-const ROOT = new URL('..', import.meta.url).pathname;
+import { fileURLToPath as __f2p, pathToFileURL as __p2u } from 'node:url';
+const ROOT = __f2p(new URL('..', import.meta.url));
 
 const mem = new Map();
 globalThis.localStorage = {
@@ -10,7 +11,7 @@ globalThis.localStorage = {
   removeItem: k => mem.delete(k),
 };
 
-const { conclure, EN_ALTITUDE } = await import(path.join(ROOT, 'js/geo.js'));
+const { conclure, EN_ALTITUDE } = await import(__p2u(path.join(ROOT, 'js/geo.js')).href);
 
 const results = [];
 const check = (name, cond, extra = '') =>

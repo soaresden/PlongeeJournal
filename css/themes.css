@@ -1,0 +1,162 @@
+/* ============================================================
+   Thèmes — uniquement des variables, aucune règle de mise en page.
+   Le thème actif est posé sur <html data-theme="…"> par js/theme.js.
+
+   Variables :
+     --bg / --bg-2 ........ fond de page / fond des champs
+     --surface(-2) ........ cartes, puces
+     --line ............... bordures
+     --text / -dim / -mute  trois niveaux de texte
+     --accent(-2) ......... couleur d'action (dégradé des boutons)
+     --accent-rgb ......... la même en « r,g,b » pour les transparences
+     --on-accent .......... texte posé sur l'accent
+     --bar ................ barres du haut / de navigation (translucides)
+     --bg-image ........... dégradé décoratif du fond
+     --overlay ............ voile derrière les fenêtres
+     --cal-* .............. cases vides du calendrier
+   ============================================================ */
+
+:root,
+:root[data-theme="plongee"] {
+  --bg: #06131f;  --bg-2: #0c1e30;
+  --surface: #102a41;  --surface-2: #16374f;  --deep: #0b2437;
+  --line: #1f4763;
+  --text: #e8f2f8;  --text-dim: #90aec4;  --text-mute: #5f829c;
+  --accent: #24c6dc;  --accent-2: #0e8fa8;  --accent-rgb: 36,198,220;
+  --on-accent: #04202a;
+  --warn: #ffb454;  --danger: #ff6b6b;  --ok: #4ade80;  --or: #e8b84b;
+  --bar: rgba(6,19,31,.86);
+  --bg-image: radial-gradient(120% 60% at 50% 0%, #0d2438 0%, #06131f 60%);
+  --overlay: rgba(2,10,18,.72);
+  --cal-0: #12293c;  --cal-we: #1a3a52;  --cal-hors: #0b1a27;  --cal-hors-we: #0e2131;
+  --shadow: 0 8px 28px rgba(0,0,0,.35);
+}
+
+:root[data-theme="abysse"] {
+  --bg: #020409;  --bg-2: #070b14;
+  --surface: #0a0f1c;  --surface-2: #111a2c;  --deep: #060a14;
+  --line: #1a2440;
+  --text: #dfe9ff;  --text-dim: #8a9cc4;  --text-mute: #55648a;
+  --accent: #7af0ff;  --accent-2: #8b7bff;  --accent-rgb: 122,240,255;
+  --on-accent: #050716;
+  --warn: #ffc46b;  --danger: #ff6b8a;  --ok: #62f5b0;  --or: #f0c75e;
+  --bar: rgba(2,4,9,.86);
+  --bg-image:
+    radial-gradient(40% 30% at 15% 85%, rgba(139,123,255,.10) 0%, transparent 70%),
+    radial-gradient(35% 25% at 85% 20%, rgba(122,240,255,.08) 0%, transparent 70%),
+    linear-gradient(#030611, #020409);
+  --overlay: rgba(0,0,6,.78);
+  --cal-0: #0d1424;  --cal-we: #141e36;  --cal-hors: #05080f;  --cal-hors-we: #080c18;
+  --shadow: 0 8px 30px rgba(0,0,0,.6);
+}
+
+:root[data-theme="clair"] {
+  --bg: #f4f7fa;  --bg-2: #ffffff;
+  --surface: #ffffff;  --surface-2: #eef3f7;  --deep: #e3ecf3;
+  --line: #d8e2ea;
+  --text: #13222f;  --text-dim: #4b6273;  --text-mute: #7d91a1;
+  --accent: #0a7bc2;  --accent-2: #075f99;  --accent-rgb: 10,123,194;
+  --on-accent: #ffffff;
+  --warn: #c77800;  --danger: #d33a3a;  --ok: #17924a;  --or: #b8860b;
+  --bar: rgba(255,255,255,.88);
+  --bg-image: linear-gradient(#f7fafc, #eef3f7);
+  --overlay: rgba(20,34,47,.42);
+  --cal-0: #e6edf3;  --cal-we: #d5e1ea;  --cal-hors: #f3f6f9;  --cal-hors-we: #ebf0f4;
+  --shadow: 0 6px 22px rgba(19,34,47,.10);
+}
+
+:root[data-theme="cousteau"] {
+  /* Le pont de la Calypso : bonnet rouge, coque marine, bois et toile. */
+  --bg: #f3ecdc;  --bg-2: #fffaf0;
+  --surface: #fffaf0;  --surface-2: #efe4cc;  --deep: #e6d8b9;
+  --line: #d9c9a6;
+  --text: #13243d;  --text-dim: #44546d;  --text-mute: #7b7f86;
+  --accent: #c8102e;  --accent-2: #8f0b20;  --accent-rgb: 200,16,46;
+  --on-accent: #fffaf0;
+  --warn: #c98a00;  --danger: #b0122b;  --ok: #2b7a4b;  --or: #d4a017;
+  --bar: rgba(19,36,61,.94);
+  --bg-image:
+    repeating-linear-gradient(0deg, rgba(19,36,61,.025) 0 1px, transparent 1px 28px),
+    linear-gradient(#f6f0e2, #efe5cf);
+  --overlay: rgba(19,36,61,.5);
+  --cal-0: #e8dcc2;  --cal-we: #dccaa5;  --cal-hors: #f4ecdc;  --cal-hors-we: #eee3cc;
+  --shadow: 0 6px 20px rgba(19,36,61,.14);
+  --bar-text: #fffaf0;  --bar-mute: #b9c2d0;
+}
+
+:root[data-theme="plage"] {
+  --bg: #fbf3e6;  --bg-2: #fffdf8;
+  --surface: #fffdf8;  --surface-2: #f6e8d2;  --deep: #f0dcbc;
+  --line: #ecd9bb;
+  --text: #3a2a1c;  --text-dim: #73604c;  --text-mute: #a38f78;
+  --accent: #f26b3a;  --accent-2: #e04b5a;  --accent-rgb: 242,107,58;
+  --on-accent: #ffffff;
+  --warn: #d48a00;  --danger: #cf3341;  --ok: #1e9a8a;  --or: #d9a21b;
+  --bar: rgba(255,250,241,.9);
+  --bg-image: linear-gradient(180deg, #fde9d3 0%, #fbf3e6 35%, #f7ead4 100%);
+  --overlay: rgba(58,42,28,.4);
+  --cal-0: #f1e2c9;  --cal-we: #e8d2ae;  --cal-hors: #faf2e5;  --cal-hors-we: #f5ead8;
+  --shadow: 0 6px 22px rgba(160,100,40,.14);
+}
+
+:root[data-theme="lagon"] {
+  --bg: #e7f8f6;  --bg-2: #ffffff;
+  --surface: #ffffff;  --surface-2: #d9f2ef;  --deep: #c4ebe6;
+  --line: #bfe5e0;
+  --text: #0b3a3a;  --text-dim: #3e6b69;  --text-mute: #6f9794;
+  --accent: #0aa79c;  --accent-2: #0a7fa8;  --accent-rgb: 10,167,156;
+  --on-accent: #ffffff;
+  --warn: #d08a00;  --danger: #d6455d;  --ok: #12936b;  --or: #c9a227;
+  --bar: rgba(240,252,250,.88);
+  --bg-image: linear-gradient(180deg, #c9f1ec 0%, #e7f8f6 40%, #f6fbf7 100%);
+  --overlay: rgba(11,58,58,.38);
+  --cal-0: #d3efeb;  --cal-we: #bde5df;  --cal-hors: #eefaf8;  --cal-hors-we: #e2f5f2;
+  --shadow: 0 6px 22px rgba(10,120,110,.12);
+}
+
+:root[data-theme="corail"] {
+  --bg: #1a0f1d;  --bg-2: #221426;
+  --surface: #2a1830;  --surface-2: #36203c;  --deep: #201224;
+  --line: #4a2c50;
+  --text: #fbe9ee;  --text-dim: #d1a9b8;  --text-mute: #98708a;
+  --accent: #ff6f61;  --accent-2: #e8437c;  --accent-rgb: 255,111,97;
+  --on-accent: #2a0710;
+  --warn: #ffc15e;  --danger: #ff5a7a;  --ok: #5fe0b4;  --or: #f4c45a;
+  --bar: rgba(26,15,29,.86);
+  --bg-image: radial-gradient(120% 60% at 50% 0%, #3a1a3a 0%, #1a0f1d 62%);
+  --overlay: rgba(10,4,12,.72);
+  --cal-0: #2e1b33;  --cal-we: #3d2443;  --cal-hors: #1d1121;  --cal-hors-we: #241529;
+  --shadow: 0 8px 28px rgba(0,0,0,.45);
+}
+
+:root[data-theme="epave"] {
+  --bg: #0f1512;  --bg-2: #141c18;
+  --surface: #1b2420;  --surface-2: #24302a;  --deep: #151d19;
+  --line: #34433a;
+  --text: #e9e4d6;  --text-dim: #aaa58f;  --text-mute: #77786a;
+  --accent: #d99a3d;  --accent-2: #a8642a;  --accent-rgb: 217,154,61;
+  --on-accent: #1a1005;
+  --warn: #e8b84b;  --danger: #e0614a;  --ok: #7fc28a;  --or: #e2b450;
+  --bar: rgba(15,21,18,.88);
+  --bg-image: radial-gradient(120% 60% at 50% 0%, #1d2a22 0%, #0f1512 62%);
+  --overlay: rgba(5,8,6,.74);
+  --cal-0: #1f2a24;  --cal-we: #2a3830;  --cal-hors: #121915;  --cal-hors-we: #161f1a;
+  --shadow: 0 8px 28px rgba(0,0,0,.45);
+}
+
+:root[data-theme="kelp"] {
+  --bg: #071612;  --bg-2: #0b1f19;
+  --surface: #0f2620;  --surface-2: #163329;  --deep: #0c211b;
+  --line: #22473a;
+  --text: #e3f5ec;  --text-dim: #94c2ab;  --text-mute: #5f8c77;
+  --accent: #5fd39a;  --accent-2: #2a9d74;  --accent-rgb: 95,211,154;
+  --on-accent: #032015;
+  --warn: #f0c35a;  --danger: #ff7a6b;  --ok: #8ae67a;  --or: #e2c050;
+  --bar: rgba(7,22,18,.86);
+  --bg-image:
+    radial-gradient(60% 40% at 50% -5%, rgba(180,255,210,.10) 0%, transparent 70%),
+    linear-gradient(#0a1d17, #071612);
+  --overlay: rgba(2,8,6,.72);
+  --cal-0: #12302a;  --cal-we: #1a3f35;  --cal-hors: #0a1b16;  --cal-hors-we: #0d221c;
+  --shadow: 0 8px 28px rgba(0,0,0,.4);
+}

@@ -1,155 +1,240 @@
 // ============================================================
 //  Réglages
 //
-//  Il n'y a plus rien à configurer pour que le carnet marche :
-//  cet écran sert à comprendre où en sont les données, et à
-//  exporter ce qui attend d'être rapatrié sur le PC.
+//  Trois choses à régler, toutes propres à CET appareil :
+//   - où vit le carnet (dépôt GitHub privé, ou appareil seul) ;
+//   - l'apparence (thème) ;
+//   - une sauvegarde manuelle, au cas où.
 // ============================================================
 
-import { el, toast, confirmBox, fmtDate } from '../lib.js';
+import { el, toast, confirmBox } from '../lib.js';
 import { store } from '../store.js';
 import { navigate } from '../router.js';
-import { modeActuel, enAttenteDExport, oublierAttente, rafraichir } from '../store-fichier.js';
-import { telechargerLot } from '../export-plongee.js';
-import { settings } from '../settings.js';
+import {
+  configGitHub, enregistrerConfigGitHub, oublierConfigGitHub, estConfigure,
+  testerConnexion, lienCreationJeton,
+} from '../github.js';
+import { modeActuel, rebrancher, synchroniser, derniereSynchro, erreurGitHub } from '../store-github.js';
+import { THEMES, themeChoisi, choisirTheme } from '../theme.js';
 
-const EXPLICATIONS = {
-  serveur: {
-    titre: 'Relié au carnet du PC',
-    icone: '✓',
-    classe: 'ok',
-    texte: 'Tout ce que tu saisis est écrit directement dans '
-         + 'donnees/carnet.json. Rien à faire de plus.',
-  },
-  lecture: {
-    titre: 'Lecture seule',
-    icone: '👁',
-    classe: 'lecture',
-    texte: 'Le carnet est consultable, mais le PC n’est pas joignable. '
-         + 'Une plongée saisie maintenant devra être exportée : un fichier '
-         + 'à déposer dans le dossier d’import.',
-  },
-  'hors-ligne': {
-    titre: 'Hors ligne',
-    icone: '▤',
-    classe: 'local',
-    texte: 'Ni le PC ni le fichier ne répondent. Tu travailles sur la copie '
-         + 'gardée dans ce navigateur : rien n’est perdu, mais rien n’est '
-         + 'partagé tant que tu n’as pas exporté.',
-  },
+const PAGES = 'https://soaresden.github.io/PlongeeJournal/';
+const APK = 'https://github.com/soaresden/PlongeeJournal/releases/latest/download/PlongeeJournal.apk';
+
+function quand(iso) {
+  if (!iso) return 'jamais';
+  const d = new Date(iso);
+  const min = Math.round((Date.now() - d) / 60000);
+  if (min < 1) return 'à l’instant';
+  if (min < 60) return `il y a ${min} min`;
+  return d.toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' });
+}
+
+const ETAT = {
+  github:              { classe: 'ok',      icone: 'i-cloud',   titre: 'Connecté à GitHub' },
+  'github-hors-ligne': { classe: 'offline', icone: 'i-offline', titre: 'GitHub injoignable — hors ligne' },
+  'github-erreur':     { classe: 'error',   icone: 'i-alert',   titre: 'Problème avec GitHub' },
+  local:               { classe: 'local',   icone: 'i-device',  titre: 'Mode local' },
 };
 
+const ico = id => el('span.ico-wrap', { html: `<svg class="ico"><use href="#${id}"/></svg>` });
+
 export async function reglagesView() {
-  const wrap = el('div');
+  const wrap = el('div.reglages');
+  const cfg = configGitHub();
   const mode = modeActuel();
-  const info = EXPLICATIONS[mode] || EXPLICATIONS['hors-ligne'];
-  const dossier = settings().dossierImport;
+  const info = ETAT[mode] || ETAT.local;
 
-  // ---------- État courant ----------
-  wrap.append(el(`div.card.etat-${info.classe}`, {},
-    el('div', { style: { display: 'flex', alignItems: 'center', gap: '12px' } },
-      el('span', { style: { fontSize: '26px' }, text: info.icone }),
-      el('div', {},
-        el('div', { style: { fontWeight: '650', fontSize: '16px' }, text: info.titre }),
-        el('div.hint', { style: { marginTop: '2px' }, text: info.texte }))),
-    el('div.btn-row', { style: { marginTop: '12px' } },
-      el('button.btn.sm.ghost', { text: '↻ Chercher le PC', onclick: async (e) => {
-        e.target.disabled = true;
-        const r = await rafraichir().catch(() => null);
-        toast(r?.mode === 'serveur'
-          ? `Carnet relié — ${r.plongees} plongée(s)`
-          : 'PC toujours pas joignable', r?.mode !== 'serveur');
-        navigate('reglages', true);
-      } }))));
+  // ---------- État ----------
+  const texteEtat = {
+    github: `Tout ce que tu saisis part en direct dans ${cfg.owner}/${cfg.repo} (${cfg.path}). `
+          + `Dernière synchro : ${quand(derniereSynchro())}.`,
+    'github-hors-ligne': 'Tu travailles sur la copie de l’appareil. Rien n’est perdu : '
+          + 'les modifications partiront toutes seules au retour du réseau.',
+    'github-erreur': erreurGitHub() || 'GitHub a refusé la dernière opération.',
+    local: 'Le carnet reste sur cet appareil uniquement. Branche ton dépôt GitHub privé '
+          + 'ci-dessous pour le retrouver sur le téléphone, la tablette et le PC.',
+  }[mode];
 
-  // ---------- Saisies en attente d'export ----------
-  const attente = enAttenteDExport();
-  if (attente.length) {
-    const diverId = await store.getActiveDiverId();
-    const toutes = diverId ? await store.listDives(diverId) : [];
-    const concernees = toutes.filter(d => attente.includes(d.id));
-
-    wrap.append(el('div.card.attente', {},
-      el('div', { style: { fontWeight: '650', marginBottom: '4px' },
-        text: `${concernees.length} saisie(s) à rapatrier` }),
-      el('div.hint', {
-        text: 'Ces plongées n’existent que sur cet appareil. Exporte-les, '
-            + `puis dépose le fichier obtenu dans le dossier ${dossier}. `
-            + 'Au prochain lancement du PC, elles rejoindront le carnet.' }),
-
-      el('div', { style: { margin: '10px 0' } },
-        ...concernees.map(d => el('div.jour-ligne', {},
-          el('div.dive-num', { style: { width: '34px', height: '34px', flex: '0 0 34px',
-            fontSize: '12px' }, text: d.numero ?? '—' }),
-          el('div', { style: { flex: 1, minWidth: 0 } },
-            el('div', { style: { fontWeight: '600', fontSize: '14px' },
-              text: d.lieuNom || 'Lieu non précisé' }),
-            el('div', { style: { color: 'var(--text-dim)', fontSize: '12.5px' },
-              text: fmtDate(d.date) }))))),
-
-      el('div.btn-row', {},
-        el('button.btn.primary', { text: '⬇ Exporter', onclick: async () => {
-          const carnet = await store.raw();
-          const nom = telechargerLot(concernees, carnet);
-          toast(`${nom} téléchargé`);
-        } }),
-        el('button.btn.sm.ghost', { text: 'Déjà importé', onclick: async () => {
-          if (await confirmBox(
-              'Marquer ces saisies comme rapatriées ? Elles ne seront plus '
-            + 'proposées à l’export. À ne faire qu’après avoir vérifié '
-            + 'qu’elles sont bien dans le carnet du PC.', 'Marquer', false)) {
-            oublierAttente();
-            toast('File d’export vidée');
+  wrap.append(el(`div.card.etat-carte.${info.classe}`, {},
+    el('div.etat-ligne', {},
+      ico(info.icone),
+      el('div', { style: { flex: 1, minWidth: 0 } },
+        el('div.etat-titre', { text: info.titre }),
+        el('div.hint', { style: { marginTop: '2px' }, text: texteEtat }))),
+    mode !== 'local'
+      ? el('div.btn-row', { style: { marginTop: '12px' } },
+          el('button.btn.sm', { type: 'button', text: '↻ Synchroniser maintenant', onclick: async e => {
+            e.currentTarget.disabled = true;
+            const change = await synchroniser().catch(() => false);
+            toast(modeActuel() === 'github'
+              ? (change ? 'Carnet mis à jour depuis GitHub' : 'Déjà à jour')
+              : (erreurGitHub() || 'GitHub injoignable'), modeActuel() !== 'github');
             navigate('reglages', true);
-          }
-        } }))));
-  }
+          } }),
+          el('a.btn.sm.ghost', { href: `https://github.com/${cfg.owner}/${cfg.repo}/commits/${cfg.branch}`,
+            target: '_blank', rel: 'noopener', text: 'Historique sur GitHub ↗' }))
+      : null));
 
-  // ---------- Comment ça marche ----------
-  wrap.append(el('div.card', {},
-    el('div.lbl', { text: 'Comment le carnet circule' }),
-    el('ol.wiz-liste', {},
-      el('li', {}, 'Sur le PC : double-clic sur ', el('code', { text: 'lancer.bat' }),
-        '. Il importe le dossier ', el('code', { text: dossier }),
-        ', puis ouvre le carnet.'),
-      el('li', {}, 'Sur le téléphone, même Wi-Fi : ouvre l’adresse ',
-        el('code', { text: 'http://…:8080' }),
-        ' affichée par la fenêtre noire. Tu écris directement dans le carnet.'),
-      el('li', {}, 'Sur le téléphone, loin du PC : tu consultes tout, et une saisie '
-        + 'produit un fichier ', el('code', { text: 'plongeeNoXXXX-…json' }),
-        ' à déposer dans ', el('code', { text: dossier }), '.'),
-    ),
-    el('div.hint', { style: { marginTop: '10px' },
-      text: 'Le carnet est un seul fichier JSON, lisible et copiable. '
-          + 'Le serveur en garde les 40 dernières versions dans '
-          + 'donnees/sauvegardes/ avant chaque écriture.' })));
+  // ---------- Dépôt GitHub ----------
+  const champ = (label, input, aide) => el('div.field', {},
+    el('label.lbl', { text: label }), input, aide ? el('div.hint', { text: aide }) : null);
+
+  const owner  = el('input', { type: 'text', value: cfg.owner, placeholder: 'soaresden',
+    autocapitalize: 'off', autocomplete: 'off', spellcheck: 'false' });
+  const repo   = el('input', { type: 'text', value: cfg.repo, placeholder: 'PlongeeJournal-data',
+    autocapitalize: 'off', autocomplete: 'off', spellcheck: 'false' });
+  const branch = el('input', { type: 'text', value: cfg.branch, autocapitalize: 'off', spellcheck: 'false' });
+  const path   = el('input', { type: 'text', value: cfg.path, autocapitalize: 'off', spellcheck: 'false' });
+  const token  = el('input', { type: 'password', value: cfg.token,
+    placeholder: 'github_pat_…', autocapitalize: 'off', autocomplete: 'off', spellcheck: 'false' });
+  const voir = el('button.btn.sm.ghost', { type: 'button', text: '👁', 'aria-label': 'Afficher le jeton',
+    onclick: () => { token.type = token.type === 'password' ? 'text' : 'password'; } });
+
+  const lire = () => ({ owner: owner.value, repo: repo.value, branch: branch.value,
+    path: path.value, token: token.value });
+
+  const resultat = el('div.hint', { style: { minHeight: '1.4em' } });
+
+  const avance = el('details.avance', {},
+    el('summary', { text: 'Options avancées' }),
+    el('div.row', {}, champ('Branche', branch), champ('Fichier', path)));
+
+  wrap.append(el('div.section', {},
+    el('h2', { text: 'Dépôt GitHub privé' }),
+    el('div.card', {},
+      el('div.row', {},
+        champ('Compte', owner),
+        champ('Dépôt', repo)),
+      avance,
+      champ('Jeton d’accès',
+        el('div.inline', {}, token, voir),
+        'Gardé uniquement sur cet appareil. Jamais dans le carnet ni dans le code.'),
+      resultat,
+      el('div.btn-row', {},
+        el('button.btn.primary', { type: 'button', text: estConfigure(cfg) ? 'Enregistrer' : 'Connecter', onclick: async e => {
+          const b = e.currentTarget;
+          const c = lire();
+          if (!c.owner || !c.repo || !c.token) { resultat.textContent = 'Compte, dépôt et jeton sont nécessaires.'; return; }
+          b.disabled = true;
+          resultat.textContent = 'Vérification auprès de GitHub…';
+          try {
+            const r = await testerConnexion({ ...configGitHub(), ...c });
+            if (!r.prive && !(await confirmBox(
+              `${r.nom} est PUBLIC : n’importe qui pourrait lire ton carnet. Continuer quand même ?`,
+              'Continuer', true))) { b.disabled = false; resultat.textContent = ''; return; }
+            enregistrerConfigGitHub(c);
+            const st = await rebrancher();
+            toast(st.mode === 'github' ? `Connecté — ${st.plongees} plongée(s) sur GitHub` : (erreurGitHub() || 'Enregistré'),
+              st.mode !== 'github');
+            navigate('reglages', true);
+          } catch (err) {
+            resultat.textContent = '⚠ ' + err.message;
+            b.disabled = false;
+          }
+        } }),
+        el('button.btn.ghost', { type: 'button', text: 'Tester', onclick: async () => {
+          resultat.textContent = 'Test…';
+          try {
+            const r = await testerConnexion({ ...configGitHub(), ...lire() });
+            resultat.textContent = `✓ ${r.nom} ${r.prive ? '(privé)' : '(⚠ public)'} — lecture et écriture OK`;
+          } catch (err) { resultat.textContent = '⚠ ' + err.message; }
+        } })),
+      estConfigure(cfg)
+        ? el('button.btn.sm.danger', { type: 'button', style: { marginTop: '12px' },
+            text: 'Débrancher (passer en mode local)', onclick: async () => {
+              if (!(await confirmBox('Débrancher GitHub sur cet appareil ? Le carnet reste sur GitHub '
+                + 'et une copie reste ici ; seul le jeton est oublié.', 'Débrancher', false))) return;
+              oublierConfigGitHub();
+              await rebrancher();
+              toast('Mode local');
+              navigate('reglages', true);
+            } })
+        : null),
+
+    el('details.card.aide', { open: !estConfigure(cfg) },
+      el('summary', { text: 'Comment obtenir le jeton (2 minutes, une seule fois)' }),
+      el('ol.wiz-liste', {},
+        el('li', {}, 'Ouvre ', el('a', { href: lienCreationJeton(), target: '_blank', rel: 'noopener',
+          text: 'la page de création de jeton GitHub ↗' }), '.'),
+        el('li', {}, 'Repository access : ', el('b', { text: 'Only select repositories' }), ' → ',
+          el('code', { text: cfg.repo || 'PlongeeJournal-data' }), '.'),
+        el('li', {}, 'Permissions → Repository → ', el('b', { text: 'Contents : Read and write' }),
+          '. Rien d’autre.'),
+        el('li', {}, 'Generate token, copie la valeur ', el('code', { text: 'github_pat_…' }),
+          ' et colle-la ci-dessus. Fais pareil sur chaque appareil (ou crée un jeton par appareil).')),
+      el('div.hint', { text: 'Ce jeton ne donne accès qu’au dépôt du carnet : ni à ton mot de passe, '
+        + 'ni à tes autres dépôts. Tu peux le révoquer à tout moment depuis GitHub.' }))));
+
+  // ---------- Apparence ----------
+  const actuel = themeChoisi();
+  const grille = el('div.themes');
+  THEMES.forEach(t => {
+    const [fond, surface, accent] = t.apercu;
+    const b = el('button.theme-choix', { type: 'button', 'aria-pressed': String(t.id === actuel),
+      onclick: () => {
+        choisirTheme(t.id);
+        grille.querySelectorAll('.theme-choix').forEach(x => x.setAttribute('aria-pressed', 'false'));
+        b.setAttribute('aria-pressed', 'true');
+      } },
+      el('span.theme-apercu', { style: { background: fond } },
+        el('span.theme-carte', { style: { background: surface } },
+          el('span.theme-trait', { style: { background: accent } }),
+          el('span.theme-trait.court', { style: { background: accent, opacity: '.45' } })),
+        el('span.theme-rond', { style: { background: accent } })),
+      el('span.theme-nom', { text: t.nom }),
+      el('span.theme-sous', { text: t.sous }));
+    grille.append(b);
+  });
+  wrap.append(el('div.section', {}, el('h2', { text: 'Apparence' }), grille));
 
   // ---------- Sauvegarde manuelle ----------
-  wrap.append(el('div.card', {},
-    el('div.lbl', { text: 'Sauvegarde' }),
-    el('div.btn-row', {},
-      el('button.btn.sm.ghost', { text: '⬇ Exporter tout le carnet', onclick: async () => {
-        const json = await store.exportAll();
-        const blob = new Blob([json], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = el('a', { href: url, download:
-          `carnet-${new Date().toISOString().slice(0, 10)}.json` });
-        document.body.append(a); a.click(); a.remove();
-        setTimeout(() => URL.revokeObjectURL(url), 30000);
-      } }),
-      el('label.btn.sm.ghost', { style: { cursor: 'pointer' } }, '⬆ Importer un fichier',
-        el('input', { type: 'file', accept: '.json', style: { display: 'none' },
-          onchange: async (e) => {
-            const f = e.target.files?.[0];
-            if (!f) return;
-            try {
-              await store.importAll(await f.text(), { merge: true });
-              toast('Import terminé');
-              navigate('dives', true);
-            } catch (err) {
-              toast(err.message, true);
-            }
-          } })))));
+  wrap.append(el('div.section', {},
+    el('h2', { text: 'Sauvegarde' }),
+    el('div.card', {},
+      el('div.hint', { style: { marginTop: 0, marginBottom: '10px' },
+        text: estConfigure(cfg)
+          ? 'GitHub garde déjà chaque version du carnet (un commit par modification). '
+          + 'Un export reste utile comme copie hors de GitHub.'
+          : 'En mode local, exporte régulièrement : si l’appareil est perdu, le carnet l’est aussi.' }),
+      el('div.btn-row', { style: { marginTop: 0 } },
+        el('button.btn.sm', { type: 'button', text: '⬇ Exporter le carnet', onclick: async () => {
+          const json = await store.exportAll();
+          await telecharger(json, `carnet-${new Date().toISOString().slice(0, 10)}.json`);
+        } }),
+        el('label.btn.sm', { style: { cursor: 'pointer' } }, '⬆ Importer un fichier',
+          el('input', { type: 'file', accept: '.json,application/json', style: { display: 'none' },
+            onchange: async e => {
+              const f = e.target.files?.[0];
+              if (!f) return;
+              try {
+                await store.importAll(await f.text(), { merge: true });
+                toast('Import terminé — fusionné avec le carnet');
+                navigate('dives', true);
+              } catch (err) { toast(err.message, true); }
+            } }))))));
 
-  return { title: 'Réglages', node: wrap };
+  // ---------- Applis ----------
+  wrap.append(el('div.section', {},
+    el('h2', { text: 'Sur tes autres appareils' }),
+    el('div.card', {},
+      el('div.kv', {}, el('span.k', { text: 'Site web' }),
+        el('a.v', { href: PAGES, target: '_blank', rel: 'noopener', text: 'soaresden.github.io/PlongeeJournal ↗' })),
+      el('div.kv', {}, el('span.k', { text: 'Appli Android' }),
+        el('a.v', { href: APK, target: '_blank', rel: 'noopener', text: 'Télécharger l’APK ↗' })),
+      el('div.hint', { text: 'Même carnet partout : il suffit de brancher le même dépôt dans les réglages de chaque appareil.' }))));
+
+  return { title: 'Réglages', node: wrap, back: true };
+}
+
+/** Téléchargement qui marche aussi dans l'APK (où <a download> est ignoré). */
+async function telecharger(texte, nom) {
+  const blob = new Blob([texte], { type: 'application/json' });
+  const fichier = typeof File === 'function' ? new File([blob], nom, { type: 'application/json' }) : null;
+  if (window.Capacitor && fichier && navigator.canShare?.({ files: [fichier] })) {
+    try { await navigator.share({ files: [fichier], title: nom }); return; } catch { /* annulé */ }
+  }
+  const url = URL.createObjectURL(blob);
+  const a = el('a', { href: url, download: nom });
+  document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 30000);
 }

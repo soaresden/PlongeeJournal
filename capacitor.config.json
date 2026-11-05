@@ -1,0 +1,12 @@
+{
+  "appId": "com.soaresden.plongeejournal",
+  "appName": "Carnet de plongée",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https"
+  },
+  "android": {
+    "backgroundColor": "#06131f",
+    "allowMixedContent": false
+  }
+}

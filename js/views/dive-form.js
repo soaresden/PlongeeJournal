@@ -16,9 +16,6 @@ import { locationPicker } from '../map.js';
 import { navigate } from '../router.js';
 import { takeDraft } from '../draft.js';
 import { profileSvg } from '../fit.js';
-import { enEcriture } from '../store-fichier.js';
-import { telechargerPlongee } from '../export-plongee.js';
-import { settings } from '../settings.js';
 
 // --- petits assembleurs de champs ---------------------------
 
@@ -1464,41 +1461,13 @@ export async function diveFormView({ id }) {
     try {
       await store.saveDive(dive);
 
-      // Sans serveur, la plongée n'existe que sur cet appareil. On ne se
-      // contente pas de le signaler : on propose tout de suite le fichier
-      // qui la fera entrer dans le carnet.
-      if (!enEcriture()) {
-        await proposerExport(dive);
-      } else {
-        toast('Plongée enregistrée');
-      }
+      toast(store.kind === 'local' ? 'Plongée enregistrée sur cet appareil' : 'Plongée enregistrée');
       navigate(`dive/${dive.id}`, true);
     } catch (e) {
       toast(e.message, true);
       saveBtn.disabled = false;
     }
   };
-
-  /**
-   * Le PC n'est pas joignable : on explique où va le fichier, et on le
-   * produit. Refuser n'efface rien — la plongée reste en attente et
-   * repartira toute seule au retour du serveur.
-   */
-  async function proposerExport(dive) {
-    const dossier = settings().dossierImport;
-    const ok = await confirmBox(
-      'Le PC n’est pas joignable : cette plongée n’existe pour l’instant que sur '
-    + `cet appareil. Télécharger le fichier à déposer dans ${dossier} ?`,
-      'Télécharger', false);
-
-    if (!ok) {
-      toast('Plongée gardée ici — à exporter depuis les réglages');
-      return;
-    }
-    const carnet = await store.raw();
-    const nom = telechargerPlongee(dive, carnet);
-    toast(`${nom} — dépose-le dans ${dossier}`);
-  }
 
   const buttons = el('div.btn-row.actions-fiche', {}, saveBtn);
   if (!isNew) {

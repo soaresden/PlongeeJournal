@@ -1,0 +1,114 @@
+# ============================================================
+#  Compile l'APK Android à chaque modification de l'app, et le
+#  publie dans la release « android » du dépôt :
+#  https://github.com/soaresden/PlongeeJournal/releases/latest/download/PlongeeJournal.apk
+#
+#  Signature : si les secrets ANDROID_KEYSTORE_B64 et
+#  ANDROID_KEYSTORE_PASS existent, l'APK est signé avec TA clé —
+#  chaque nouvelle version s'installe par-dessus l'ancienne sans
+#  rien perdre. Sans eux, une clé de debug est utilisée.
+# ============================================================
+name: APK Android
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'index.html'
+      - 'manifest.webmanifest'
+      - 'css/**'
+      - 'js/**'
+      - 'assets/**'
+      - 'vendor/**'
+      - 'capacitor.config.json'
+      - 'package.json'
+      - 'outils/android-icones.py'
+      - 'outils/build-www.mjs'
+      - '.github/workflows/android.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apk
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Tests
+        run: npm test
+
+      - name: Projet Android (Capacitor)
+        run: |
+          npm install --no-audit --no-fund
+          npm run www
+          npx cap add android
+          npx cap sync android
+
+      - name: Icônes, permissions, version
+        run: |
+          pip install --quiet pillow
+          python outils/android-icones.py android/app/src/main/res
+          MANIFEST=android/app/src/main/AndroidManifest.xml
+          sed -i 's#<uses-permission android:name="android.permission.INTERNET" />#<uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-permission android:name="android.permission.CAMERA" />\n    <uses-feature android:name="android.hardware.location.gps" android:required="false" />\n    <uses-feature android:name="android.hardware.camera" android:required="false" />#' "$MANIFEST"
+          sed -i "s/versionCode 1$/versionCode ${{ github.run_number }}/; s/versionName \"1.0\"/versionName \"2.0.${{ github.run_number }}\"/" android/app/build.gradle
+          grep -n "permission\|uses-feature" "$MANIFEST"
+          grep -n "versionCode\|versionName" android/app/build.gradle
+
+      - name: Compilation
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          if [ -n "${{ secrets.ANDROID_KEYSTORE_B64 }}" ]; then
+            ./gradlew --no-daemon assembleRelease
+          else
+            ./gradlew --no-daemon assembleDebug
+          fi
+
+      - name: Signature
+        env:
+          KS_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+          KS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASS }}
+        run: |
+          BT="$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)"
+          if [ -n "$KS_B64" ]; then
+            echo "$KS_B64" | base64 -d > release.jks
+            "$BT/zipalign" -p -f 4 android/app/build/outputs/apk/release/app-release-unsigned.apk aligne.apk
+            "$BT/apksigner" sign --ks release.jks --ks-key-alias carnet \
+              --ks-pass env:KS_PASS --key-pass env:KS_PASS --out PlongeeJournal.apk aligne.apk
+            rm -f release.jks
+          else
+            echo "::warning::Pas de clé de signature : APK de debug (à désinstaller avant chaque mise à jour)."
+            cp android/app/build/outputs/apk/debug/app-debug.apk PlongeeJournal.apk
+          fi
+          "$BT/apksigner" verify --print-certs PlongeeJournal.apk | head -3
+          ls -la PlongeeJournal.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PlongeeJournal-apk
+          path: PlongeeJournal.apk
+
+      - name: Publication (release « android »)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete android --yes --cleanup-tag || true
+          gh release create android PlongeeJournal.apk \
+            --title "Carnet de plongée — APK 2.0.${{ github.run_number }}" \
+            --notes "APK Android compilé depuis ${GITHUB_SHA::7}. Sur le téléphone ou la tablette : télécharger, ouvrir, autoriser l’installation depuis cette source." \
+            --latest

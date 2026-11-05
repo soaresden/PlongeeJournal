@@ -6,11 +6,11 @@
 //  surtout aucun réseau — c'est ce qui permet de le tester.
 //
 //  États possibles :
-//   ok       — écrit dans le carnet du PC
-//   syncing  — écriture en cours
-//   lecture  — carnet consultable, PC pas joignable
-//   pending  — des saisies attendent d'être exportées
-//   local    — hors ligne, données dans ce navigateur
+//   ok       — synchronisé avec le dépôt GitHub
+//   syncing  — lecture ou écriture en cours
+//   pending  — des modifications attendent d'être envoyées
+//   offline  — GitHub configuré mais injoignable (pas de réseau)
+//   local    — mode local : GitHub n'est pas configuré
 //   error    — quelque chose a échoué, le détail le dit
 // ============================================================
 

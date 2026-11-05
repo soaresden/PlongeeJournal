@@ -1,8 +1,9 @@
 // Fabrique un vrai fichier FIT de plongée, puis vérifie le décodeur.
 import path from 'node:path';
-const ROOT = new URL('..', import.meta.url).pathname;
+import { fileURLToPath as __f2p, pathToFileURL as __p2u } from 'node:url';
+const ROOT = __f2p(new URL('..', import.meta.url));
 const { decodeFit, fitToDive, mergeDives, estimateStops, profileSvg } =
-  await import(path.join(ROOT, 'js/fit.js'));
+  await import(__p2u(path.join(ROOT, 'js/fit.js')).href);
 
 const FIT_EPOCH = 631065600;
 

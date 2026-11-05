@@ -272,16 +272,16 @@ export function profileSvg(samples, { width = 640, height = 180 } = {}) {
 
   const steps = [0, maxD / 2, maxD].map(d => {
     const yy = y(d).toFixed(1);
-    return `<line x1="${pad.l}" y1="${yy}" x2="${width - pad.r}" y2="${yy}" stroke="#1f4763" stroke-width="1"/>`
-         + `<text x="4" y="${(+yy + 4).toFixed(1)}" fill="#5f829c" font-size="10">${Math.round(d)}m</text>`;
+    return `<line x1="${pad.l}" y1="${yy}" x2="${width - pad.r}" y2="${yy}" style="stroke:var(--line)" stroke-width="1"/>`
+         + `<text x="4" y="${(+yy + 4).toFixed(1)}" style="fill:var(--text-mute)" font-size="10">${Math.round(d)}m</text>`;
   }).join('');
 
   return `<svg viewBox="0 0 ${width} ${height}" width="100%" height="${height}" xmlns="http://www.w3.org/2000/svg">
     ${steps}
-    <polygon points="${area}" fill="rgba(36,198,220,.16)"/>
-    <polyline points="${pts}" fill="none" stroke="#24c6dc" stroke-width="2"
+    <polygon points="${area}" style="fill:rgba(var(--accent-rgb),.16)"/>
+    <polyline points="${pts}" fill="none" style="stroke:var(--accent)" stroke-width="2"
               stroke-linejoin="round" stroke-linecap="round"/>
-    <text x="${width - pad.r}" y="${height - 5}" fill="#5f829c" font-size="10" text-anchor="end">
+    <text x="${width - pad.r}" y="${height - 5}" style="fill:var(--text-mute)" font-size="10" text-anchor="end">
       ${Math.round(maxT / 60)} min</text>
   </svg>`;
 }

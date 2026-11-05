@@ -1,0 +1,17 @@
+{
+  "name": "plongee-journal",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Carnet de plongée — PWA + APK Android, synchronisé dans un dépôt GitHub privé.",
+  "scripts": {
+    "test": "node outils/dive-test.mjs && node outils/fit-test.mjs && node outils/geo-test.mjs && node outils/lieu-test.mjs && node outils/stamp-test.mjs && node outils/github-test.mjs",
+    "www": "node outils/build-www.mjs",
+    "android:sync": "npm run www && npx cap sync android"
+  },
+  "devDependencies": {
+    "@capacitor/android": "6.2.0",
+    "@capacitor/cli": "6.2.0",
+    "@capacitor/core": "6.2.0"
+  }
+}

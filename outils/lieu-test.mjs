@@ -4,7 +4,8 @@
 // lieux. L'app doit retomber sur « Cherbourg », centrer la carte dessus,
 // et conserver le libellé tapé.
 import path from 'node:path';
-const ROOT = new URL('..', import.meta.url).pathname;
+import { fileURLToPath as __f2p, pathToFileURL as __p2u } from 'node:url';
+const ROOT = __f2p(new URL('..', import.meta.url));
 
 const mem = new Map();
 globalThis.localStorage = {
@@ -13,7 +14,7 @@ globalThis.localStorage = {
   removeItem: k => mem.delete(k),
 };
 
-const { pistesDeRecherche } = await import(path.join(ROOT, 'js/map.js'));
+const { pistesDeRecherche } = await import(__p2u(path.join(ROOT, 'js/map.js')).href);
 
 const results = [];
 const check = (name, cond, extra = '') =>
@@ -70,7 +71,7 @@ check('apostrophe et accents préservés', l[1] === 'Cassis', l.join('|'));
 //  Cadrage : on part de ce qu'on veut voir, pas d'un niveau de zoom
 // ============================================================
 
-const { zoomPourLargeurKm } = await import(new URL('../js/map.js', import.meta.url).pathname);
+const { zoomPourLargeurKm } = await import(new URL('../js/map.js', import.meta.url).href);
 
 /** Largeur réellement couverte par la carte, en km, au zoom rendu. */
 const largeurObtenue = (km, lat, px) => {

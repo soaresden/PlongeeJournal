@@ -7,13 +7,24 @@
 //  objet JSON ; il n'a aucune règle métier à connaître.
 // ============================================================
 
+import { TABLES as TABLES_ENTITES } from './fusion.js';
 import { computeStats, sortDives, sortPeople, reconcileTimes } from './model.js';
 
 export const CARNET_VIDE = {
   version: 1,
   divers: [], buddies: [], dives: [], certifs: [],
   settings: { activeDiverId: null },
+  _supprimes: {},          // id → date de suppression (voir fusion.js)
 };
+
+const maintenant = () => new Date().toISOString();
+
+/** Note une suppression, pour qu'une autre copie du carnet ne la ressuscite pas. */
+function enterrer(d, ...ids) {
+  d._supprimes ||= {};
+  const t = maintenant();
+  ids.flat().filter(Boolean).forEach(id => { d._supprimes[id] = t; });
+}
 
 /** Complète un objet chargé pour qu'il ait toujours la bonne forme. */
 export function normaliser(data) {
@@ -29,6 +40,7 @@ export function normaliser(data) {
     certifs:  Array.isArray(data.certifs) ? data.certifs
             : Array.isArray(data.certifications) ? data.certifications : [],
     settings: { ...base.settings, ...(data.settings || {}) },
+    _supprimes: (data._supprimes && typeof data._supprimes === 'object') ? data._supprimes : {},
   };
 }
 
@@ -68,6 +80,7 @@ export function creerStore(support) {
 
     async saveDiver(diver) {
       const d = db();
+      diver.updatedAt = maintenant();
       const i = d.divers.findIndex(x => x.id === diver.id);
       if (i >= 0) d.divers[i] = diver; else d.divers.push(diver);
       if (!d.settings.activeDiverId) d.settings.activeDiverId = diver.id;
@@ -77,6 +90,9 @@ export function creerStore(support) {
 
     async deleteDiver(id) {
       const d = db();
+      enterrer(d, id,
+        d.dives.filter(x => x.diverId === id).map(x => x.id),
+        (d.certifs || []).filter(x => x.diverId === id).map(x => x.id));
       d.divers = d.divers.filter(x => x.id !== id);
       d.dives  = d.dives.filter(x => x.diverId !== id);
       d.certifs = (d.certifs || []).filter(x => x.diverId !== id);
@@ -107,6 +123,7 @@ export function creerStore(support) {
 
     async saveCertification(certif) {
       const d = db(); d.certifs ||= [];
+      certif.updatedAt = maintenant();
       const i = d.certifs.findIndex(c => c.id === certif.id);
       if (i >= 0) d.certifs[i] = certif; else d.certifs.push(certif);
       await save({ table: 'certifs', id: certif.id });
@@ -115,6 +132,7 @@ export function creerStore(support) {
 
     async deleteCertification(id) {
       const d = db();
+      enterrer(d, id);
       d.certifs = (d.certifs || []).filter(c => c.id !== id);
       await save({ table: 'certifs', id, supprime: true });
     },
@@ -126,6 +144,7 @@ export function creerStore(support) {
 
     async saveBuddy(buddy) {
       const d = db();
+      buddy.updatedAt = maintenant();
       const i = d.buddies.findIndex(x => x.id === buddy.id);
       if (i >= 0) d.buddies[i] = buddy; else d.buddies.push(buddy);
       await save({ table: 'buddies', id: buddy.id });
@@ -134,6 +153,7 @@ export function creerStore(support) {
 
     async deleteBuddy(id) {
       const d = db();
+      enterrer(d, id);
       d.buddies = d.buddies.filter(x => x.id !== id);
       // Un compagnon supprimé ne doit pas laisser de référence fantôme
       // dans les plongées passées.
@@ -157,7 +177,7 @@ export function creerStore(support) {
 
     async saveDive(dive) {
       const d = db();
-      dive.updatedAt = new Date().toISOString();
+      dive.updatedAt = maintenant();
       reconcileTimes(dive);          // durée ⇄ heure de sortie, toujours cohérentes
       const i = d.dives.findIndex(x => x.id === dive.id);
       if (i >= 0) d.dives[i] = dive; else d.dives.push(dive);
@@ -167,6 +187,7 @@ export function creerStore(support) {
 
     async deleteDive(id) {
       const d = db();
+      enterrer(d, id);
       d.dives = d.dives.filter(x => x.id !== id);
       await save({ table: 'dives', id, supprime: true });
     },
@@ -222,7 +243,10 @@ export function creerStore(support) {
     },
 
     async wipe() {
+      const ancien = db();
       cache = structuredClone(CARNET_VIDE);
+      // Effacer tout doit aussi valoir pour les autres appareils.
+      if (ancien) enterrer(cache, ...TABLES_ENTITES.map(t => (ancien[t] || []).map(x => x.id)));
       await save({ table: 'tout' });
     },
 

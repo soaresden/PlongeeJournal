@@ -95,10 +95,10 @@ export async function diversView() {
     el('div.card', {},
       el('div.hint', { style: { marginTop: '0', marginBottom: '12px' },
         text: local
-          ? 'Les plongées sont stockées dans ce navigateur uniquement. Exporte régulièrement '
-          + 'une sauvegarde depuis les réglages.'
-          : 'Tes plongées sont dans le fichier carnet.json du PC. Un export reste utile comme copie '
-          + 'hors ligne, ou pour changer de base.' }),
+          ? 'Mode local : les plongées sont sur cet appareil uniquement. Branche ton dépôt GitHub '
+          + 'dans les réglages pour les retrouver partout.'
+          : 'Tes plongées sont synchronisées avec ton dépôt GitHub privé. Un export reste utile '
+          + 'comme copie hors de GitHub.' }),
       el('div.btn-row', { style: { marginTop: '0' } },
         el('button.btn.sm', {
           text: 'Exporter',

@@ -5,7 +5,9 @@
 import { $, $$, el, toast } from './lib.js';
 import { route, onRender, navigate, match, startRouter, currentPath } from './router.js';
 import { initStore } from './store.js';
-import { modeActuel, enAttenteDExport, rafraichir } from './store-fichier.js';
+import { modeActuel, synchroniser, vider, erreurGitHub } from './store-github.js';
+import { configGitHub } from './github.js';
+import { appliquerTheme } from './theme.js';
 import * as sync from './sync.js';
 
 import { divesView, diveView }            from './views/dives.js';
@@ -40,52 +42,105 @@ const backBtn = $('#backBtn');
 const actions = $('#topActions');
 const identEl = $('#topIdent');
 
+appliquerTheme();
+
 // ------------------------------------------------------------
-//  Indicateur d'état du carnet
+//  Indicateur d'état du carnet : GitHub ou local, en un coup d'œil
 // ------------------------------------------------------------
 
-const syncBtn = el('button.icon-btn', {
-  title: 'État du carnet',
-  style: { fontSize: '15px', padding: '6px 8px' },
-});
+const syncBtn = el('button.etat-pill', { type: 'button', title: 'État du carnet' });
 
 const ETATS = {
-  ok:      { icon: '✓',  color: 'var(--ok)',        label: 'Écrit dans le carnet du PC' },
-  syncing: { icon: '⟳',  color: 'var(--accent)',    label: 'Écriture en cours…' },
-  pending: { icon: '⇡',  color: 'var(--warn)',      label: 'Saisies à exporter' },
-  lecture: { icon: '👁', color: 'var(--text-dim)',  label: 'Lecture seule' },
-  local:   { icon: '▤',  color: 'var(--text-mute)', label: 'Hors ligne' },
-  error:   { icon: '!',  color: 'var(--danger)',    label: 'Problème' },
+  ok:      { icone: 'i-cloud',   court: 'GitHub',     classe: 'ok',      label: 'Synchronisé avec GitHub' },
+  syncing: { icone: 'i-sync',    court: 'Synchro…',   classe: 'syncing', label: 'Synchronisation en cours' },
+  pending: { icone: 'i-sync',    court: 'En attente', classe: 'pending', label: 'Modifications à envoyer' },
+  offline: { icone: 'i-offline', court: 'Hors ligne', classe: 'offline', label: 'GitHub injoignable' },
+  local:   { icone: 'i-device',  court: 'Local',      classe: 'local',   label: 'Mode local' },
+  error:   { icone: 'i-alert',   court: 'Erreur',     classe: 'error',   label: 'Problème de synchronisation' },
+};
+
+const svg = id => {
+  const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  s.setAttribute('class', 'ico');
+  const u = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+  u.setAttribute('href', '#' + id);
+  s.append(u);
+  return s;
 };
 
 sync.onSyncChange(s => {
-  const look = ETATS[s.state] ?? ETATS.ok;
-  syncBtn.textContent = look.icon + (s.pending ? ` ${s.pending}` : '');
-  syncBtn.style.color = look.color;
+  const look = ETATS[s.state] ?? ETATS.local;
+  syncBtn.className = `etat-pill ${look.classe}`;
+  syncBtn.replaceChildren(svg(look.icone), el('span.etat-court', { text: look.court }));
   syncBtn.title = s.detail ? `${look.label} — ${s.detail}` : look.label;
-  syncBtn.classList.toggle('spin', s.state === 'syncing');
+  syncBtn.setAttribute('aria-label', syncBtn.title);
 });
 
 syncBtn.onclick = async () => {
   const s = sync.status();
-  if (s.pending) return navigate('reglages');
-
-  toast('Recherche du carnet…');
-  try {
-    const r = await rafraichir();
-    toast(r.mode === 'serveur'
-      ? `Carnet rechargé — ${r.plongees} plongée(s)`
-      : 'PC non joignable, carnet en lecture seule');
-    navigate(currentPath(), true);
-  } catch (e) {
-    toast(e.message, true);
-  }
+  if (s.state === 'local' || s.state === 'error') return navigate('reglages');
+  toast('Synchronisation…');
+  const change = await synchroniser().catch(() => false);
+  const apres = sync.status();
+  toast(apres.state === 'ok' ? 'Carnet à jour avec GitHub' : (apres.detail || 'GitHub injoignable'),
+    apres.state === 'error');
+  if (change) navigate(currentPath(), true);
 };
 
-const settingsBtn = el('button.icon-btn', { text: '⚙', title: 'Réglages',
-  onclick: () => navigate('reglages') });
+const settingsBtn = el('button.icon-btn.btn-reglages', { title: 'Réglages', 'aria-label': 'Réglages',
+  onclick: () => navigate('reglages') }, svg('i-gear'));
 
 actions.append(syncBtn, settingsBtn);
+
+// ------------------------------------------------------------
+//  Bandeau d'ouverture : « connecté à GitHub » ou « mode local »
+// ------------------------------------------------------------
+
+const bandeau = $('#bandeau');
+let minuteurBandeau = null;
+
+function afficherBandeau({ classe, icone, titre, texte, action, duree = 5000 }) {
+  clearTimeout(minuteurBandeau);
+  bandeau.className = `bandeau ${classe}`;
+  bandeau.replaceChildren(
+    svg(icone),
+    el('div.bandeau-txt', {}, el('b', { text: titre }), texte ? el('span', { text: texte }) : null),
+    action ? el('button.btn.sm', { type: 'button', text: action.label, onclick: action.onclick }) : null,
+    el('button.bandeau-x', { type: 'button', 'aria-label': 'Fermer', text: '×',
+      onclick: () => { bandeau.hidden = true; } }),
+  );
+  bandeau.hidden = false;
+  if (duree) minuteurBandeau = setTimeout(() => { bandeau.hidden = true; }, duree);
+}
+
+async function annoncerConnexion() {
+  const cfg = configGitHub();
+  const depot = `${cfg.owner}/${cfg.repo}`;
+  const { store } = await import('./store.js');
+  const id = await store.getActiveDiverId();
+  const n = id ? (await store.listDives(id)).length : 0;
+  const plongees = `${n} plongée${n > 1 ? 's' : ''}`;
+  const m = modeActuel();
+
+  if (m === 'github') {
+    afficherBandeau({ classe: 'ok', icone: 'i-cloud', titre: 'Connecté à GitHub',
+      texte: `${depot} · ${plongees} · sauvegarde en direct` });
+  } else if (m === 'local') {
+    afficherBandeau({ classe: 'local', icone: 'i-device', titre: 'Mode local',
+      texte: `${plongees} sur cet appareil uniquement — rien n’est envoyé sur GitHub`,
+      action: { label: 'Brancher GitHub', onclick: () => { bandeau.hidden = true; navigate('reglages'); } },
+      duree: 9000 });
+  } else if (m === 'github-hors-ligne') {
+    afficherBandeau({ classe: 'offline', icone: 'i-offline', titre: 'Hors ligne',
+      texte: `Copie de l’appareil (${plongees}). Tes modifications partiront sur ${depot} au retour du réseau.`,
+      duree: 8000 });
+  } else {
+    afficherBandeau({ classe: 'error', icone: 'i-alert', titre: 'GitHub ne répond pas comme prévu',
+      texte: erreurGitHub(),
+      action: { label: 'Réglages', onclick: () => { bandeau.hidden = true; navigate('reglages'); } },
+      duree: 0 });
+  }
+}
 
 // ------------------------------------------------------------
 //  Rendu
@@ -100,6 +155,14 @@ async function ensureStore() {
   await initStore();
   booted = true;
   await majFicheUrgence();
+
+  // Le carnet de l'appareil est affiché tout de suite ; GitHub est
+  // consulté en parallèle et l'écran se met à jour s'il apporte du neuf.
+  if (modeActuel() === 'local') { annoncerConnexion(); return; }
+  synchroniser()
+    .then(change => { if (change) navigate(currentPath(), true); })
+    .catch(() => {})
+    .finally(annoncerConnexion);
 }
 
 /**
@@ -185,6 +248,7 @@ onRender(async path => {
     dives: 'dives', dive: path === 'dive/new' ? 'dive/new' : 'dives',
     divers: 'divers', diver: 'divers',
     buddies: 'buddies', buddy: 'buddies', stats: 'stats',
+    reglages: 'reglages', suunto: 'divers', urgence: 'divers',
   }[root];
   $$('#tabbar .tab').forEach(t => t.classList.toggle('active', t.dataset.route === tabFor));
 
@@ -204,37 +268,44 @@ backBtn.addEventListener('click', () => {
 });
 
 // ------------------------------------------------------------
-//  Retour du serveur
+//  Retour au premier plan, retour du réseau
 //
-//  Le PC vient d'être allumé, ou le téléphone a rejoint le Wi-Fi :
-//  on retente le carnet plutôt que d'attendre que l'utilisateur y pense.
+//  Un autre appareil a peut-être écrit entre-temps, ou des
+//  modifications attendent le réseau : on synchronise sans rien
+//  demander.
 // ------------------------------------------------------------
 
 let dernierEssai = 0;
-async function retenterLeServeur() {
-  if (modeActuel() === 'serveur') return;
-  if (document.hidden || Date.now() - dernierEssai < 20000) return;
+async function resynchroniser(force = false) {
+  if (!booted || modeActuel() === 'local') return;
+  if (document.hidden) { vider(); return; }          // on part : on pousse ce qui attend
+  if (!force && Date.now() - dernierEssai < 15000) return;
   dernierEssai = Date.now();
-
-  const avant = enAttenteDExport().length;
-  const r = await rafraichir().catch(() => null);
-  if (r?.mode === 'serveur') {
-    const parties = avant - enAttenteDExport().length;
-    toast(parties > 0
-      ? `PC retrouvé — ${parties} saisie(s) enregistrée(s)`
-      : 'PC retrouvé — carnet à jour');
+  const avant = modeActuel();
+  const change = await synchroniser().catch(() => false);
+  if (change) {
+    toast('Carnet mis à jour depuis GitHub');
     navigate(currentPath(), true);
+  } else if (avant !== 'github' && modeActuel() === 'github') {
+    toast('GitHub retrouvé — carnet synchronisé');
   }
 }
 
-window.addEventListener('online', retenterLeServeur);
-document.addEventListener('visibilitychange', retenterLeServeur);
+window.addEventListener('online', () => resynchroniser(true));
+document.addEventListener('visibilitychange', () => resynchroniser());
+window.addEventListener('pagehide', () => { vider(); });
+// Filet : des modifications en attente sont retentées chaque minute.
+setInterval(() => {
+  const s = sync.status().state;
+  if (s === 'pending' || s === 'offline') resynchroniser(true);
+}, 60000);
 
 // ------------------------------------------------------------
 //  Service worker (mode hors-ligne)
 // ------------------------------------------------------------
 
-if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+// Dans l'APK, les fichiers sont déjà dans l'application : pas de cache à tenir.
+if ('serviceWorker' in navigator && location.protocol.startsWith('http') && !window.Capacitor) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register(new URL('../sw.js', import.meta.url))
       .catch(err => console.warn('Service worker non enregistré', err));

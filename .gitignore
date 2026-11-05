@@ -6,6 +6,9 @@
 
 donnees/
 PlongeeAImporter/
+D5 old backup/
+SondesSuunto/
+serveur/sportstracker.txt
 plongeeNo*.json
 lot*plongees*.json
 carnet-*.json
@@ -21,6 +24,15 @@ config.local.js
 # Outils de développement
 node_modules/
 package-lock.json
+.claude/
+
+# APK : générés par GitHub Actions, jamais versionnés
+www/
+android/
+*.apk
+*.jks
+*.keystore
+signature-android/
 
 # Système
 .DS_Store

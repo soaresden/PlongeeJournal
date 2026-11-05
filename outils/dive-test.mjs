@@ -1,6 +1,7 @@
 // Vérifie les règles de validation d'une plongée et le tri des espèces.
 import path from 'node:path';
-const ROOT = new URL('..', import.meta.url).pathname;
+import { fileURLToPath as __f2p, pathToFileURL as __p2u } from 'node:url';
+const ROOT = __f2p(new URL('..', import.meta.url));
 
 const results = [];
 const check = (name, cond, extra = '') =>
@@ -22,9 +23,9 @@ const { emptyDive, emptyBuddy, emptyDiver, emptyCertification, emptyMateriel,
         libelleMateriel, valeursMateriel, reconcileTimes, validerPlongee,
         optionsAutomatiques, appliquerOptionsAuto, niveauCourant, consommation,
         plongeesParNiveau, parClub, libelleGaz, pmuNitrox } =
-  await import(path.join(ROOT, 'js/model.js'));
+  await import(__p2u(path.join(ROOT, 'js/model.js')).href);
 const { NIVEAUX, rangNiveau, GAZ, gazParId, DIVE_OPTIONS, TYPES_MATERIEL, typeMateriel,
-        PALANQUEE_MODES } = await import(path.join(ROOT, 'js/config.js'));
+        PALANQUEE_MODES } = await import(__p2u(path.join(ROOT, 'js/config.js')).href);
 
 const champs = x => validerPlongee(x).map(m => m.champ);
 let d;
@@ -388,7 +389,7 @@ check('modes de palanquée conservés',
 //  Tri aquatique — entièrement déduit des bases, rien en dur
 // ------------------------------------------------------------
 
-const especes = await import(path.join(ROOT, 'js/species.js'));
+const especes = await import(__p2u(path.join(ROOT, 'js/species.js')).href);
 const { distanceKm, versObservation, lienWrecksite, lienRechercheWeb, _interne } = especes;
 const { estAquatique, estTerrestre, estFlore } = _interne;
 

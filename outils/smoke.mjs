@@ -3,7 +3,8 @@ import { JSDOM } from 'jsdom';
 import fs from 'node:fs';
 import path from 'node:path';
 
-const ROOT = new URL('..', import.meta.url).pathname;
+import { fileURLToPath as __f2p, pathToFileURL as __p2u } from 'node:url';
+const ROOT = __f2p(new URL('..', import.meta.url));
 const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
 
 const dom = new JSDOM(html, {
@@ -47,7 +48,7 @@ process.on('unhandledRejection', r => errors.push('unhandled: ' + r));
 
 const tick = (ms = 60) => new Promise(r => setTimeout(r, ms));
 
-await import(path.join(ROOT, 'js/app.js'));
+await import(__p2u(path.join(ROOT, 'js/app.js')).href);
 await tick(150);
 
 const view = () => document.getElementById('view').textContent.replace(/\s+/g, ' ').trim();
@@ -62,17 +63,21 @@ check('barre du haut : emplacement d’identité présent',
   !!document.getElementById('topIdent'), '');
 
 // --- Créer un plongeur -------------------------------------
-const { store, emptyDiver, emptyDive, emptyBuddy, guessWater } = await import(path.join(ROOT, 'js/store.js'));
+const { store, emptyDiver, emptyDive, emptyBuddy, guessWater } = await import(__p2u(path.join(ROOT, 'js/store.js')).href);
 
 // --- Mode de stockage --------------------------------------
-// Aucun serveur en face pendant les tests : l'app doit rester utilisable
-// et le dire, pas planter.
-const { modeActuel } = await import(path.join(ROOT, 'js/store-fichier.js'));
-const etatSync = await import(path.join(ROOT, 'js/sync.js'));
-check('sans serveur ni fichier, le carnet passe hors ligne',
-  modeActuel() === 'hors-ligne', modeActuel());
+// Aucun dépôt GitHub configuré pendant les tests : l'app doit être en
+// mode local, et le dire.
+const { modeActuel } = await import(__p2u(path.join(ROOT, 'js/store-github.js')).href);
+const etatSync = await import(__p2u(path.join(ROOT, 'js/sync.js')).href);
+check('sans GitHub configuré, le carnet est en mode local',
+  modeActuel() === 'local', modeActuel());
 check('l’état est annoncé à l’interface',
-  ['local', 'pending'].includes(etatSync.status().state), etatSync.status().state);
+  etatSync.status().state === 'local', etatSync.status().state);
+check('la pastille d’état dit « Local »',
+  document.querySelector('.etat-pill')?.textContent.includes('Local'), document.querySelector('.etat-pill')?.textContent);
+check('le bandeau d’ouverture annonce le mode local',
+  /Mode local/.test(document.getElementById('bandeau')?.textContent || ''), document.getElementById('bandeau')?.textContent);
 
 const d = emptyDiver();
 Object.assign(d, { prenom: 'Denis', nom: 'Testeur', licence: 'A-12-345678',
@@ -147,11 +152,13 @@ window.location.hash = '#/reglages';
 window.dispatchEvent(new window.Event('hashchange'));
 await tick(150);
 check('réglages : l’état du stockage est expliqué',
-  /Hors ligne|Lecture seule|carnet du PC/.test(view()), view().slice(0, 120));
-check('réglages : le chemin d’import est rappelé',
-  view().includes('PlongeeAImporter'), '');
+  /Mode local/.test(view()), view().slice(0, 120));
+check('réglages : le branchement GitHub est proposé',
+  /Dépôt GitHub privé/.test(view()) && /Jeton d’accès/.test(view()), '');
+check('réglages : les thèmes sont proposés',
+  /Cousteau/.test(view()) && /Abysse/.test(view()) && /Eau turquoise/.test(view()), '');
 check('réglages : sauvegarde manuelle proposée',
-  /Exporter tout le carnet/.test(view()), '');
+  /Exporter le carnet/.test(view()), '');
 
 // --- Écran Plongeurs : vignettes, pas des lignes ---
 window.location.hash = '#/buddies';
@@ -359,7 +366,7 @@ if (versCal) {
 // fonction pure, et on vérifie que la feuille de style s'y raccroche.
 {
   const { GEO, coteDansLeSens, meilleurSens } =
-    await import(path.join(ROOT, 'js/views/calendar.js'));
+    await import(__p2u(path.join(ROOT, 'js/views/calendar.js')).href);
   const { gouttiere: G, regle: R, gap: g } = GEO;
 
   // Un sens ne doit jamais déborder, ni en largeur ni en hauteur.

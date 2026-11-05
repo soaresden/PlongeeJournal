@@ -3,7 +3,8 @@
 // On fabrique de fausses photos de carnet (papier gris, tampon encré
 // dans un coin) et on contrôle que le cadre détecté tombe dessus.
 import path from 'node:path';
-const ROOT = new URL('..', import.meta.url).pathname;
+import { fileURLToPath as __f2p, pathToFileURL as __p2u } from 'node:url';
+const ROOT = __f2p(new URL('..', import.meta.url));
 
 const results = [];
 const check = (name, cond, extra = '') =>
@@ -26,7 +27,7 @@ globalThis.document = { createElement: () => new FauxCanvas() };
 globalThis.Image = class {};
 globalThis.FileReader = class {};
 
-const { detecterCadre } = await import(path.join(ROOT, 'js/stamp.js'));
+const { detecterCadre } = await import(__p2u(path.join(ROOT, 'js/stamp.js')).href);
 
 /**
  * Fabrique une fausse photo : papier uniforme + rectangle encré.

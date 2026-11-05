@@ -1,56 +1,93 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="fr" data-theme="plongee">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=5">
 <meta name="theme-color" content="#06131f">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Carnet de plongée">
 <title>Carnet de plongée</title>
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="icon" href="./assets/icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="./assets/icon-180.png">
+<script>
+  // Thème posé avant le premier rendu : pas d'éclair blanc ou bleu.
+  try {
+    var t = localStorage.getItem('plongee-journal:theme') || 'plongee';
+    if (t === 'auto') t = matchMedia('(prefers-color-scheme: dark)').matches ? 'plongee' : 'clair';
+    document.documentElement.dataset.theme = t;
+  } catch (e) {}
+</script>
+<link rel="stylesheet" href="./css/themes.css">
 <link rel="stylesheet" href="./css/styles.css">
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+<link rel="stylesheet" href="./vendor/leaflet/leaflet.css">
 </head>
 <body>
 
+<!-- Pictogrammes : un seul jeu, dessiné au trait, qui prend la couleur du thème. -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-dives" viewBox="0 0 24 24"><path d="M3 7c2 0 2-1.5 4.5-1.5S10 7 12 7s2-1.5 4.5-1.5S19 7 21 7M3 12c2 0 2-1.5 4.5-1.5S10 12 12 12s2-1.5 4.5-1.5S19 12 21 12M3 17c2 0 2-1.5 4.5-1.5S10 17 12 17s2-1.5 4.5-1.5S19 17 21 17"/></symbol>
+  <symbol id="i-stats" viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-buddies" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3 19c.6-3.3 3-5 6-5s5.4 1.7 6 5"/><circle cx="17" cy="9" r="2.5"/><path d="M16.5 14.2c2.4.2 4 1.7 4.5 4.3"/></symbol>
+  <symbol id="i-profil" viewBox="0 0 24 24"><circle cx="12" cy="8.5" r="3.8"/><path d="M4.5 20c.9-3.9 3.8-6 7.5-6s6.6 2.1 7.5 6"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></symbol>
+  <symbol id="i-cloud" viewBox="0 0 24 24"><path d="M7 18a4.5 4.5 0 0 1-.6-9 6 6 0 0 1 11.4 1.6A3.8 3.8 0 0 1 17.5 18z"/></symbol>
+  <symbol id="i-device" viewBox="0 0 24 24"><rect x="6" y="2.5" width="12" height="19" rx="2.5"/><path d="M10.5 18.5h3"/></symbol>
+  <symbol id="i-sync" viewBox="0 0 24 24"><path d="M20 11a8 8 0 0 0-14.3-4.3L4 9M4 4v5h5M4 13a8 8 0 0 0 14.3 4.3L20 15M20 20v-5h-5"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 3l9.5 17h-19z"/><path d="M12 10v4.5M12 17.5v.2"/></symbol>
+  <symbol id="i-offline" viewBox="0 0 24 24"><path d="M7 18a4.5 4.5 0 0 1-.6-9 6 6 0 0 1 11.4 1.6A3.8 3.8 0 0 1 17.5 18zM3 3l18 18"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+</svg>
+
 <div id="app">
+  <nav id="tabbar" aria-label="Navigation principale">
+    <div class="rail-logo" aria-hidden="true"><img src="./assets/icon.svg" alt=""></div>
+    <button class="tab" data-route="dives">
+      <svg class="tab-ico"><use href="#i-dives"/></svg><span class="tab-lbl">Plongées</span>
+    </button>
+    <button class="tab" data-route="stats">
+      <svg class="tab-ico"><use href="#i-stats"/></svg><span class="tab-lbl">Stats</span>
+    </button>
+    <button class="tab tab-add" data-route="dive/new" aria-label="Nouvelle plongée">
+      <span class="tab-add-rond"><svg class="tab-ico"><use href="#i-plus"/></svg></span><span class="tab-lbl">Nouvelle</span>
+    </button>
+    <button class="tab" data-route="buddies">
+      <svg class="tab-ico"><use href="#i-buddies"/></svg><span class="tab-lbl">Plongeurs</span>
+    </button>
+    <button class="tab" data-route="divers">
+      <svg class="tab-ico"><use href="#i-profil"/></svg><span class="tab-lbl">Profil</span>
+    </button>
+    <button class="tab tab-rail-only" data-route="reglages">
+      <svg class="tab-ico"><use href="#i-gear"/></svg><span class="tab-lbl">Réglages</span>
+    </button>
+  </nav>
+
   <header id="topbar">
-    <button id="backBtn" class="icon-btn" hidden aria-label="Retour">&#8592;</button>
+    <button id="backBtn" class="icon-btn" hidden aria-label="Retour"><svg class="ico"><use href="#i-back"/></svg></button>
     <div id="topTitle">Carnet de plongée</div>
     <button id="topIdent" hidden aria-label="Mon profil"></button>
     <div id="topActions"></div>
   </header>
 
-  <main id="view" tabindex="-1"></main>
+  <div id="bandeau" hidden role="status" aria-live="polite"></div>
 
-  <nav id="tabbar">
-    <button class="tab" data-route="dives">
-      <span class="tab-ico">&#9832;</span><span class="tab-lbl">Plongées</span>
-    </button>
-    <button class="tab" data-route="stats">
-      <span class="tab-ico">&#9776;</span><span class="tab-lbl">Stats</span>
-    </button>
-    <button class="tab tab-add" data-route="dive/new" aria-label="Nouvelle plongée">
-      <span class="tab-ico">+</span>
-    </button>
-    <button class="tab" data-route="buddies">
-      <span class="tab-ico">&#129343;</span><span class="tab-lbl">Plongeurs</span>
-    </button>
-    <button class="tab" data-route="divers">
-      <span class="tab-ico">&#9673;</span><span class="tab-lbl">Profil</span>
-    </button>
-  </nav>
+  <main id="view" tabindex="-1">
+    <div class="boot">
+      <img class="boot-logo" src="./assets/icon.svg" alt="">
+      <div class="boot-titre">Carnet de plongée</div>
+      <div class="boot-sous">Ouverture du carnet…</div>
+    </div>
+  </main>
 </div>
 
 <div id="toast" role="status" aria-live="polite"></div>
 <div id="modalRoot"></div>
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script src="./vendor/leaflet/leaflet.js"></script>
 <script type="module" src="./js/app.js"></script>
 </body>
 </html>

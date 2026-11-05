@@ -3,20 +3,23 @@
 
 // À incrémenter à chaque livraison : un vieux cache sert un vieux
 // index.html, et les changements d'icônes ou de menu ne se voient pas.
-const CACHE = 'plongee-journal-v12';
+const CACHE = 'plongee-journal-v20';
 
 const ASSETS = [
   './',
   './index.html',
   './manifest.webmanifest',
+  './css/themes.css',
   './css/styles.css',
   './js/app.js',
   './js/router.js',
   './js/lib.js',
   './js/store.js',
-  './js/store-local.js',
   './js/store-base.js',
-  './js/store-fichier.js',
+  './js/store-github.js',
+  './js/github.js',
+  './js/fusion.js',
+  './js/theme.js',
   './js/model.js',
   './js/settings.js',
   './js/sync.js',
@@ -25,7 +28,6 @@ const ASSETS = [
   './js/species.js',
   './js/stamp.js',
   './js/draft.js',
-  './js/export-plongee.js',
   './js/config.js',
   './js/map.js',
   './js/views/dives.js',
@@ -41,8 +43,8 @@ const ASSETS = [
   './js/urgence.js',
   './js/views/suunto.js',
   './assets/icon.svg',
-  'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
-  'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',
+  './vendor/leaflet/leaflet.css',
+  './vendor/leaflet/leaflet.js',
 ];
 
 self.addEventListener('install', e => {
@@ -69,11 +71,16 @@ self.addEventListener('fetch', e => {
   // passent jamais par le cache : servir un carnet périmé serait pire
   // que ne rien servir du tout.
   if (/^\/api\//.test(url.pathname) || /\/donnees\//.test(url.pathname)) return;
-  if (/tile|nominatim|arcgisonline|googleapis|suunto/.test(url.hostname + url.pathname)) return;
+  if (/tile|nominatim|arcgisonline|googleapis|suunto|api\.github\.com/.test(url.hostname + url.pathname)) return;
 
   // Réseau d'abord pour le code (mises à jour immédiates), cache en secours.
+  // « no-cache » : on revalide auprès du serveur, sinon le cache HTTP du
+  // navigateur peut resservir une vieille feuille de style après une mise à jour.
+  const frais = e.request.mode === 'navigate'
+    ? fetch(e.request.url, { cache: 'no-cache', credentials: 'same-origin' })
+    : fetch(e.request, { cache: 'no-cache' });
   e.respondWith(
-    fetch(e.request)
+    frais
       .then(res => {
         const copy = res.clone();
         caches.open(CACHE).then(c => c.put(e.request, copy)).catch(() => {});

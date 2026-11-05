@@ -72,7 +72,7 @@ export async function divesView() {
 
   const search = el('input', { type: 'search', placeholder: 'Chercher un lieu, un compagnon, une observation…' });
   const zoneRecherche = el('div.field', {}, search);
-  const list = el('div');
+  const list = el('div.dive-list');
   const cal = el('div');
 
   const carteBox = el('div');
@@ -133,9 +133,7 @@ export async function divesView() {
       const y = (d.date || '').slice(0, 4);
       if (y && y !== currentYear) {
         currentYear = y;
-        list.append(el('h2', { text: y, style: {
-          fontSize: '12px', letterSpacing: '1.1px', color: 'var(--text-mute)',
-          margin: '18px 0 8px 2px', textTransform: 'uppercase' } }));
+        list.append(el('h2.annee', { text: y }));
       }
       list.append(el('div.card.clickable', { onclick: () => navigate(`dive/${d.id}`) },
         el('div.dive-row', {},
@@ -179,13 +177,13 @@ export async function diveView({ id }) {
 
   const buddies = await store.listBuddies();
   const buddyName = bid => fullName(buddies.find(b => b.id === bid)) || '?';
-  const wrap = el('div');
+  const wrap = el('div.fiche');
 
   const kv = (k, v) => (v === null || v === undefined || v === '' || v === '—')
     ? null : el('div.kv', {}, el('span.k', { text: k }), el('span.v', {}, v));
 
   // En-tête
-  wrap.append(el('div.card', {},
+  wrap.append(el('div.card.fiche-tete', {},
     el('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px' } },
       el('div', {},
         el('div', { style: { fontSize: '19px', fontWeight: '680' },
