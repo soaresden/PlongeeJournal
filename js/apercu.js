@@ -15,6 +15,7 @@ import { navigate } from './router.js';
 import { profileSvg } from './fit.js';
 import { ambianceDe, stylesAmbiance, vignetteLieu, etiquetteAmbiance } from './ambiance.js';
 import { agendaBranche, agendaLisible, chargerAgenda, evenementsDu, lieuPropose } from './agenda.js';
+import { editeurPalanquee, champsCentre } from './palanquee.js';
 
 /**
  * « Ce jour-là dans ton agenda » : les événements du jour, chacun avec un
@@ -172,6 +173,7 @@ export async function apercuPlongee(id, { retour = null, onClose = null } = {}) 
 
   const date = saisie('date', d.date, v => { maj({ date: v }); majNiveau(); });
   const lieuDive = saisie('text', d.lieuNom, v => maj({ lieuNom: v }));
+  const centre = champsCentre(d, await store.listDives(d.diverId), () => sauvegarde.planifier());
 
   const a = ambianceDe(d);
   const tete = el('div.apercu-tete-plongee', {},
@@ -198,15 +200,16 @@ export async function apercuPlongee(id, { retour = null, onClose = null } = {}) 
       champ('Prof. max (m)', saisie('text', d.profMax, v => maj({ profMax: num(v) }), { inputmode: 'decimal' })),
       champ('Eau (°C)', saisie('text', d.tempFond, v => maj({ tempFond: num(v) }), { inputmode: 'decimal' })),
       champ('Type', liste([['', '—'], ...DIVE_TYPES.map(t => [t, t])], d.type, v => maj({ type: v }))),
-      champ('Niveau', selNiveau),
+      champ('Niveau', selNiveau)),
+    el('div.apercu-bloc', {}, el('div.apercu-lbl', { text: 'Palanquée' }),
+      editeurPalanquee(d, buddies, () => sauvegarde.planifier())),
+    el('div.apercu-grille', {},
+      champ('Centre de plongée', el('div', {}, centre.nom, centre.liste), { large: true }),
+      champ('Adresse du centre', centre.adresse, { large: true }),
       champ('Ce que j’ai fait', saisie('textarea', d.fait, v => maj({ fait: v })), { large: true }),
       champ('Ce que j’ai vu', saisie('textarea', d.vu, v => maj({ vu: v })), { large: true }),
       champ('Notes', saisie('textarea', d.observations, v => maj({ observations: v })), { large: true })),
-    blocAgenda(d.date, lieuDive, v => maj({ lieuNom: v })),
-    (d.buddyIds || []).length
-      ? el('div.apercu-bloc', {}, el('div.apercu-lbl', { text: 'Palanquée' }),
-          el('div.chips', {}, ...d.buddyIds.map(b => el('span.chip', { text: nom(b) }))))
-      : null);
+    blocAgenda(d.date, lieuDive, v => maj({ lieuNom: v })));
 
   const pied = el('div.apercu-actions', {},
     temoin,

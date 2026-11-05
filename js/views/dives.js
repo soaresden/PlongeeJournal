@@ -210,8 +210,9 @@ export async function divesView() {
   }
 
   /** Les compagnons, toujours là : « à compléter » tant qu'il n'y en a pas. */
-  const palanquee = ids => {
+  const palanquee = (ids, sansNom = false) => {
     const noms = (ids || []).map(buddyName).filter(Boolean);
+    if (sansNom) noms.push('Moniteur');
     return el(`div.dive-sub.dive-buddies${noms.length ? '' : '.vide'}`, { title: noms.join(', ') || 'Palanquée à compléter' },
       el('span.metr-ico', { html: '<svg class="ico-m" viewBox="0 0 24 24"><use href="#i-buddies"/></svg>' }),
       el('span', { text: noms.length ? noms.join(', ') : 'Palanquée à compléter' }));
@@ -232,7 +233,7 @@ export async function divesView() {
             chiffre('duree', fmtDuration(d.dureeMin), 'Durée'),
             d.tempFond != null ? chiffre('eau', `${d.tempFond}°`, 'Eau au fond') : null),
           miniCourbe(d.samples || d.profil, { prof, duree: Number(d.dureeMin) || 0, profRef })),
-        palanquee(d.buddyIds),
+        palanquee(d.buddyIds, d.moniteurSansNom),
       ),
     );
   }
@@ -528,7 +529,7 @@ export async function diveView({ id }) {
   }
 
   // Palanquée
-  if ((d.buddyIds || []).length || d.palanqueeMode || d.stampImage || d.stampId) {
+  if ((d.buddyIds || []).length || d.palanqueeMode || d.stampImage || d.stampId || d.moniteurSansNom || d.centreNom) {
     const modeLabel = {
       moniteur: 'Encadré par un moniteur', chef: 'Guide de palanquée',
       autonome2: 'Autonome à 2', autonome3: 'Autonome à 3',
@@ -543,11 +544,14 @@ export async function diveView({ id }) {
       el('h2', { text: 'Palanquée' }),
       el('div.card', {},
         modeLabel ? el('div', { style: { marginBottom: '10px', color: 'var(--text-dim)' }, text: modeLabel }) : null,
-        (d.buddyIds || []).length
-          ? el('div.chips', {}, d.buddyIds.map(bid =>
+        d.centreNom ? el('div', { style: { marginBottom: '10px' } }, el('b', { text: d.centreNom }),
+          d.centreAdresse ? el('span', { style: { color: 'var(--text-dim)' }, text: ` · ${d.centreAdresse}` }) : null) : null,
+        (d.buddyIds || []).length || d.moniteurSansNom
+          ? el('div.chips', {}, ...(d.buddyIds || []).map(bid =>
               el('span.chip.solid', {
                 text: buddyName(bid) + (bid === d.chefBuddyId ? ' ★' : ''),
-              })))
+              })),
+              d.moniteurSansNom ? el('span.chip.solid', { text: 'Moniteur (nom inconnu)' }) : null)
           : null,
         stampImg
           ? el('div', { style: { marginTop: '14px' } },

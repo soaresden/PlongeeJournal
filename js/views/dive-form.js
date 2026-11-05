@@ -4,6 +4,7 @@
 
 import { el, toast, num, fullName, openModal, fileToDataURL, confirmBox, todayISO,
          minToTime, timeToMin, scrollTo } from '../lib.js';
+import { editeurPalanquee, champsCentre } from '../palanquee.js';
 import { store, emptyDive, emptyBuddy, reconcileTimes, validerPlongee,
          appliquerOptionsAuto, niveauCourant, niveauALaDate, libelleGaz, pmuNitrox,
          libelleMateriel, consommation } from '../store.js';
@@ -793,209 +794,12 @@ export async function diveFormView({ id }) {
   ));
 
   // ---------- 8. Palanquée ----------
-  const buddyChips = el('div.chips');
   const chefWrap   = el('div');
   const stampWrap  = el('div');
 
-  const rechercheBuddy = el('input', { type: 'search', placeholder: 'Filtrer par nom ou club…',
-                                       autocapitalize: 'off' });
-
-  // Clubs dépliés : le club du dernier plongeur coché reste ouvert.
-  const clubsOuverts = new Set();
-
-  /** Tampon retenu pour ce plongeur sur cette plongée. */
-  function tamponDe(b) {
-    dive.tampons ||= {};
-    const choisi = dive.tampons[b.id];
-    const stamps = b.stamps || [];
-    if (choisi) return stamps.find(s => s.id === choisi) || null;
-    // Par défaut : le premier tampon, ou la signature à défaut.
-    return stamps.find(s => s.type !== 'signature') || stamps[0] || null;
-  }
-
-  /** Choix du tampon quand un plongeur en a plusieurs. */
-  function choisirTampon(b, onFait) {
-    const stamps = b.stamps || [];
-    if (!stamps.length) {
-      return toast(`${fullName(b)} n’a ni tampon ni signature enregistrés`, true);
-    }
-    openModal(close => el('div', {},
-      el('h3', { text: `Tampon — ${fullName(b)}` }),
-      el('div.stamp-grid', {},
-        stamps.map(s => {
-          const cell = el('div.stamp', {}, el('img', { src: s.dataUrl, alt: s.label || '' }));
-          if (tamponDe(b)?.id === s.id) cell.classList.add('on');
-          cell.onclick = () => {
-            dive.tampons = { ...(dive.tampons || {}), [b.id]: s.id };
-            onFait(); close();
-          };
-          return cell;
-        })),
-      el('div.hint', { text: 'Le tampon retenu apparaîtra sur la fiche de la plongée.' }),
-      el('div.btn-row', {},
-        el('button.btn.ghost', { type: 'button', text: 'Fermer', onclick: close })),
-    ));
-  }
-
-  /** Une ligne par plongeur : nom · moniteur · tampon. */
-  function lignePlongeur(b) {
-    const coche = () => dive.buddyIds.includes(b.id);
-
-    const caseCoche = el('input', { type: 'checkbox' });
-    caseCoche.checked = coche();
-
-    const celluleTampon = el('button.pl-tampon', { type: 'button' });
-
-    function rendreTampon() {
-      celluleTampon.innerHTML = '';
-      const t = tamponDe(b);
-      const plusieurs = (b.stamps || []).length > 1;
-
-      if (!coche()) {
-        celluleTampon.append(el('span.pl-vide', { text: '' }));
-        celluleTampon.disabled = true;
-        return;
-      }
-      celluleTampon.disabled = false;
-
-      if (t) {
-        celluleTampon.append(el('img', { src: t.dataUrl, alt: 'Tampon' }));
-        if (plusieurs) celluleTampon.append(el('span.pl-multi', { text: (b.stamps || []).length }));
-        celluleTampon.title = plusieurs ? 'Changer de tampon' : (t.label || 'Tampon');
-      } else {
-        celluleTampon.append(el('span.pl-vide', { text: '＋' }));
-        celluleTampon.title = 'Aucun tampon enregistré';
-      }
-    }
-
-    celluleTampon.onclick = e => {
-      e.stopPropagation();
-      if (!coche()) return;
-      if ((b.stamps || []).length) choisirTampon(b, rendreTampon);
-      else navigate(`buddy/${b.id}`);
-    };
-
-    const ligne = el('div.pl-ligne', {},
-      caseCoche,
-      el('div.pl-nom', { text: fullName(b) }),
-      el('div.pl-role', {},
-        b.structure ? el('span.badge.struct', { text: 'club' })
-        : b.moniteur ? el('span.badge.mon', { text: 'moniteur' })
-        : el('span.pl-vide', { text: '—' })),
-      celluleTampon,
-    );
-
-    const majLigne = () => {
-      ligne.classList.toggle('on', coche());
-      caseCoche.checked = coche();
-      rendreTampon();
-    };
-
-    const basculer = () => {
-      const on = !coche();
-      dive.buddyIds = on ? [...dive.buddyIds, b.id] : dive.buddyIds.filter(x => x !== b.id);
-      if (!on && dive.chefBuddyId === b.id) dive.chefBuddyId = '';
-      majLigne();
-      renderChef(); renderStamp();
-    };
-
-    ligne.onclick = basculer;
-    caseCoche.onclick = e => { e.stopPropagation(); basculer(); };
-
-    majLigne();
-    return ligne;
-  }
-
-  function renderBuddies() {
-    buddyChips.innerHTML = '';
-
-    const q = rechercheBuddy.value.trim().toLowerCase();
-    const visibles = buddies.filter(b =>
-      dive.buddyIds.includes(b.id)      // les sélectionnés restent toujours visibles
-      || !q
-      || `${fullName(b)} ${b.club || ''}`.toLowerCase().includes(q));
-
-    if (!visibles.length) {
-      buddyChips.append(el('div.hint', { style: { marginTop: 0 }, text: 'Aucun plongeur ne correspond.' }));
-    }
-
-    // Regroupés par club, en accordéon : avec 25 plongeurs, tout dérouler
-    // ferait défiler pendant des écrans.
-    const groupes = new Map();
-    visibles.forEach(b => {
-      const club = (b.club || '').trim() || 'Sans club';
-      if (!groupes.has(club)) groupes.set(club, []);
-      groupes.get(club).push(b);
-    });
-
-    [...groupes.entries()]
-      .sort((a, b) => (a[0] === 'Sans club') - (b[0] === 'Sans club')
-                   || a[0].localeCompare(b[0], 'fr'))
-      .forEach(([club, membres]) => {
-        const choisis = membres.filter(b => dive.buddyIds.includes(b.id)).length;
-        // On ouvre si : recherche en cours, club déjà ouvert, ou quelqu'un coché dedans.
-        const ouvert = !!q || clubsOuverts.has(club) || choisis > 0;
-
-        const fleche = el('span.sec-fleche', { text: ouvert ? '▾' : '▸' });
-        const corps = el('div.pl-groupe', {},
-          ...membres
-            .sort((x, y) => (y.moniteur ? 1 : 0) - (x.moniteur ? 1 : 0)
-                         || fullName(x).localeCompare(fullName(y), 'fr'))
-            .map(lignePlongeur));
-        corps.hidden = !ouvert;
-
-        const entete = el('button.pl-club', { type: 'button' },
-          fleche,
-          el('span.pl-club-nom', { text: club }),
-          choisis ? el('span.badge.tek', { text: `${choisis}` }) : null,
-          el('span.pl-club-n', { text: `${membres.length}` }),
-        );
-        entete.onclick = () => {
-          const nouvel = corps.hidden;
-          corps.hidden = !nouvel;
-          fleche.textContent = nouvel ? '▾' : '▸';
-          nouvel ? clubsOuverts.add(club) : clubsOuverts.delete(club);
-        };
-
-        buddyChips.append(el('div.pl-bloc', {}, entete, corps));
-      });
-
-    buddyChips.append(el('button.btn.sm.block', {
-      type: 'button', text: '+ Nouveau plongeur',
-      style: { borderStyle: 'dashed', marginTop: '12px' },
-      onclick: () => quickAddBuddy(),
-    }));
-  }
-
-  rechercheBuddy.addEventListener('input', renderBuddies);
-
-  function quickAddBuddy() {
-    openModal(close => {
-      const b = emptyBuddy();
-      const p = el('input', { type: 'text', placeholder: 'Prénom', autofocus: true });
-      const n = el('input', { type: 'text', placeholder: 'Nom' });
-      return el('div', {},
-        el('h3', { text: 'Nouveau compagnon' }),
-        field('Prénom', p), field('Nom', n),
-        el('div.btn-row', {},
-          el('button.btn.ghost', { type: 'button', text: 'Annuler', onclick: close }),
-          el('button.btn.primary', {
-            type: 'button', text: 'Ajouter',
-            onclick: async () => {
-              if (!p.value.trim() && !n.value.trim()) return toast('Indique au moins un nom', true);
-              b.prenom = p.value.trim(); b.nom = n.value.trim();
-              await store.saveBuddy(b);
-              buddies = await store.listBuddies();
-              dive.buddyIds = [...dive.buddyIds, b.id];
-              renderBuddies(); renderChef(); renderStamp();
-              close();
-              toast(`${fullName(b)} ajouté`);
-            },
-          }),
-        ),
-      );
-    });
-  }
+  // Taper un nom : connu, il est proposé ; inconnu, il est créé tout seul.
+  const editeur = editeurPalanquee(dive, buddies, () => { renderChef(); renderStamp(); });
+  const centre = champsCentre(dive, toutesDives);
 
   function renderChef() {
     chefWrap.innerHTML = '';
@@ -1083,7 +887,7 @@ export async function diveFormView({ id }) {
         : 'Photographie le tampon du carnet. Enregistre-le sur la fiche d’un compagnon pour le réutiliser.'));
   }
 
-  renderMode(); renderBuddies(); renderChef(); renderStamp();
+  renderMode(); renderChef(); renderStamp();
 
   form.append(section('Plongeurs', { icone: '👥', ouvert: true },
     modeWrap,
@@ -1091,7 +895,10 @@ export async function diveFormView({ id }) {
       text: 'Plonger avec un moniteur ne fait pas une plongée d’enseignement : '
           + 'on peut très bien sortir en exploration avec lui. Le type de plongée '
           + 'se choisit plus haut, indépendamment de qui t’accompagne.' }),
-    field('Compagnons de plongée', el('div', {}, rechercheBuddy, buddyChips)),
+    el('div.row-2', {},
+      field('Centre de plongée', el('div', {}, centre.nom, centre.liste)),
+      field('Adresse du centre', centre.adresse)),
+    field('Palanquée', editeur),
     chefWrap,
     stampWrap,
   ));

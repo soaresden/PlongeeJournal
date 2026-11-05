@@ -162,14 +162,15 @@ export async function buddiesView() {
 
     // Les filtres : tout, les moniteurs, chaque catégorie, sans catégorie.
     const compte = new Map();
-    buddies.forEach(b => cats(b).forEach(c => compte.set(c, (compte.get(c) || 0) + 1)));
+    const gens = buddies.filter(b => !b.structure);
+    gens.forEach(b => cats(b).forEach(c => compte.set(c, (compte.get(c) || 0) + 1)));
     const categories = [...compte.keys()].sort((x, y) => x.localeCompare(y, 'fr'));
     if (filtre.startsWith('cat:') && !compte.has(filtre.slice(4))) filtre = '';
     const choix = [
-      ['', 'Tous', buddies.length, null],
-      ['mon', 'Moniteurs', buddies.filter(estMoniteur).length, null],
+      ['', 'Tous', gens.length, null],
+      ['mon', 'Moniteurs', gens.filter(estMoniteur).length, null],
       ...categories.map(c => [`cat:${c}`, c, compte.get(c), couleurCategorie(c)]),
-      ['sans', 'Sans tag', buddies.filter(b => !cats(b).length).length, null],
+      ['sans', 'Sans tag', gens.filter(b => !cats(b).length).length, null],
     ];
     puces.replaceChildren(...choix.filter(([id, , nb]) => nb || !id).map(([id, label, nb, couleur]) => {
       const p = el(`button.cat-filtre${id === filtre ? '.on' : ''}`, { type: 'button',
@@ -204,6 +205,7 @@ export async function buddiesView() {
 
     const q = recherche.value.trim().toLowerCase();
     let filtres = buddies.filter(b => {
+      if (b.structure) return false;   // les anciens « centres » : notés sur les plongées
       if (filtre === 'mon' && !estMoniteur(b)) return false;
       if (filtre === 'sans' && cats(b).length) return false;
       if (filtre.startsWith('cat:') && !cats(b).includes(filtre.slice(4))) return false;
@@ -310,7 +312,7 @@ export async function apercuPlongeur(id, { onClose = null } = {}) {
       champ(b.structure ? 'Centre de plongée' : 'Prénom', saisie('prenom')),
       b.structure ? null : champ('Nom', saisie('nom')),
       b.structure ? null : champ('Licence', saisie('licence')),
-      el('div.apercu-champ.large', {}, coche('moniteur', 'Moniteur'), coche('structure', 'Un moniteur du centre, sans son nom')),
+      el('div.apercu-champ.large', {}, coche('moniteur', 'Moniteur')),
       el('div.apercu-champ.large', {}, el('span', { text: 'Tags' }), zoneCats),
       champ('Note', note, true)),
     (b.stamps || []).length ? el('div.apercu-bloc', {}, el('div.apercu-lbl', { text: 'Tampons et signatures' }),

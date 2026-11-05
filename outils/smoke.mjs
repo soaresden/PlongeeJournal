@@ -680,17 +680,24 @@ check('formulaire : sections en entonnoir',
     .join('|').includes('Lieu et environnement'),
   [...document.querySelectorAll('#view .sec-titre')].map(x => x.textContent.trim()).join('|'));
 
-check('formulaire : plongeurs en lignes',
-  document.querySelectorAll('#view .pl-ligne').length === 1,
-  String(document.querySelectorAll('#view .pl-ligne').length));
-check('formulaire : clubs en accordéon',
-  document.querySelectorAll('#view .pl-club').length >= 1,
-  String(document.querySelectorAll('#view .pl-club').length));
-check('formulaire : le plongeur de la palanquée est coché',
-  document.querySelectorAll('#view .pl-ligne.on').length === 1,
-  String(document.querySelectorAll('#view .pl-ligne.on').length));
-check('formulaire : colonne tampon présente',
-  document.querySelectorAll('#view .pl-tampon').length === 1, '');
+check('formulaire : la palanquée se tape (champ + puces)',
+  !!document.querySelector('#view .palq .palq-saisie input[type=text]'), '');
+check('formulaire : le plongeur de la palanquée est en puce',
+  document.querySelectorAll('#view .palq-puce').length === 1,
+  String(document.querySelectorAll('#view .palq-puce').length));
+{
+  const champ = document.querySelector('#view .palq-saisie input[type=text]');
+  champ.value = 'zzz';
+  champ.dispatchEvent(new window.Event('input'));
+  check('formulaire : un nom inconnu propose de l’ajouter',
+    [...document.querySelectorAll('#view .palq-prop.nouveau')].some(b => b.textContent.includes('zzz')), '');
+  champ.value = '';
+  champ.dispatchEvent(new window.Event('input'));
+}
+check('formulaire : moniteur sans nom proposé',
+  !!document.querySelector('#view .palq-prop.anonyme'), '');
+check('formulaire : centre de plongée',
+  [...document.querySelectorAll('#view label, #view .lbl')].some(x => /Centre de plongée/.test(x.textContent)), '');
 check('formulaire : section Bouteille',
   [...document.querySelectorAll('#view .sec-titre')].some(x => /Bouteille/.test(x.textContent)),
   '');

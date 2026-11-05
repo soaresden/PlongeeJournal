@@ -97,6 +97,9 @@ export function emptyDive(diverId, numero) {
     lat: null, lng: null, // point cliqué dans l'eau
     eau: '',              // 'douce' | 'salee'
     site: '',             // nom du site précis / point de mise à l'eau
+    centreNom: '',        // le centre ou club avec qui on a plongé
+    centreAdresse: '',
+    moniteurSansNom: false, // un moniteur dans la palanquée, nom pas noté
 
     // L'heure d'immersion peut manquer (plongées d'avant l'ordinateur) :
     // la durée seule suffit.
