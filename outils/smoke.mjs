@@ -318,7 +318,7 @@ await tick(80);
 window.location.hash = '#/reglages';
 window.dispatchEvent(new window.Event('hashchange'));
 await tick(200);
-check('réglages APK : compte relié affiché', /denis\.smoke/.test(view()) && /Récupérer mes activités/.test(view()), '');
+check('réglages APK : compte relié affiché, sans action d’import', /Relié · denis\.smoke/.test(view()) && !/Récupérer mes activités/.test(view()), '');
 window.location.hash = '#/suunto';
 window.dispatchEvent(new window.Event('hashchange'));
 await tick(150);

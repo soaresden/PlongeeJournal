@@ -1,10 +1,12 @@
 // ============================================================
 //  Réglages
 //
-//  Trois choses à régler, toutes propres à CET appareil :
-//   - où vit le carnet (dépôt GitHub privé, ou appareil seul) ;
-//   - l'apparence (thème) ;
-//   - une sauvegarde manuelle, au cas où.
+//  Uniquement des réglages, rangés par thème :
+//   - Comptes : GitHub (où vit le carnet) et Suunto (les clés et la
+//     liaison ; l'import lui-même est dans Divers → Suunto) ;
+//   - Apparence (thème) ;
+//   - Sauvegarde manuelle, au cas où ;
+//   - Application : version de l'APK, autres appareils.
 // ============================================================
 
 import { el, toast, confirmBox } from '../lib.js';
@@ -17,7 +19,7 @@ import {
 import { modeActuel, rebrancher, synchroniser, derniereSynchro, erreurGitHub } from '../store-github.js';
 import { THEMES, themeChoisi, choisirTheme } from '../theme.js';
 import {
-  chargerLiaison, sauverLiaison, estRelie, lienAutorisation, nouvelEtat, RETOUR_DEFAUT,
+  chargerLiaison, sauverLiaison, estRelie, clesCompletes, lienAutorisation, nouvelEtat, RETOUR_DEFAUT,
 } from '../suunto-cloud.js';
 import {
   estApk, versionInstallee, verifier, nouveautes, telechargerApk, taillePropre,
@@ -46,45 +48,91 @@ const ico = id => el('span.ico-wrap', { html: `<svg class="ico"><use href="#${id
 
 export async function reglagesView() {
   const wrap = el('div.reglages');
+
+  // Seulement des réglages, rangés par thème. Les actions (import Suunto,
+  // ajout de plongées…) vivent dans leurs écrans.
+  wrap.append(el('div.section', {},
+    el('h2', { text: 'Comptes' }),
+    carteGitHub(),
+    carteSuunto()));
+
+  wrap.append(sectionApparence());
+  wrap.append(sectionDonnees());
+
+  const appli = el('div.section', {}, el('h2', { text: 'Application' }));
+  if (estApk()) appli.append(carteMiseAJour());
+  appli.append(el('div.card', {},
+    el('div.kv', {}, el('span.k', { text: 'Site web' }),
+      el('a.v', { href: PAGES, target: '_blank', rel: 'noopener', text: 'soaresden.github.io/PlongeeJournal ↗' })),
+    el('div.kv', {}, el('span.k', { text: 'Appli Android' }),
+      el('a.v', { href: APK, target: '_blank', rel: 'noopener', text: 'Télécharger l’APK ↗' })),
+    el('div.hint', { text: 'Même carnet partout : il suffit de brancher le même dépôt GitHub sur chaque appareil.' })));
+  wrap.append(appli);
+
+  return { title: 'Réglages', node: wrap, back: true };
+}
+
+/**
+ * Carte de compte repliable : une ligne (icône, nom, état), le détail
+ * en dessous. `etat` est un nœud, pour pouvoir le mettre à jour.
+ */
+function carteCompte({ classe, icone, titre, etat, ouvert = false }) {
+  const corps = el('div.compte-corps');
+  const pastille = ico(icone);
+  const carte = el(`details.card.compte.${classe}`, { open: ouvert },
+    el('summary.compte-ligne', {},
+      pastille,
+      el('div.compte-texte', {}, el('div.etat-titre', { text: titre }), etat),
+      el('span.compte-chevron', { 'aria-hidden': 'true' })),
+    corps);
+  const changer = (nouvelle, nouvelleIcone) => {
+    carte.className = `card compte ${nouvelle}`;
+    if (nouvelleIcone) pastille.innerHTML = `<svg class="ico"><use href="#${nouvelleIcone}"/></svg>`;
+  };
+  return { carte, corps, changer };
+}
+
+/** Compte GitHub : où vit le carnet. */
+function carteGitHub() {
   const cfg = configGitHub();
   const mode = modeActuel();
   const info = ETAT[mode] || ETAT.local;
-
-  // ---------- État ----------
-  const texteEtat = {
-    github: `Tout ce que tu saisis part en direct dans ${cfg.owner}/${cfg.repo} (${cfg.path}). `
-          + `Dernière synchro : ${quand(derniereSynchro())}.`,
-    'github-hors-ligne': 'Tu travailles sur la copie de l’appareil. Rien n’est perdu : '
-          + 'les modifications partiront toutes seules au retour du réseau.',
+  const resume = {
+    github: `${cfg.owner}/${cfg.repo} · synchro ${quand(derniereSynchro())}`,
+    'github-hors-ligne': 'Injoignable : tu travailles hors ligne, rien n’est perdu',
+    'github-erreur': 'Problème : ouvre pour voir le détail',
+    local: 'Mode local : le carnet reste sur cet appareil',
+  }[mode];
+  const detail = {
+    github: `Tout ce que tu saisis part en direct dans ${cfg.owner}/${cfg.repo} (${cfg.path}).`,
+    'github-hors-ligne': 'Tu travailles sur la copie de l’appareil. Les modifications partiront toutes seules au retour du réseau.',
     'github-erreur': erreurGitHub() || 'GitHub a refusé la dernière opération.',
-    local: 'Le carnet reste sur cet appareil uniquement. Branche ton dépôt GitHub privé '
-          + 'ci-dessous pour le retrouver sur le téléphone, la tablette et le PC.',
+    local: 'Branche ton dépôt GitHub privé pour retrouver le carnet sur le téléphone, la tablette et le PC.',
   }[mode];
 
-  wrap.append(el(`div.card.etat-carte.${info.classe}`, {},
-    el('div.etat-ligne', {},
-      ico(info.icone),
-      el('div', { style: { flex: 1, minWidth: 0 } },
-        el('div.etat-titre', { text: info.titre }),
-        el('div.hint', { style: { marginTop: '2px' }, text: texteEtat }))),
-    mode !== 'local'
-      ? el('div.btn-row', { style: { marginTop: '12px' } },
-          el('button.btn.sm', { type: 'button', text: '↻ Synchroniser maintenant', onclick: async e => {
-            e.currentTarget.disabled = true;
-            const change = await synchroniser().catch(() => false);
-            toast(modeActuel() === 'github'
-              ? (change ? 'Carnet mis à jour depuis GitHub' : 'Déjà à jour')
-              : (erreurGitHub() || 'GitHub injoignable'), modeActuel() !== 'github');
-            navigate('reglages', true);
-          } }),
-          el('a.btn.sm.ghost', { href: `https://github.com/${cfg.owner}/${cfg.repo}/commits/${cfg.branch}`,
-            target: '_blank', rel: 'noopener', text: 'Historique sur GitHub ↗' }))
-      : null));
+  const { carte, corps } = carteCompte({
+    classe: info.classe, icone: info.icone, titre: 'GitHub',
+    etat: el('div.hint.compte-etat', { text: resume }),
+    ouvert: mode === 'local' || mode === 'github-erreur',
+  });
 
-  // ---------- Dépôt GitHub ----------
+  corps.append(el('div.hint', { style: { marginTop: 0 }, text: detail }));
+  if (mode !== 'local') {
+    corps.append(el('div.btn-row', { style: { marginTop: '10px' } },
+      el('button.btn.sm', { type: 'button', text: '↻ Synchroniser maintenant', onclick: async e => {
+        e.currentTarget.disabled = true;
+        const change = await synchroniser().catch(() => false);
+        toast(modeActuel() === 'github'
+          ? (change ? 'Carnet mis à jour depuis GitHub' : 'Déjà à jour')
+          : (erreurGitHub() || 'GitHub injoignable'), modeActuel() !== 'github');
+        navigate('reglages', true);
+      } }),
+      el('a.btn.sm.ghost', { href: `https://github.com/${cfg.owner}/${cfg.repo}/commits/${cfg.branch}`,
+        target: '_blank', rel: 'noopener', text: 'Historique ↗' })));
+  }
+
   const champ = (label, input, aide) => el('div.field', {},
     el('label.lbl', { text: label }), input, aide ? el('div.hint', { text: aide }) : null);
-
   const owner  = el('input', { type: 'text', value: cfg.owner, placeholder: 'soaresden',
     autocapitalize: 'off', autocomplete: 'off', spellcheck: 'false' });
   const repo   = el('input', { type: 'text', value: cfg.repo, placeholder: 'PlongeeJournal-data',
@@ -95,69 +143,48 @@ export async function reglagesView() {
     placeholder: 'github_pat_…', autocapitalize: 'off', autocomplete: 'off', spellcheck: 'false' });
   const voir = el('button.btn.sm.ghost', { type: 'button', text: '👁', 'aria-label': 'Afficher le jeton',
     onclick: () => { token.type = token.type === 'password' ? 'text' : 'password'; } });
-
-  const lire = () => ({ owner: owner.value, repo: repo.value, branch: branch.value,
-    path: path.value, token: token.value });
-
+  const lire = () => ({ owner: owner.value, repo: repo.value, branch: branch.value, path: path.value, token: token.value });
   const resultat = el('div.hint', { style: { minHeight: '1.4em' } });
 
-  const avance = el('details.avance', {},
-    el('summary', { text: 'Options avancées' }),
-    el('div.row', {}, champ('Branche', branch), champ('Fichier', path)));
-
-  wrap.append(el('div.section', {},
-    el('h2', { text: 'Dépôt GitHub privé' }),
-    el('div.card', {},
-      el('div.row', {},
-        champ('Compte', owner),
-        champ('Dépôt', repo)),
-      avance,
-      champ('Jeton d’accès',
-        el('div.inline', {}, token, voir),
-        'Gardé uniquement sur cet appareil. Jamais dans le carnet ni dans le code.'),
-      resultat,
-      el('div.btn-row', {},
-        el('button.btn.primary', { type: 'button', text: estConfigure(cfg) ? 'Enregistrer' : 'Connecter', onclick: async e => {
-          const b = e.currentTarget;
-          const c = lire();
-          if (!c.owner || !c.repo || !c.token) { resultat.textContent = 'Compte, dépôt et jeton sont nécessaires.'; return; }
-          b.disabled = true;
-          resultat.textContent = 'Vérification auprès de GitHub…';
-          try {
-            const r = await testerConnexion({ ...configGitHub(), ...c });
-            if (!r.prive && !(await confirmBox(
-              `${r.nom} est PUBLIC : n’importe qui pourrait lire ton carnet. Continuer quand même ?`,
-              'Continuer', true))) { b.disabled = false; resultat.textContent = ''; return; }
-            enregistrerConfigGitHub(c);
-            const st = await rebrancher();
-            toast(st.mode === 'github' ? `Connecté — ${st.plongees} plongée(s) sur GitHub` : (erreurGitHub() || 'Enregistré'),
-              st.mode !== 'github');
-            navigate('reglages', true);
-          } catch (err) {
-            resultat.textContent = '⚠ ' + err.message;
-            b.disabled = false;
-          }
-        } }),
-        el('button.btn.ghost', { type: 'button', text: 'Tester', onclick: async () => {
-          resultat.textContent = 'Test…';
-          try {
-            const r = await testerConnexion({ ...configGitHub(), ...lire() });
-            resultat.textContent = `✓ ${r.nom} ${r.prive ? '(privé)' : '(⚠ public)'} — lecture et écriture OK`;
-          } catch (err) { resultat.textContent = '⚠ ' + err.message; }
-        } })),
-      estConfigure(cfg)
-        ? el('button.btn.sm.danger', { type: 'button', style: { marginTop: '12px' },
-            text: 'Débrancher (passer en mode local)', onclick: async () => {
-              if (!(await confirmBox('Débrancher GitHub sur cet appareil ? Le carnet reste sur GitHub '
-                + 'et une copie reste ici ; seul le jeton est oublié.', 'Débrancher', false))) return;
-              oublierConfigGitHub();
-              await rebrancher();
-              toast('Mode local');
-              navigate('reglages', true);
-            } })
-        : null),
-
-    el('details.card.aide', { open: !estConfigure(cfg) },
+  corps.append(
+    el('div.compte-sous', { text: 'Dépôt GitHub privé' }),
+    el('div.row', {}, champ('Compte', owner), champ('Dépôt', repo)),
+    el('details.avance', {},
+      el('summary', { text: 'Options avancées' }),
+      el('div.row', {}, champ('Branche', branch), champ('Fichier', path))),
+    champ('Jeton d’accès', el('div.inline', {}, token, voir),
+      'Gardé uniquement sur cet appareil. Jamais dans le carnet ni dans le code.'),
+    resultat,
+    el('div.btn-row', {},
+      el('button.btn.primary', { type: 'button', text: estConfigure(cfg) ? 'Enregistrer' : 'Connecter', onclick: async e => {
+        const b = e.currentTarget;
+        const c = lire();
+        if (!c.owner || !c.repo || !c.token) { resultat.textContent = 'Compte, dépôt et jeton sont nécessaires.'; return; }
+        b.disabled = true;
+        resultat.textContent = 'Vérification auprès de GitHub…';
+        try {
+          const r = await testerConnexion({ ...configGitHub(), ...c });
+          if (!r.prive && !(await confirmBox(
+            `${r.nom} est PUBLIC : n’importe qui pourrait lire ton carnet. Continuer quand même ?`,
+            'Continuer', true))) { b.disabled = false; resultat.textContent = ''; return; }
+          enregistrerConfigGitHub(c);
+          const st = await rebrancher();
+          toast(st.mode === 'github' ? `Connecté — ${st.plongees} plongée(s) sur GitHub` : (erreurGitHub() || 'Enregistré'),
+            st.mode !== 'github');
+          navigate('reglages', true);
+        } catch (err) {
+          resultat.textContent = '⚠ ' + err.message;
+          b.disabled = false;
+        }
+      } }),
+      el('button.btn.ghost', { type: 'button', text: 'Tester', onclick: async () => {
+        resultat.textContent = 'Test…';
+        try {
+          const r = await testerConnexion({ ...configGitHub(), ...lire() });
+          resultat.textContent = `✓ ${r.nom} ${r.prive ? '(privé)' : '(⚠ public)'} — lecture et écriture OK`;
+        } catch (err) { resultat.textContent = '⚠ ' + err.message; }
+      } })),
+    el('details.aide', { open: !estConfigure(cfg) },
       el('summary', { text: 'Comment obtenir le jeton (2 minutes, une seule fois)' }),
       el('ol.wiz-liste', {},
         el('li', {}, 'Ouvre ', el('a', { href: lienCreationJeton(), target: '_blank', rel: 'noopener',
@@ -169,9 +196,22 @@ export async function reglagesView() {
         el('li', {}, 'Generate token, copie la valeur ', el('code', { text: 'github_pat_…' }),
           ' et colle-la ci-dessus. Fais pareil sur chaque appareil (ou crée un jeton par appareil).')),
       el('div.hint', { text: 'Ce jeton ne donne accès qu’au dépôt du carnet : ni à ton mot de passe, '
-        + 'ni à tes autres dépôts. Tu peux le révoquer à tout moment depuis GitHub.' }))));
+        + 'ni à tes autres dépôts. Tu peux le révoquer à tout moment depuis GitHub.' })),
+    estConfigure(cfg)
+      ? el('button.btn.sm.danger', { type: 'button', style: { marginTop: '12px' },
+          text: 'Débrancher (passer en mode local)', onclick: async () => {
+            if (!(await confirmBox('Débrancher GitHub sur cet appareil ? Le carnet reste sur GitHub '
+              + 'et une copie reste ici ; seul le jeton est oublié.', 'Débrancher', false))) return;
+            oublierConfigGitHub();
+            await rebrancher();
+            toast('Mode local');
+            navigate('reglages', true);
+          } })
+      : null);
+  return carte;
+}
 
-  // ---------- Apparence ----------
+function sectionApparence() {
   const actuel = themeChoisi();
   const grille = el('div.themes');
   THEMES.forEach(t => {
@@ -191,14 +231,15 @@ export async function reglagesView() {
       el('span.theme-sous', { text: t.sous }));
     grille.append(b);
   });
-  wrap.append(el('div.section', {}, el('h2', { text: 'Apparence' }), grille));
+  return el('div.section', {}, el('h2', { text: 'Apparence' }), grille);
+}
 
-  // ---------- Sauvegarde manuelle ----------
-  wrap.append(el('div.section', {},
+function sectionDonnees() {
+  return el('div.section', {},
     el('h2', { text: 'Sauvegarde' }),
     el('div.card', {},
       el('div.hint', { style: { marginTop: 0, marginBottom: '10px' },
-        text: estConfigure(cfg)
+        text: estConfigure()
           ? 'GitHub garde déjà chaque version du carnet (un commit par modification). '
           + 'Un export reste utile comme copie hors de GitHub.'
           : 'En mode local, exporte régulièrement : si l’appareil est perdu, le carnet l’est aussi.' }),
@@ -217,48 +258,28 @@ export async function reglagesView() {
                 toast('Import terminé — fusionné avec le carnet');
                 navigate('dives', true);
               } catch (err) { toast(err.message, true); }
-            } }))))));
-
-  // ---------- Compte Suunto ----------
-  wrap.append(carteSuunto());
-
-  // ---------- Mise à jour de l'APK ----------
-  if (estApk()) wrap.append(carteMiseAJour());
-
-  // ---------- Applis ----------
-  wrap.append(el('div.section', {},
-    el('h2', { text: 'Sur tes autres appareils' }),
-    el('div.card', {},
-      el('div.kv', {}, el('span.k', { text: 'Site web' }),
-        el('a.v', { href: PAGES, target: '_blank', rel: 'noopener', text: 'soaresden.github.io/PlongeeJournal ↗' })),
-      el('div.kv', {}, el('span.k', { text: 'Appli Android' }),
-        el('a.v', { href: APK, target: '_blank', rel: 'noopener', text: 'Télécharger l’APK ↗' })),
-      el('div.hint', { text: 'Même carnet partout : il suffit de brancher le même dépôt dans les réglages de chaque appareil.' }))));
-
-  return { title: 'Réglages', node: wrap, back: true };
+            } })))));
 }
 
-/** Carte « Compte Suunto » : les clés de l'appli Suunto, puis la connexion. */
+/** Compte Suunto : les clés de l'appli Suunto, puis la connexion. L'import, lui, est dans Divers → Suunto. */
 function carteSuunto() {
-  const corps = el('div.card.carte-suunto', {}, el('div.hint', { style: { marginTop: 0 }, text: 'Chargement…' }));
+  const etat = el('div.hint.compte-etat', { text: 'Chargement…' });
+  const { carte, corps, changer } = carteCompte({ classe: 'local', icone: 'i-montre', titre: 'Compte Suunto', etat });
   let liaison = null, sha = null;
   const kv = (k, v) => el('div.kv', {}, el('span.k', { text: k }), el('span.v', { text: v }));
-  // append() natif écrirait « null » en texte : on filtre.
-  const ajouter = (...noeuds) => corps.append(...noeuds.filter(Boolean));
   const dateHeure = iso => (iso ? new Date(iso).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : '—');
 
   const rendre = () => {
     corps.replaceChildren();
     if (estRelie(liaison)) {
-      ajouter(
+      changer('ok');
+      etat.textContent = `Relié${liaison.compte ? ` · ${liaison.compte}` : ''}`;
+      corps.append(
         kv('Compte', liaison.compte || 'relié'),
         kv('Relié le', dateHeure(liaison.lieLe)),
         kv('Dernière récupération', dateHeure(liaison.derniereRecup)),
-        el('button.btn.primary.block', { type: 'button', style: { marginTop: '12px' },
-          text: '☁️ Récupérer mes activités', onclick: () => navigate('suunto-cloud') }),
-        estApk() ? null : el('div.hint', { text: 'La récupération se fait dans l’appli Android : le serveur des activités '
-          + 'de Suunto refuse les pages web.' }),
-        el('button.btn.block', { type: 'button', style: { marginTop: '8px' }, text: 'Délier le compte Suunto',
+        el('div.hint', { text: 'Pour importer tes activités : Divers → Suunto → « Récupérer depuis mon compte Suunto ».' }),
+        el('button.btn.sm.danger', { type: 'button', style: { marginTop: '12px' }, text: 'Délier le compte Suunto',
           onclick: async () => {
             if (!(await confirmBox('Délier le compte Suunto ? Le carnet ne bouge pas ; tu pourras le relier à nouveau.'))) return;
             try {
@@ -271,29 +292,29 @@ function carteSuunto() {
       return;
     }
 
+    changer('local');
+    etat.textContent = clesCompletes(liaison) ? 'Clés enregistrées · compte pas encore relié' : 'Pas encore configuré';
     const champ = (nom, libelle, type = 'text') => {
       const input = el('input', { type, value: liaison[nom] || '', autocomplete: 'off', spellcheck: 'false',
         oninput: () => { liaison[nom] = input.value.trim(); } });
-      return el('label.champ', { style: { display: 'block', marginTop: '10px' } },
-        el('span', { style: { display: 'block', fontSize: '13px', color: 'var(--text-mute)', marginBottom: '4px' }, text: libelle }), input);
+      return el('div.field', {}, el('label.lbl', { text: libelle }), input);
     };
     const retour = liaison.redirectUri || RETOUR_DEFAUT;
-    ajouter(
-      el('div.hint', { style: { marginTop: 0 }, text: 'Les clés de ton appli Suunto sont dans ton profil sur apizone.suunto.com : '
+    corps.append(
+      el('div.hint', { style: { marginTop: 0, marginBottom: '8px' }, text: 'Les clés de ton appli Suunto sont dans ton profil sur apizone.suunto.com : '
         + 'identifiant et secret client dans « OAuth and application settings », clé d’abonnement dans « Your subscriptions ».' }),
       champ('clientId', 'Identifiant client (Client Id)'),
       champ('clientSecret', 'Secret client (Client secret)', 'password'),
       champ('cleAbonnement', 'Clé d’abonnement (Subscription key)', 'password'),
-      el('div.kv', { style: { marginTop: '10px' } }, el('span.k', { text: 'Adresse de retour (Redirect URI)' }),
+      el('div.kv', {}, el('span.k', { text: 'Adresse de retour (Redirect URI)' }),
         el('button.btn.sm', { type: 'button', text: '📋 Copier', onclick: async () => {
           try { await navigator.clipboard.writeText(retour); toast('Adresse copiée'); } catch { toast(retour); }
         } })),
       el('div', { style: { fontFamily: 'monospace', fontSize: '12.5px', wordBreak: 'break-all' }, text: retour }),
-      el('div.hint', { text: 'À déclarer telle quelle dans les réglages OAuth de ton appli Suunto.' }),
-      el('div.hint', { text: estConfigure()
-        ? 'Les clés et la connexion sont gardées dans ton dépôt privé (suunto.json, à côté du carnet, pas dedans) : '
-          + 'le téléphone les retrouve tout seul.'
-        : 'Sans dépôt GitHub branché, elles restent sur cet appareil.' }),
+      el('div.hint', { text: 'À déclarer telle quelle dans les réglages OAuth de ton appli Suunto. '
+        + (estConfigure()
+          ? 'Les clés et la connexion sont gardées dans ton dépôt privé (suunto.json, à côté du carnet) : chaque appareil les retrouve tout seul.'
+          : 'Sans dépôt GitHub branché, elles restent sur cet appareil.') }),
       // Dans l'APK, Suunto renverrait vers le site dans le navigateur du
       // téléphone, pas dans l'appli : on y enregistre seulement les clés
       // (suunto.json), et la connexion se termine sur le site, au PC.
@@ -310,6 +331,7 @@ function carteSuunto() {
             if (!estApk()) { location.href = lienAutorisation(liaison, nouvelEtat()); return; }
             toast(estConfigure() ? 'Clés enregistrées dans ton dépôt — termine la connexion sur le PC'
               : 'Clés enregistrées sur ce téléphone seulement : branche GitHub pour les retrouver sur le PC', !estConfigure());
+            etat.textContent = 'Clés enregistrées · compte pas encore relié';
           } catch (err) {
             toast(err.message, true);
           }
@@ -322,9 +344,9 @@ function carteSuunto() {
 
   chargerLiaison()
     .then(r => { liaison = r.liaison; sha = r.sha; rendre(); })
-    .catch(e => { corps.replaceChildren(el('div.hint', { text: e.message })); });
+    .catch(e => { etat.textContent = e.message; });
 
-  return el('div.section', {}, el('h2', { text: 'Compte Suunto' }), corps);
+  return carte;
 }
 
 function dateCourte(iso) {
@@ -398,14 +420,13 @@ function carteMiseAJour() {
   bouton.onclick = lancer;
   lancer();
 
-  return el('div.section', {},
-    el('h2', { text: 'Appli Android' }),
-    el('div.card.carte-maj', {},
+  return el('div.card.carte-maj', {},
+      el('div.compte-sous', { style: { marginTop: 0 }, text: 'Appli Android' }),
       el('div.kv', {}, el('span.k', { text: 'Installée' }), vInstallee),
       el('div.kv', {}, el('span.k', { text: 'Dernière sur GitHub' }), vGitHub),
       message, liste, bouton,
       el('div.hint', { text: 'Le fichier se télécharge depuis ton dépôt GitHub ; Android te demande '
-        + 'ensuite de confirmer l’installation. Ton carnet et tes réglages sont conservés.' })));
+        + 'ensuite de confirmer l’installation. Ton carnet et tes réglages sont conservés.' }));
 }
 
 /** Téléchargement qui marche aussi dans l'APK (où <a download> est ignoré). */
