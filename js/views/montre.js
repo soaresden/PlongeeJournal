@@ -14,7 +14,7 @@
 // ============================================================
 
 import { el, toast, fmtDuration } from '../lib.js';
-import { store } from '../store.js';
+import { store, TYPES_SEANCE, typeSeance } from '../store.js';
 import { navigate } from '../router.js';
 import { profileSvg } from '../fit.js';
 import { bleDisponible, ouvrirLienOcean, montreMemorisee, oublierMontre } from '../ble.js';
@@ -22,6 +22,7 @@ import { OceanSession, Annule } from '../ocean-device.js';
 import { parseOcean, oceanToDive, plongeeCorrespondante, CLE_OCEAN } from '../ocean-sbem.js';
 import { journalBle } from '../ble-journal.js';
 import { creerPlongeeImportee } from './suunto.js';
+import { suggererRangement, seanceDepuisImport, commePlongees } from '../seances.js';
 
 // L'état survit au changement d'écran : on peut aller voir le carnet et
 // revenir copier le journal.
@@ -30,6 +31,7 @@ const etat = {
   bruts: new Map(),       // id → {compresse, resume}
   decodes: new Map(),     // id → {dive, erreur}
   coches: new Map(),      // id → bool
+  rangement: new Map(),   // id → 'plongee' | 'fosse' | 'piscine' | 'apnee'
   occupe: false, abort: null,
 };
 
@@ -87,6 +89,9 @@ export async function montreView() {
   const dispo = bleDisponible();
   const diverId = await store.getActiveDiverId();
   const dives = diverId ? await store.listDives(diverId) : [];
+  const seances = diverId ? await store.listSeances(diverId) : [];
+  // Déjà dans le carnet : en plongée, ou rangée dans les séances.
+  const connues = () => [...dives, ...commePlongees(seances)];
 
   const statut = el('div.hint', { style: { margin: '10px 0 6px', minHeight: '1.4em' } });
   const barre = el('progress', { max: 1, value: 0, style: { width: '100%', display: 'none' } });
@@ -163,7 +168,7 @@ export async function montreView() {
       dire('Lecture de la liste des plongées…');
       etat.fiches = await session.lister();
       for (const f of etat.fiches) {
-        if (!etat.coches.has(f.id)) etat.coches.set(f.id, !plongeeCorrespondante(f, dives) && f.taille > 0);
+        if (!etat.coches.has(f.id)) etat.coches.set(f.id, !plongeeCorrespondante(f, connues()) && f.taille > 0);
       }
       dire(`${etat.fiches.length} plongée(s) dans la montre.`);
     } catch (e) {
@@ -207,6 +212,10 @@ export async function montreView() {
             + `${dive.pressionDepart ?? '?'}→${dive.pressionFin ?? '?'} bar, ${dive.samples.length} points, `
             + `gaz ${JSON.stringify(dec.gaz)}, GF ${JSON.stringify(dec.gf)}, heure ${dec.heureDepuisGps ? 'GPS' : 'id'}`);
           etat.decodes.set(f.id, { dive, dec });
+          if (!etat.rangement.has(f.id)) {
+            etat.rangement.set(f.id, suggererRangement({ genre: dec.genre, profMax: dive.profMax, date: dive.start, lieu: dive.lieu }, seances));
+          }
+          journalBle.log(`  activité Suunto n°${dec.sport ?? '?'} (${dec.genre}) → rangée comme « ${etat.rangement.get(f.id)} »`);
         } catch (e) {
           if (e instanceof Annule) throw e;
           journalBle.log(`✗ plongée ${f.id} : ${e.message}`);
@@ -231,18 +240,16 @@ export async function montreView() {
   async function ajouter() {
     if (!diverId) { toast('Crée d’abord ton profil de plongeur', true); return; }
     const prets = etat.fiches
-      .filter(f => etat.coches.get(f.id) && etat.decodes.get(f.id)?.dive && !plongeeCorrespondante(f, dives))
+      .filter(f => etat.coches.get(f.id) && etat.decodes.get(f.id)?.dive && !plongeeCorrespondante(f, connues()))
       .sort((a, b) => a.id - b.id);
     if (!prets.length) return;
     etat.occupe = true;
     rendre();
-    const creees = [];
+    const creees = [], rangees = [];
     try {
       for (const f of prets) {
         const { dive: decode, dec } = etat.decodes.get(f.id);
-        const dive = await creerPlongeeImportee(diverId, decode, {
-          cles: [CLE_OCEAN(f.id)],
-          suunto: {
+        const suunto = {
             cle: CLE_OCEAN(f.id),
             source: 'bluetooth',
             appareil: etat.info?.modele || 'Suunto Ocean',
@@ -253,21 +260,52 @@ export async function montreView() {
             gf: dec.gf ? `${dec.gf.bas}/${dec.gf.haut}` : null,
             gaz: dec.gaz,
             eau: dec.eau,
-          },
-        });
+            sport: dec.sport,
+        };
+        const type = etat.rangement.get(f.id) || 'plongee';
+        if (type !== 'plongee') {
+          const seance = await store.saveSeance(seanceDepuisImport(diverId, type, decode, { cles: [CLE_OCEAN(f.id)], suunto }));
+          seances.push(seance);
+          rangees.push(seance);
+          journalBle.log(`+ séance « ${type} » ajoutée (${CLE_OCEAN(f.id)})`);
+          continue;
+        }
+        const dive = await creerPlongeeImportee(diverId, decode, { cles: [CLE_OCEAN(f.id)], suunto });
         dives.push(dive);
         creees.push(dive);
         journalBle.log(`+ plongée n°${dive.numero} ajoutée au carnet (${CLE_OCEAN(f.id)})`);
       }
-      toast(creees.length === 1 ? `Plongée n°${creees[0].numero} ajoutée` : `${creees.length} plongées ajoutées au carnet`);
+      toast([creees.length ? `${creees.length} plongée${creees.length > 1 ? 's' : ''} au carnet` : null,
+             rangees.length ? `${rangees.length} séance${rangees.length > 1 ? 's' : ''}` : null].filter(Boolean).join(' · '));
       await deconnecter();
-      navigate(creees.length === 1 ? `dive/${creees[0].id}/edit` : 'dives');
+      navigate(creees.length === 1 && !rangees.length ? `dive/${creees[0].id}/edit` : creees.length ? 'dives' : 'seances');
     } catch (e) {
       erreur(e, 'Ajout au carnet');
     } finally {
       etat.occupe = false;
       if (wrap.isConnected) rendre();
     }
+  }
+
+  // ---------- plongée ou séance ----------
+
+  function selecteurRangement(id) {
+    const seg = el('div.seg', { style: { marginTop: '10px' } });
+    [['plongee', '🌊 Plongée'], ...TYPES_SEANCE.map(t => [t.id, `${t.icone} ${t.label}`])]
+      .forEach(([v, label]) => {
+        const b = el('button', { type: 'button', text: label, disabled: etat.occupe });
+        if ((etat.rangement.get(id) || 'plongee') === v) b.classList.add('on');
+        b.onclick = () => { etat.rangement.set(id, v); rendre(); };
+        seg.append(b);
+      });
+    return el('div', {}, el('div.hint', { style: { marginTop: '8px' }, text: 'Ranger comme :' }), seg);
+  }
+
+  function libelleAjout(prets) {
+    const n = prets.filter(f => (etat.rangement.get(f.id) || 'plongee') === 'plongee').length;
+    const s = prets.length - n;
+    return [n ? `${n} plongée${n > 1 ? 's' : ''} au carnet` : null, s ? `${s} séance${s > 1 ? 's' : ''}` : null]
+      .filter(Boolean).join(' + ');
   }
 
   // ---------- rendu ----------
@@ -294,7 +332,7 @@ export async function montreView() {
     // Les plus récentes en haut.
     for (const f of [...etat.fiches].reverse()) {
       const date = new Date(f.id * 1000);
-      const deja = plongeeCorrespondante(f, dives);
+      const deja = plongeeCorrespondante(f, connues());
       const d = etat.decodes.get(f.id);
       const coche = el('input', { type: 'checkbox', disabled: etat.occupe || !!deja });
       coche.style.cssText = 'width:20px;height:20px;accent-color:var(--accent);flex:0 0 auto';
@@ -315,15 +353,17 @@ export async function montreView() {
             el('div', { style: { fontWeight: '600' }, text: fmtDateHeure(date) }),
             el('div', { style: { color: 'var(--text-dim)', fontSize: '13px' }, text: details }),
             deja ? el('div', { style: { color: 'var(--text-mute)', fontSize: '12px' },
-              text: `Dans le carnet : n°${deja.dive.numero ?? '?'} (${deja.comment})` }) : null,
+              text: deja.dive.seance ? `Dans les séances : ${typeSeance(deja.dive.type).label}`
+                : `Dans le carnet : n°${deja.dive.numero ?? '?'} (${deja.comment})` }) : null,
             d?.erreur ? el('div', { style: { color: 'var(--danger, #e5534b)', fontSize: '12px' }, text: `Échec : ${d.erreur}` }) : null,
           )),
+        d?.dive && !deja ? selecteurRangement(f.id) : null,
         d?.dive?.samples?.length ? el('div', { style: { marginTop: '10px' }, html: profileSvg(d.dive.samples) }) : null,
       ));
     }
 
-    const aTelecharger = etat.fiches.filter(f => etat.coches.get(f.id) && !etat.decodes.get(f.id)?.dive && !plongeeCorrespondante(f, dives));
-    const prets = etat.fiches.filter(f => etat.coches.get(f.id) && etat.decodes.get(f.id)?.dive && !plongeeCorrespondante(f, dives));
+    const aTelecharger = etat.fiches.filter(f => etat.coches.get(f.id) && !etat.decodes.get(f.id)?.dive && !plongeeCorrespondante(f, connues()));
+    const prets = etat.fiches.filter(f => etat.coches.get(f.id) && etat.decodes.get(f.id)?.dive && !plongeeCorrespondante(f, connues()));
     actions.append(el('div.btn-row', {},
       el('button.btn.block', {
         type: 'button', disabled: etat.occupe || !aTelecharger.length || !etat.session,
@@ -333,7 +373,7 @@ export async function montreView() {
       el('div.btn-row', {},
         el('button.btn.primary.block', {
           type: 'button', disabled: etat.occupe || !prets.length,
-          text: prets.length ? `✓ Ajouter ${prets.length} plongée(s) au carnet` : 'Rien à ajouter pour l’instant',
+          text: prets.length ? `✓ Ajouter ${libelleAjout(prets)}` : 'Rien à ajouter pour l’instant',
           onclick: ajouter,
         })));
   }

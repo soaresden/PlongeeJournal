@@ -21,6 +21,7 @@ export const AMBIANCES = {
   ocean:     { nom: 'Océan',               c1: '#0288d1', c2: '#4dd0e1' },
   douce:     { nom: 'Lac & carrière',      c1: '#2e9d5b', c2: '#a3c94a' },
   fosse:     { nom: 'Fosse',               c1: '#7e57c2', c2: '#42a5f5' },
+  aPreciser: { nom: 'Eau à préciser',      c1: '#5c7184', c2: '#8aa1b4' },
 };
 
 const entre = (v, a, b) => v >= a && v <= b;
@@ -39,7 +40,10 @@ export function ambianceId(d = {}) {
   }
   if (entre(lat, 30, 46.5) && entre(lng, -5.6, 36.5)) return 'med';
   if (entre(lat, 25, 42) && entre(lng, -35, -12)) return 'atlantique';
-  if (lat > 43) return 'nord';
+  // Au nord, la mer n'est qu'une bande côtière : sans type d'eau connu, un
+  // point en Île-de-France n'a rien de la Manche (une piscine importée
+  // de la montre, par exemple).
+  if (lat > 43) return d.eau === 'salee' ? 'nord' : 'aPreciser';
   return 'ocean';
 }
 

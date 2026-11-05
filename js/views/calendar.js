@@ -22,6 +22,21 @@
 
 import { el, fmtDate, fmtDuration, fmtDateLong, fullName, scrollTo } from '../lib.js';
 import { navigate } from '../router.js';
+import { TYPES_SEANCE, typeSeance } from '../model.js';
+
+// Ce que le calendrier montre : les plongées, et chaque type de séance,
+// au choix (cases à cocher). Retenu sur l'appareil.
+const CLE_COUCHES = 'plongee-journal:cal-couches';
+function lireCouches() {
+  try {
+    const v = JSON.parse(localStorage.getItem(CLE_COUCHES) || 'null');
+    if (Array.isArray(v)) return new Set(v);
+  } catch { /* stockage indisponible */ }
+  return new Set(['plongees']);
+}
+function garderCouches(c) {
+  try { localStorage.setItem(CLE_COUCHES, JSON.stringify([...c])); } catch { /* plein ou privé */ }
+}
 
 const MOIS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin',
               'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
@@ -65,22 +80,29 @@ export function meilleurSens(largeur, hauteur, geo = GEO) {
 
 // ============================================================
 
-export function calendrier(dives, { buddies = [] } = {}) {
+export function calendrier(dives, { buddies = [], seances = [] } = {}) {
   const wrap = el('div');
 
-  const avecDate = dives.filter(d => (d.date || '').length >= 10);
-  if (!avecDate.length) {
+  const datee = x => /^\d{4}-\d\d-\d\d/.test(x.date || '');
+  const avecDate = dives.filter(datee);
+  const seancesDatees = seances.filter(datee);
+  if (!avecDate.length && !seancesDatees.length) {
     wrap.append(el('div.empty', { text: 'Aucune plongée datée.' }));
     return wrap;
   }
 
   const nomCompagnon = id => fullName(buddies.find(b => b.id === id)) || '?';
+  const couches = lireCouches();
+  const voitPlongees = () => couches.has('plongees');
 
-  const dates = avecDate.map(d => d.date.slice(0, 10)).sort();
+  // Les années couvrent plongées ET séances ; le mois affiché et la
+  // période par défaut suivent les plongées (le carnet), s'il y en a.
+  const toutes = [...avecDate, ...seancesDatees].map(d => d.date.slice(0, 10)).sort();
+  const dates = avecDate.length ? avecDate.map(d => d.date.slice(0, 10)).sort() : toutes;
   const premier = dates[0];
   const dernier = dates[dates.length - 1];
-  const anneeMin = Number(premier.slice(0, 4));
-  const anneeMax = Number(dernier.slice(0, 4));
+  const anneeMin = Number(toutes[0].slice(0, 4));
+  const anneeMax = Number(toutes[toutes.length - 1].slice(0, 4));
 
   let mode = localStorage.getItem('plongee-journal:cal-mode') || 'tout';
   let mois = Number(dernier.slice(5, 7)) - 1;
@@ -91,44 +113,76 @@ export function calendrier(dives, { buddies = [] } = {}) {
 
   const echelles = el('div.cal-tete');   // Tout / Année / Mois / Période
   const barre = el('div');               // commandes propres à l'échelle
+  const zoneCouches = el('div');         // plongées / fosse / piscine / apnée
   const filtre = el('div');
   const scene = el('div');
   const detail = el('div');
 
-  /** Plongées après application du filtre par compagnon. */
-  const retenues = () => (compagnonsFiltre.size
-    ? avecDate.filter(d => (d.buddyIds || []).some(id => compagnonsFiltre.has(id)))
-    : avecDate);
+  /** Plongées après application du filtre par compagnon (et de la case « Plongées »). */
+  const retenues = () => (!voitPlongees() ? []
+    : compagnonsFiltre.size
+      ? avecDate.filter(d => (d.buddyIds || []).some(id => compagnonsFiltre.has(id)))
+      : avecDate);
 
+  /** Séances des types cochés. */
+  const seancesVues = () => seancesDatees.filter(s => couches.has(s.type));
+
+  const VIDE = { p: [], s: [] };
+
+  /** jour → { p: plongées, s: séances } */
   function parJour(liste) {
     const m = new Map();
-    liste.forEach(d => {
-      const k = d.date.slice(0, 10);
-      if (!m.has(k)) m.set(k, []);
-      m.get(k).push(d);
-    });
+    const case_ = k => { if (!m.has(k)) m.set(k, { p: [], s: [] }); return m.get(k); };
+    liste.forEach(d => case_(d.date.slice(0, 10)).p.push(d));
+    seancesVues().forEach(s => case_(s.date.slice(0, 10)).s.push(s));
     return m;
   }
 
+  /** « 2 plongées, 1 fosse » */
+  function libelleJour(jour) {
+    const parts = [];
+    if (jour.p.length) parts.push(`${jour.p.length} plongée${jour.p.length > 1 ? 's' : ''}`);
+    for (const t of TYPES_SEANCE) {
+      const n = jour.s.filter(s => s.type === t.id).length;
+      if (n) parts.push(n > 1 ? `${n} ${t.pluriel}` : `1 ${t.label.toLowerCase()}`);
+    }
+    return parts.join(', ');
+  }
+
   // ---------- un carré ----------
-  function carre(dateStr, duJour, extra = '') {
+  function carre(dateStr, jour = VIDE, extra = '', { toujours = false } = {}) {
+    const n = jour.p.length;
+    const types = [...new Set(jour.s.map(s => s.type))];
+    // Une plongée garde sa couleur de chaleur ; un jour de séance seule
+    // prend la couleur de la séance ; les deux : un coin de couleur.
+    let classe = `j n${chaleur(n)}${extra}`;
+    if (!n && types.length) classe += ` s-${types[0]}`;
+    else if (n && types.length) classe += ` avec-s pt-${types[0]}`;
     const c = el('button', {
       type: 'button',
-      class: `j n${chaleur(duJour.length)}${extra}`,
-      title: duJour.length
-        ? `${fmtDate(dateStr)} — ${duJour.length} plongée${duJour.length > 1 ? 's' : ''}`
-        : fmtDate(dateStr),
+      class: classe,
+      title: n || types.length ? `${fmtDate(dateStr)} — ${libelleJour(jour)}` : fmtDate(dateStr),
     });
     if (dateStr === iso(new Date())) c.classList.add('auj');
-    if (duJour.length) c.onclick = () => afficherJour(dateStr, duJour);
+    if (n || types.length || toujours) c.onclick = () => afficherJour(dateStr, jour);
     else c.disabled = true;
     return c;
   }
 
-  function afficherJour(date, duJour) {
+  function afficherJour(date, jour) {
+    const duJour = jour.p;
     detail.innerHTML = '';
     detail.append(el('div.card', {},
       el('div.lbl', { text: fmtDateLong(date) }),
+      ...jour.s.map(s => el('div.jour-ligne', { onclick: () => navigate(`seance/${s.id}`) },
+        el('span.seance-pastille', { class: `s-${s.type}`, style: { width: '38px', height: '38px', flex: '0 0 38px', fontSize: '18px' }, text: typeSeance(s.type).icone }),
+        el('div', { style: { flex: 1, minWidth: 0 } },
+          el('div', { style: { fontWeight: '600', fontSize: '14.5px' }, text: `${typeSeance(s.type).label}${s.lieu ? ` · ${s.lieu}` : ''}` }),
+          el('div', { style: { color: 'var(--text-dim)', fontSize: '12.5px' },
+            text: [s.heure, s.dureeMin ? fmtDuration(s.dureeMin) : null, s.profMax ? `${s.profMax} m` : null,
+                   s.distanceM ? `${s.distanceM} m nagés` : null].filter(Boolean).join(' · ') })),
+        el('span', { style: { color: 'var(--text-mute)' }, text: '›' }))),
+      !duJour.length && !jour.s.length ? el('div.hint', { text: 'Rien ce jour-là.' }) : null,
       ...duJour.map(d => el('div.jour-ligne', { onclick: () => navigate(`dive/${d.id}`) },
         el('div.dive-num', { style: { width: '38px', height: '38px', flex: '0 0 38px',
           fontSize: '13px' }, text: d.numero ?? '—' }),
@@ -142,6 +196,10 @@ export function calendrier(dives, { buddies = [] } = {}) {
               .filter(Boolean).join(' · ') })),
         el('span', { style: { color: 'var(--text-mute)' }, text: '›' }),
       )),
+      // Pointer une séance ce jour-là (la fosse du jeudi oubliée…).
+      el('div.chips', { style: { marginTop: '10px' } },
+        ...TYPES_SEANCE.map(t => el('button.chip', { type: 'button', text: `＋ ${t.icone} ${t.label}`,
+          onclick: () => navigate(`seance/new?type=${t.id}&date=${date}`) }))),
     ));
     scrollTo(detail, { behavior: 'smooth', block: 'nearest' });
   }
@@ -156,7 +214,7 @@ export function calendrier(dives, { buddies = [] } = {}) {
 
     const k = cle(an, m, j);
     const horsBorne = borne && (k < borne.debut || k > borne.fin);
-    const duJour = horsBorne ? [] : (jours.get(k) || []);
+    const duJour = horsBorne ? VIDE : (jours.get(k) || VIDE);
 
     const jourSemaine = new Date(an, m, j).getDay();     // 0 = dimanche
     let extra = '';
@@ -281,13 +339,14 @@ export function calendrier(dives, { buddies = [] } = {}) {
     nbAnnees = Math.max(1, aLAn - deLAn + 1);
 
     for (let an = deLAn; an <= aLAn; an++) {
-      const compte = liste.filter(d => d.date.startsWith(String(an))
-        && (!borne || (d.date.slice(0, 10) >= borne.debut && d.date.slice(0, 10) <= borne.fin))).length;
+      const dans = d => d.date.startsWith(String(an))
+        && (!borne || (d.date.slice(0, 10) >= borne.debut && d.date.slice(0, 10) <= borne.fin));
+      const compte = libelleJour({ p: liste.filter(dans), s: seancesVues().filter(dans) });
 
       bloc.append(
         el('div.an12-entete', {},
           el('span.an12-an', { text: String(an) }),
-          el('span.an12-n', { text: compte ? `${compte} plongée${compte > 1 ? 's' : ''}` : '—' })),
+          el('span.an12-n', { text: compte || '—' })),
         grilleAnnee(an, { jours, borne }));
     }
     return bloc;
@@ -310,22 +369,29 @@ export function calendrier(dives, { buddies = [] } = {}) {
     JOURS.forEach(j => grille.append(el('div.mois-jour-nom', { text: j })));
     for (let i = 0; i < decalage; i++) grille.append(el('div'));
 
-    let total = 0;
+    const total = { p: [], s: [] };
     for (let j = 1; j <= nbJours; j++) {
       const k = cle(annee, mois, j);
-      const duJour = jours.get(k) || [];
-      total += duJour.length;
+      const duJour = jours.get(k) || VIDE;
+      total.p.push(...duJour.p);
+      total.s.push(...duJour.s);
 
       const jourSemaine = new Date(annee, mois, j).getDay();
-      const c = carre(k, duJour, ' grand' + (jourSemaine % 6 === 0 ? ' we' : ''));
+      // En vue mois tout jour se touche : pour y pointer une séance.
+      const c = carre(k, duJour, ' grand' + (jourSemaine % 6 === 0 ? ' we' : ''), { toujours: true });
       c.append(el('span.mois-num', { text: String(j) }));
-      if (duJour.length > 1) c.append(el('span.mois-badge', { text: String(duJour.length) }));
+      const n = duJour.p.length + duJour.s.length;
+      if (n > 1) c.append(el('span.mois-badge', { text: String(n) }));
+      if (duJour.s.length) {
+        c.append(el('span.mois-seances', {},
+          ...[...new Set(duJour.s.map(s => s.type))].map(t => el('span', { text: typeSeance(t).icone }))));
+      }
       grille.append(c);
     }
 
+    const resume = libelleJour(total);
     bloc.append(grille, el('div.hint', {
-      text: total ? `${total} plongée${total > 1 ? 's' : ''} en ${MOIS[mois]} ${annee}.`
-                  : `Aucune plongée en ${MOIS[mois]} ${annee}.`,
+      text: resume ? `${resume} en ${MOIS[mois]} ${annee}.` : `Rien en ${MOIS[mois]} ${annee}.`,
     }));
     return bloc;
   }
@@ -452,6 +518,32 @@ export function calendrier(dives, { buddies = [] } = {}) {
   }
 
   // ============================================================
+  //  Ce qu'on affiche : plongées, fosses, piscines, apnées
+  // ============================================================
+
+  function rendreCouches() {
+    zoneCouches.innerHTML = '';
+    const lignes = [
+      { id: 'plongees', label: 'Plongées', n: avecDate.length, carreClasse: 'j n2' },
+      ...TYPES_SEANCE.map(t => ({ id: t.id, label: `${t.icone} ${t.label}`, n: seancesDatees.filter(s => s.type === t.id).length, carreClasse: `j n0 s-${t.id}` })),
+    ];
+    const boite = el('div.card.filtre-card.cal-couches', {},
+      ...lignes.map(l => {
+        const coche = el('input', { type: 'checkbox' });
+        coche.checked = couches.has(l.id);
+        coche.onchange = () => {
+          if (coche.checked) couches.add(l.id); else couches.delete(l.id);
+          garderCouches(couches);
+          detail.innerHTML = '';
+          rendreScene();
+        };
+        return el('label.cal-couche', {}, coche, el('span', { class: l.carreClasse }), el('span', { text: l.label }),
+          el('span.cal-couche-n', { text: String(l.n) }));
+      }));
+    zoneCouches.append(boite);
+  }
+
+  // ============================================================
   //  Filtre par compagnon, commun à toutes les vues
   // ============================================================
 
@@ -530,6 +622,7 @@ export function calendrier(dives, { buddies = [] } = {}) {
     if (!sansMesure) requestAnimationFrame(mesurerPuisEventuellementRefaire);
   }
 
+  rendreCouches();
   rendreFiltre();
   rendreBarre();
   rendreScene();
@@ -552,6 +645,6 @@ export function calendrier(dives, { buddies = [] } = {}) {
   // rien, et la grille récupère toute la hauteur.
   wrap.append(echelles, el('div.cal-wrap', {},
     el('div.cal-carte', {}, scene),
-    el('div.cal-panneau', {}, barre, filtre, detail)));
+    el('div.cal-panneau', {}, barre, zoneCouches, filtre, detail)));
   return wrap;
 }

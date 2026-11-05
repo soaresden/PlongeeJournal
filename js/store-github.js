@@ -232,6 +232,7 @@ const adaptateur = creerStore({
       buddies: quoi.supprime ? 'plongeur supprimé' : 'plongeur',
       divers: quoi.supprime ? 'profil supprimé' : 'profil',
       certifs: 'certification',
+      seances: quoi.supprime ? 'séance supprimée' : 'séance',
       settings: 'réglages',
       tout: 'import / remise à zéro',
     }[quoi.table];

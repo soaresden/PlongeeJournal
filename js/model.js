@@ -433,6 +433,98 @@ export function sortPeople(list) {
     (a.nom + a.prenom).localeCompare(b.nom + b.prenom, 'fr'));
 }
 
+// ------------------------------------------------------------
+//  Séances d'entraînement : fosse, piscine, apnée
+//
+//  Ce ne sont pas des plongées du carnet : pas de numéro, pas de
+//  niveau, elles ne comptent pas dans les statistiques de plongée.
+//  Elles ont leur propre compteur.
+// ------------------------------------------------------------
+
+export const TYPES_SEANCE = [
+  { id: 'fosse',   label: 'Fosse',   pluriel: 'fosses',            icone: '🤿', detail: 'plongée bouteille en fosse' },
+  { id: 'piscine', label: 'Piscine', pluriel: 'séances de piscine', icone: '🏊', detail: 'natation' },
+  { id: 'apnee',   label: 'Apnée',   pluriel: 'séances d’apnée',    icone: '🐬', detail: 'apnée' },
+];
+
+export const typeSeance = id => TYPES_SEANCE.find(t => t.id === id) || TYPES_SEANCE[0];
+
+export function emptySeance(diverId, type = 'fosse', date = '') {
+  const now = new Date().toISOString();
+  return {
+    id: uid(),
+    diverId,
+    type,                 // fosse | piscine | apnee
+    date,                 // AAAA-MM-JJ
+    heure: '',            // HH:MM
+    dureeMin: null,
+    lieu: '',
+    profMax: null,        // fosse, apnée (m)
+    distanceM: null,      // piscine (m)
+    apneeMaxS: null,      // apnée : meilleure apnée statique (s)
+    tempEau: null,        // °C
+    buddyIds: [],
+    notes: '',
+    // Import (montre) : mêmes clés anti-doublon que les plongées.
+    suuntoKeys: [],
+    source: '',           // '' (saisie) | 'bluetooth' | 'plongee' (déplacée depuis le carnet)
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+export function sortSeances(list) {
+  return list.slice().sort((a, b) => (b.date || '').localeCompare(a.date || '')
+                                  || (b.heure || '').localeCompare(a.heure || ''));
+}
+
+/** Compteurs par type : en tout, et pour l'année donnée. */
+export function statsSeances(list, annee = String(new Date().getFullYear())) {
+  const parType = {};
+  for (const t of TYPES_SEANCE) parType[t.id] = { total: 0, annee: 0, minutes: 0, derniere: null };
+  for (const s of list) {
+    const p = parType[s.type];
+    if (!p) continue;
+    p.total++;
+    if ((s.date || '').startsWith(annee)) p.annee++;
+    p.minutes += Number(s.dureeMin) || 0;
+    if (s.date && (!p.derniere || s.date > p.derniere)) p.derniere = s.date;
+  }
+  return { total: list.length, annee, parType };
+}
+
+/**
+ * Une plongée du carnet qui était en fait une séance (une fosse saisie ou
+ * importée comme plongée) : les champs qui ont un sens sont repris.
+ */
+export function seanceDepuisPlongee(dive, type) {
+  const s = emptySeance(dive.diverId, type, dive.date || '');
+  s.heure = dive.heureImmersion || '';
+  // Date abîmée (GPS sans signal lors d'un import) : la clé de la montre
+  // est l'heure de début, en secondes UNIX.
+  const id = Number((dive.suuntoKeys || []).find(k => /^ocean:\d+$/.test(k))?.slice(6));
+  if (!/^\d{4}-\d\d-\d\d$/.test(s.date) && id) {
+    const d = new Date(id * 1000), p = n => String(n).padStart(2, '0');
+    s.date = `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+    s.heure = `${p(d.getHours())}:${p(d.getMinutes())}`;
+  }
+  if (!/^\d\d:\d\d$/.test(s.heure)) s.heure = '';
+  s.dureeMin = dive.dureeMin ?? null;
+  s.lieu = [dive.lieuNom, dive.site].filter(Boolean).join(' — ');
+  s.profMax = dive.profMax ?? null;
+  s.buddyIds = [...(dive.buddyIds || [])];
+  s.notes = [dive.fait, dive.observations].filter(Boolean).join('\n');
+  s.suuntoKeys = [...(dive.suuntoKeys || [])];
+  if (dive.suunto) s.suunto = dive.suunto;
+  if (dive.samples?.length) s.samples = dive.samples;
+  // Une position « au large du Gabon » vient d'un GPS sans signal.
+  if (dive.lat != null && Math.abs(dive.lat) > 0.01) { s.lat = dive.lat; s.lng = dive.lng; }
+  if (dive.tempFond != null) s.tempEau = dive.tempFond;
+  if (type === 'piscine') s.profMax = null;
+  s.source = 'plongee';
+  return s;
+}
+
 /** Regroupe les compagnons par club, les sans-club en dernier. */
 export function parClub(buddies) {
   const groupes = new Map();

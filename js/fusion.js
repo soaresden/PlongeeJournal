@@ -16,7 +16,7 @@
 //  Aucune dépendance : testé tel quel par outils/github-test.mjs.
 // ============================================================
 
-export const TABLES = ['divers', 'buddies', 'dives', 'certifs'];
+export const TABLES = ['divers', 'buddies', 'dives', 'certifs', 'seances'];
 
 const date = x => String(x?.updatedAt || '');
 

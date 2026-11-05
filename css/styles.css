@@ -1263,3 +1263,68 @@ a.btn { text-decoration: none; }
 @media (max-width: 400px) {
   .fiche-tete .vignette { width: 92px !important; height: 92px !important; }
 }
+
+/* ============================================================
+   Séances : fosse, piscine, apnée
+   ============================================================ */
+:root {
+  --s-fosse: #8b5cf6;
+  --s-piscine: #3b82f6;
+  --s-apnee: #e86fb0;
+}
+.s-fosse   { --s: var(--s-fosse); }
+.s-piscine { --s: var(--s-piscine); }
+.s-apnee   { --s: var(--s-apnee); }
+.pt-fosse   { --pt: var(--s-fosse); }
+.pt-piscine { --pt: var(--s-piscine); }
+.pt-apnee   { --pt: var(--s-apnee); }
+
+/* Au calendrier : un jour de séance seule prend sa couleur ; un jour de
+   plongée ET de séance garde sa chaleur, avec un coin de couleur. */
+.j.n0.s-fosse, .j.n0.s-piscine, .j.n0.s-apnee { background: var(--s); }
+.j.avec-s::after {
+  content: ''; position: absolute; right: 0; bottom: 0;
+  width: 45%; height: 45%; background: var(--pt);
+  border-top-left-radius: 2px; border-bottom-right-radius: inherit;
+}
+.j.grand.s-fosse .mois-num, .j.grand.s-piscine .mois-num, .j.grand.s-apnee .mois-num { color: #fff; font-weight: 700; }
+.mois-seances {
+  position: absolute; left: 0; right: 0; bottom: 1px;
+  display: flex; justify-content: center; gap: 1px;
+  font-size: min(10px, calc(var(--cellm, 40px) * 0.26)); line-height: 1;
+}
+.j.grand.avec-s::after { width: 30%; height: 30%; }
+
+.cal-couches { display: flex; flex-wrap: wrap; gap: 4px 14px; }
+.cal-couche {
+  display: flex; align-items: center; gap: 7px;
+  font-size: 13.5px; cursor: pointer; padding: 3px 0; color: var(--text);
+}
+.cal-couche input { width: 17px; height: 17px; accent-color: var(--accent); margin: 0; }
+.cal-couche .j { width: 11px; height: 11px; display: inline-block; flex: 0 0 11px; }
+.cal-couche-n { color: var(--text-mute); font-size: 11.5px; }
+@media (min-width: 560px) {
+  .cal-panneau .cal-couches { flex-direction: column; gap: 0; }
+  .cal-panneau .cal-couche-n { margin-left: auto; }
+}
+
+.seance-pastille {
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 50%; background: var(--s, var(--s-fosse)); line-height: 1;
+}
+.seance-carte { display: flex; align-items: center; gap: 12px; }
+.seances-compteurs { grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.seance-stat {
+  font-family: inherit; text-align: left; cursor: pointer; color: inherit;
+  border-top: 3px solid var(--s); padding: 10px;
+}
+.seance-stat .n { color: var(--text); display: flex; align-items: center; gap: 6px; }
+.seance-stat-ico { font-size: 18px; }
+.seance-stat .l { margin-top: 2px; font-size: 11.5px; }
+.seances-ajout { margin-top: 10px; flex-wrap: wrap; }
+.seances-ajout .btn { padding: 10px 6px; font-size: 14px; }
+
+/* Quatre vues dans l'écran Plongées : on resserre sur téléphone. */
+@media (max-width: 420px) {
+  .bascule-dives button { padding: 8px 2px; font-size: 12px; }
+}

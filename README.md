@@ -103,6 +103,16 @@ Tank POD, gaz, gradients, position GPS de la mise à l'eau. Les plongées déjà
 importées (en `.fit` ou en Bluetooth) sont reconnues. Voir
 [Appairer la montre](#appairer-la-montre-suunto-ocean).
 
+**Séances : fosse, piscine, apnée** — à côté du carnet, pas dedans : elles
+n'ont pas de numéro et ne comptent pas comme plongées, mais ont leurs
+compteurs (« 23 fosses, dont 9 cette année »). Un bouton par type pour pointer
+la séance du jour, pré-remplie d'après la précédente. À l'agenda, des cases à
+cocher affichent plongées, fosses, piscines et apnées, chacune de sa couleur ;
+toucher un jour permet d'y pointer une séance oubliée. À l'import depuis la
+montre, chaque activité se range en plongée ou en séance (natation et petit
+bain → piscine, jeudi soir en fosse → fosse) ; une plongée déjà au carnet peut
+être rangée en séance après coup.
+
 **Calculs** — consommation d'air (brute et ramenée à la surface), profondeur
 maximale opérationnelle d'un nitrox, niveau courant déduit des cartes de
 certification, statistiques du carnet.
@@ -200,7 +210,8 @@ node outils/dive-test.mjs        # 159  règles métier : durées, paliers, nive
 node outils/smoke.mjs            # 118  tous les écrans, dans un vrai DOM (npm i jsdom)
 node outils/github-test.mjs      #  35  synchro GitHub : création, conflits, suppressions, hors ligne
 node outils/lieu-test.mjs        #  30  recherche de lieux, cadrage des cartes
-node outils/ocean-test.mjs       #  64  Suunto Ocean : trames, Heatshrink, décodage, session Bluetooth
+node outils/ocean-test.mjs       #  69  Suunto Ocean : trames, Heatshrink, décodage, session Bluetooth
+node outils/seance-test.mjs      #  38  séances : stockage, fusion, tri plongée / piscine / fosse
 node outils/fit-test.mjs         #  27  décodage des fichiers .fit
 node outils/geo-test.mjs         #  22  eau douce / salée, altitude
 node outils/stamp-test.mjs       #  13  détourage des tampons

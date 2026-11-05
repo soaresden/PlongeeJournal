@@ -2,14 +2,15 @@
 //  Liste des plongées + fiche détaillée
 // ============================================================
 
-import { el, fmtDate, fmtDateLong, fmtDuration, fullName, toast, confirmBox } from '../lib.js';
-import { store } from '../store.js';
+import { el, fmtDate, fmtDateLong, fmtDuration, fullName, toast, confirmBox, openModal } from '../lib.js';
+import { store, TYPES_SEANCE } from '../store.js';
 import { staticMap } from '../map.js';
 import { navigate } from '../router.js';
 import { profileSvg } from '../fit.js';
 import { consommation, libelleGaz } from '../store.js';
 import { METEO, ETAT_MER, COURANTS, VISIBILITE_ICONES } from '../config.js';
 import { ambianceDe, stylesAmbiance, vignetteLieu, etiquetteAmbiance } from '../ambiance.js';
+import { plongeesARanger } from '../seances.js';
 
 /** Retrouve le pictogramme d'une condition à partir de sa valeur stockée. */
 const picto = (liste, valeur) => {
@@ -44,6 +45,7 @@ export async function divesView() {
 
   const diver = await store.getDiver(diverId);
   const dives = await store.listDives(diverId);
+  const seances = await store.listSeances(diverId);
   const buddies = await store.listBuddies();
   const buddyName = id => fullName(buddies.find(b => b.id === id)) || '?';
 
@@ -58,7 +60,7 @@ export async function divesView() {
     derniere: st.lastDate ? fmtDate(st.lastDate) : '',
   };
 
-  if (!dives.length) {
+  if (!dives.length && !seances.length) {
     wrap.append(el('div.empty', {},
       el('span.big', { text: '🌊' }),
       'Ton carnet est vide.', el('br'),
@@ -77,11 +79,12 @@ export async function divesView() {
   const cal = el('div');
 
   const carteBox = el('div');
+  const seancesBox = el('div');
 
-  const bascule = el('div.seg', { style: { marginBottom: '12px' } });
+  const bascule = el('div.seg.bascule-dives', { style: { marginBottom: '12px' } });
   function rendreBascule() {
     bascule.innerHTML = '';
-    [['liste', '☰ Liste'], ['calendrier', '▦ Calendrier'], ['carte', '🗺 Carte']].forEach(([id, label]) => {
+    [['liste', '☰ Liste'], ['calendrier', '▦ Agenda'], ['carte', '🗺 Carte'], ['seances', '🏊 Séances']].forEach(([id, label]) => {
       const b = el('button', { type: 'button', text: label });
       if (id === vue) b.classList.add('on');
       b.onclick = async () => {
@@ -96,13 +99,19 @@ export async function divesView() {
 
   async function afficherVue() {
     zoneRecherche.hidden = vue !== 'liste';
+    if (bandeauRanger) bandeauRanger.hidden = vue !== 'liste';
     list.hidden = vue !== 'liste';
     cal.hidden = vue !== 'calendrier';
     carteBox.hidden = vue !== 'carte';
+    seancesBox.hidden = vue !== 'seances';
 
     if (vue === 'calendrier' && !cal.childNodes.length) {
       const { calendrier } = await import('./calendar.js');
-      cal.append(calendrier(dives, { buddies }));
+      cal.append(calendrier(dives, { buddies, seances }));
+    }
+    if (vue === 'seances' && !seancesBox.childNodes.length) {
+      const { seancesPanneau } = await import('./seances.js');
+      seancesBox.append(seancesPanneau({ seances, dives }));
     }
     if (vue === 'carte' && !carteBox.childNodes.length) {
       const { carteDesPlongees } = await import('./carte.js');
@@ -111,7 +120,15 @@ export async function divesView() {
   }
 
   rendreBascule();
-  wrap.append(bascule, zoneRecherche, list, cal, carteBox);
+  // Des « plongées » importées qui étaient des piscines ou des fosses :
+  // on le signale là où elles se voient, dans la liste.
+  const aRanger = plongeesARanger(dives, seances);
+  const bandeauRanger = aRanger.length ? el('div.card.alerte.clickable', {
+    onclick: async () => { vue = 'seances'; localStorage.setItem(vueMemoire, vue); rendreBascule(); await afficherVue(); },
+  },
+    el('div', { style: { fontWeight: '650' }, text: `🏊 ${aRanger.length} plongée${aRanger.length > 1 ? 's' : ''} importée${aRanger.length > 1 ? 's' : ''} ressemble${aRanger.length > 1 ? 'nt' : ''} à des séances` }),
+    el('div.hint', { text: 'Piscine, fosse : range-les dans Séances pour qu’elles ne comptent plus comme plongées ›' })) : null;
+  wrap.append(bascule, bandeauRanger || '', zoneRecherche, list, cal, carteBox, seancesBox);
 
   function matches(d, q) {
     if (!q) return true;
@@ -162,7 +179,10 @@ export async function divesView() {
     const q = search.value.trim().toLowerCase();
     const shown = dives.filter(d => matches(d, q));
     list.innerHTML = '';
-    if (!shown.length) { list.append(el('div.empty', { text: 'Aucune plongée ne correspond.' })); return; }
+    if (!shown.length) {
+      list.append(el('div.empty', { text: dives.length ? 'Aucune plongée ne correspond.' : 'Aucune plongée : tes séances sont dans l’onglet Séances.' }));
+      return;
+    }
 
     const parAnnee = new Map();
     shown.forEach(d => {
@@ -213,6 +233,26 @@ export async function divesView() {
   return { title: 'Plongées', node: wrap, identite };
 }
 
+/** Une « plongée » qui était une séance : on la range, elle quitte le carnet. */
+function versSeance(d) {
+  openModal(close => el('div', {},
+    el('h3', { text: 'C’était une séance ?' }),
+    el('div.hint', { style: { marginBottom: '12px' },
+      text: `La plongée n°${d.numero ?? ''} quitte le carnet et devient une séance : `
+          + 'elle ne compte plus comme plongée. Date, heure, durée, profil et notes sont gardés.' }),
+    el('div.btn-row', { style: { flexWrap: 'wrap' } },
+      ...TYPES_SEANCE.map(t => el('button.btn', {
+        type: 'button', text: `${t.icone} ${t.label}`,
+        onclick: async () => {
+          const s = await store.plongeeEnSeance(d.id, t.id);
+          close();
+          toast(`Rangée en séance : ${t.label}`);
+          navigate(`seance/${s.id}`, true);
+        },
+      }))),
+    el('div.btn-row', {}, el('button.btn.ghost', { type: 'button', text: 'Annuler', onclick: close }))));
+}
+
 // ------------------------------------------------------------
 //  Fiche détaillée
 // ------------------------------------------------------------
@@ -247,6 +287,10 @@ export async function diveView({ id }) {
   // Les chercher en bas d'une page longue n'avait aucun sens.
   wrap.append(el('div.btn-row.actions-fiche', {},
     el('button.btn.primary', { text: '✎ Modifier', onclick: () => navigate(`dive/${d.id}/edit`) }),
+    el('button.btn.ghost', {
+      text: '↪ En séance', title: 'C’était une fosse, une piscine ou une apnée',
+      onclick: () => versSeance(d),
+    }),
     el('button.btn.danger', {
       text: '🗑 Supprimer',
       onclick: async () => {

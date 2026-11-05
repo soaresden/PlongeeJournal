@@ -10,6 +10,7 @@ fabrication de l'APK.
 | `smoke.mjs` | tous les écrans dans un DOM simulé (`npm i jsdom`) |
 | `fit-test.mjs` | décodage des fichiers `.fit` d'ordinateur de plongée |
 | `ocean-test.mjs` | Suunto Ocean en Bluetooth : trames, Heatshrink, décodage d'une vraie plongée (`fixtures/`), session contre une fausse montre |
+| `seance-test.mjs` | séances (fosse, piscine, apnée) : stockage, fusion, tri des activités de la montre |
 | `geo-test.mjs` | eau douce / salée, altitude |
 | `lieu-test.mjs` | recherche de lieux, cadrage des cartes |
 | `stamp-test.mjs` | détourage des tampons photographiés |

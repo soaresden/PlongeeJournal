@@ -113,7 +113,12 @@ function enregistrementResume(b, debut, fin, index) {
 function lireResume(b, s, fin, res) {
   const r = lecteur(b);
   const taille = fin - s;
-  if (taille >= R.GF_BAS + 2) res.gf = { bas: r.u16(s + R.GF_BAS), haut: r.u16(s + R.GF_HAUT) };
+  if (taille >= R.GF_BAS + 2) {
+    // Hors plongée bouteille le résumé n'a pas cette forme : des
+    // « gradients » de 52084/9216 ne veulent rien dire.
+    const bas = r.u16(s + R.GF_BAS), haut = r.u16(s + R.GF_HAUT);
+    if (bas >= 10 && bas <= haut && haut <= 100) res.gf = { bas, haut };
+  }
   if (taille > R.EAU && b[s + R.EAU] <= 2) res.eau = ['douce', 'en13319', 'salee'][b[s + R.EAU]];
   for (let i = 0; i < 4; i++) {
     const base = s + R.GAZ_BASE + i * R.GAZ_PAS;
@@ -150,7 +155,7 @@ export function parseOcean(b, { logId = null } = {}) {
   const blocsGaz = [];      // {gaz, champ, debut, fin, finPlongee}
   const carte = new Map();  // `${emplacement}:${champ}` → index
   const p2premier = new Map();
-  let debutUtc = null, lieu = null, atmos = null, genre = 'bouteille';
+  let debutUtc = null, lieu = null, atmos = null, genre = 'bouteille', sport = null;
   const points = [];
   const changementsGaz = [];
 
@@ -213,11 +218,19 @@ export function parseOcean(b, { logId = null } = {}) {
       }
       case C.GPS: {
         if (k.n < 18) break;
+        // Sans signal (piscine couverte, montre sous l'eau), la montre écrit
+        // quand même un bloc GPS, rempli de n'importe quoi : heure absurde,
+        // position au large du Gabon. On n'y croit que si l'heure est
+        // plausible, à deux jours près de celle de la fiche.
         const utc = r.u64(k.o + 2);
-        if (debutUtc === null && utc > horloge) debutUtc = Math.floor((utc - horloge) / 1000);
+        const debut = Math.floor((utc - horloge) / 1000);
+        const plausible = utc > horloge && debut > 1.4e9 && debut < 4.2e9
+          && (logId == null || Math.abs(debut - logId) < 2 * 86400);
+        if (!plausible) break;
+        if (debutUtc === null) debutUtc = debut;
         if (!lieu) {
           const lat = r.i32(k.o + 10) / 1e7, lng = r.i32(k.o + 14) / 1e7;
-          if (lat || lng) lieu = { lat, lng };
+          if (Math.abs(lat) > 0.01 && Math.abs(lat) <= 90 && Math.abs(lng) <= 180) lieu = { lat, lng };
         }
         break;
       }
@@ -242,7 +255,12 @@ export function parseOcean(b, { logId = null } = {}) {
         if (k.n >= 6) atmos = r.f32(k.o + 2) / 100000;
         break;
       case C.ACTIVITE:
-        if (k.n >= 3) genre = [61, 62].includes(b[k.o + 2]) ? 'apnee' : 'bouteille';
+        // Type d'activité de l'appli Suunto : 51 plongée bouteille,
+        // 61/62 apnée. Le reste (natation…) n'est pas une plongée.
+        if (k.n >= 3) {
+          sport = b[k.o + 2];
+          genre = sport === 51 ? 'bouteille' : [61, 62].includes(sport) ? 'apnee' : 'autre';
+        }
         break;
       case C.GAZ:
         if (k.n >= 4 && r.i16(k.o + 2) >= 0) changementsGaz.push({ t: horloge, gaz: r.i16(k.o + 2) });
@@ -262,7 +280,7 @@ export function parseOcean(b, { logId = null } = {}) {
     profMax, profMoy: nb ? somme / nb : 0,
     tempMin, tempMax, tempSurface,
     blocs: blocsGaz.map(t => ({ gaz: t.gaz, champ: t.champ, debut: t.debut, fin: t.finPlongee ?? t.fin })),
-    gaz: [], gf: null, eau: null, atmos, lieu, genre,
+    gaz: [], gf: null, eau: null, atmos, lieu, genre, sport,
     debutFluxS: debutUtc ?? logId ?? null,
     heureDepuisGps: debutUtc !== null,
     premierePlongeeMs, dernierePlongeeMs,
@@ -372,7 +390,8 @@ export function oceanToDive(dec) {
   const debutMs = dec.premierePlongeeMs ?? 0;
   const finMs = dec.dernierePlongeeMs != null ? dec.dernierePlongeeMs + 1000 : Infinity;
   const samples = echantillonner(dec.points, { debutMs, finMs });
-  const start = dec.debutFluxS != null ? new Date((dec.debutFluxS * 1000) + debutMs) : null;
+  let start = dec.debutFluxS != null ? new Date((dec.debutFluxS * 1000) + debutMs) : null;
+  if (start && Number.isNaN(start.getTime())) start = null;
   const bloc = dec.blocs[0] || null;
   const gaz = dec.gaz[bloc?.gaz ?? 0] || null;
   return {

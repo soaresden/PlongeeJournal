@@ -224,6 +224,35 @@ function etat141(dtMs, profondeur, bars) {
   check('fiche : 20 min, 30,4 m', v.dureeMin === 20 && v.profMax === 30.4, `${v.dureeMin} ${v.profMax}`);
 }
 
+{
+  // Piscine couverte : bloc GPS sans signal (heure absurde, position au
+  // large du Gabon), activité « natation », résumé sans gradients.
+  const gps = new Uint8Array(20);
+  gps.set(le16(0), 0);
+  new DataView(gps.buffer).setBigUint64(2, 0x00FF00FF00FF00FFn, true);
+  gps.set(le32(1812), 10); gps.set(le32(252378848), 14);
+  const s = new Sbem()
+    .bloc(0x08, [0, 0, 6, 0, 0, 0])                     // activité non plongée
+    .bloc(0x0B, [...gps])
+    .bloc(0x1C, [0, 0, 1])
+    .bloc(0x12, [...le16(0), ...new Array(14).fill(0), ...le16(30100)])
+    .bloc(0x1C, [...le16(30000), 0]);
+  const d = parseOcean(s.octets(), { logId: 1790619124 });
+  check('GPS sans signal : heure = id de la fiche', d.debutFluxS === 1790619124 && !d.heureDepuisGps, String(d.debutFluxS));
+  check('GPS sans signal : pas de position', d.lieu === null, JSON.stringify(d.lieu));
+  check('activité Suunto non plongée : genre « autre »', d.genre === 'autre' && d.sport === 6, `${d.genre} ${d.sport}`);
+  const v = oceanToDive(d);
+  check('GPS sans signal : date de début valide', v.start instanceof Date && !Number.isNaN(v.start.getTime()), String(v.start));
+
+  // Un résumé de natation : les « gradients » n'en sont pas.
+  const resume = new Uint8Array(8 + 2 + 220);
+  resume.set(new TextEncoder().encode('SBEM0103'), 0);
+  resume[8] = 0x30; resume[9] = 220;
+  resume.set(le16(9216), 0x33); resume.set(le16(52084), 0x35);
+  const d2 = parseOcean(new Uint8Array([...s.octets(), ...resume]), { logId: 1790619124 });
+  check('gradients absurdes (52084/9216) écartés', d2.gf === null, JSON.stringify(d2.gf));
+}
+
 // ============================================================
 //  Rapprochement avec le carnet
 // ============================================================

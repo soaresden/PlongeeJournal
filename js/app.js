@@ -20,6 +20,7 @@ import { suuntoView }                     from './views/suunto.js';
 import { montreView }                     from './views/montre.js';
 import { montreAideView }                 from './views/montre-aide.js';
 import { urgenceView }                    from './views/urgence.js';
+import { seanceFormView }                 from './views/seances.js';
 
 // ---------- Routes ----------
 route('dives',            divesView);
@@ -39,6 +40,10 @@ route('suunto',           suuntoView);
 route('montre',           montreView);
 route('montre-aide',      montreAideView);
 route('urgence',          urgenceView);
+// Les séances s'affichent dans l'écran Plongées (onglet « Séances »).
+route('seances',          () => { try { localStorage.setItem('plongee-journal:vue-dives', 'seances'); } catch { /* privé */ } return divesView(); });
+route('seance/new',       seanceFormView);
+route('seance/:id',       seanceFormView);
 
 const viewEl  = $('#view');
 const titleEl = $('#topTitle');
@@ -253,6 +258,7 @@ onRender(async path => {
     divers: 'divers', diver: 'divers',
     buddies: 'buddies', buddy: 'buddies', stats: 'stats',
     reglages: 'reglages', suunto: 'divers', montre: 'divers', 'montre-aide': 'divers', urgence: 'divers',
+    seances: 'dives', seance: 'dives',
   }[root];
   $$('#tabbar .tab').forEach(t => t.classList.toggle('active', t.dataset.route === tabFor));
 

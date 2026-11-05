@@ -8,11 +8,11 @@
 // ============================================================
 
 import { TABLES as TABLES_ENTITES } from './fusion.js';
-import { computeStats, sortDives, sortPeople, reconcileTimes } from './model.js';
+import { computeStats, sortDives, sortPeople, reconcileTimes, sortSeances, seanceDepuisPlongee } from './model.js';
 
 export const CARNET_VIDE = {
   version: 1,
-  divers: [], buddies: [], dives: [], certifs: [],
+  divers: [], buddies: [], dives: [], certifs: [], seances: [],
   settings: { activeDiverId: null },
   _supprimes: {},          // id → date de suppression (voir fusion.js)
 };
@@ -39,6 +39,7 @@ export function normaliser(data) {
     // on accepte les deux pour ne casser aucun fichier existant.
     certifs:  Array.isArray(data.certifs) ? data.certifs
             : Array.isArray(data.certifications) ? data.certifications : [],
+    seances:  Array.isArray(data.seances)  ? data.seances  : [],
     settings: { ...base.settings, ...(data.settings || {}) },
     _supprimes: (data._supprimes && typeof data._supprimes === 'object') ? data._supprimes : {},
   };
@@ -92,10 +93,12 @@ export function creerStore(support) {
       const d = db();
       enterrer(d, id,
         d.dives.filter(x => x.diverId === id).map(x => x.id),
-        (d.certifs || []).filter(x => x.diverId === id).map(x => x.id));
+        (d.certifs || []).filter(x => x.diverId === id).map(x => x.id),
+        (d.seances || []).filter(x => x.diverId === id).map(x => x.id));
       d.divers = d.divers.filter(x => x.id !== id);
       d.dives  = d.dives.filter(x => x.diverId !== id);
       d.certifs = (d.certifs || []).filter(x => x.diverId !== id);
+      d.seances = (d.seances || []).filter(x => x.diverId !== id);
       if (d.settings.activeDiverId === id) d.settings.activeDiverId = d.divers[0]?.id || null;
       await save({ table: 'divers', id, supprime: true });
     },
@@ -161,6 +164,7 @@ export function creerStore(support) {
         dv.buddyIds = (dv.buddyIds || []).filter(x => x !== id);
         if (dv.chefBuddyId === id) dv.chefBuddyId = '';
       });
+      (d.seances || []).forEach(s => { s.buddyIds = (s.buddyIds || []).filter(x => x !== id); });
       await save({ table: 'buddies', id, supprime: true });
     },
 
@@ -200,6 +204,41 @@ export function creerStore(support) {
       return [...new Set(db().dives.flatMap(d => d.suuntoKeys || []))];
     },
 
+    // ---- Séances (fosse, piscine, apnée) ----
+
+    async listSeances(diverId) { return sortSeances((db().seances || []).filter(s => s.diverId === diverId)); },
+    async getSeance(id) { return (db().seances || []).find(s => s.id === id) || null; },
+
+    async saveSeance(seance) {
+      const d = db(); d.seances ||= [];
+      seance.updatedAt = maintenant();
+      const i = d.seances.findIndex(s => s.id === seance.id);
+      if (i >= 0) d.seances[i] = seance; else d.seances.push(seance);
+      await save({ table: 'seances', id: seance.id });
+      return seance;
+    },
+
+    async deleteSeance(id) {
+      const d = db();
+      enterrer(d, id);
+      d.seances = (d.seances || []).filter(s => s.id !== id);
+      await save({ table: 'seances', id, supprime: true });
+    },
+
+    /** Une plongée qui était une séance : elle quitte le carnet, en une seule écriture. */
+    async plongeeEnSeance(diveId, type) {
+      const d = db(); d.seances ||= [];
+      const dive = d.dives.find(x => x.id === diveId);
+      if (!dive) throw new Error('Plongée introuvable');
+      const seance = seanceDepuisPlongee(dive, type);
+      seance.updatedAt = maintenant();
+      d.seances.push(seance);
+      enterrer(d, diveId);
+      d.dives = d.dives.filter(x => x.id !== diveId);
+      await save({ table: 'seances', id: seance.id });
+      return seance;
+    },
+
     async stats(diverId) {
       return computeStats(
         db().dives.filter(d => d.diverId === diverId),
@@ -237,6 +276,8 @@ export function creerStore(support) {
         fondre(d.buddies, entrant.buddies);
         fondre(d.dives,   entrant.dives);
         fondre(d.certifs, entrant.certifs || entrant.certifications);
+        d.seances ||= [];
+        fondre(d.seances, entrant.seances);
       }
       await save({ table: 'tout' });
     },

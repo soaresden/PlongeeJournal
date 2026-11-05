@@ -126,8 +126,15 @@ check('profondeur max', st.maxDepth === 24, String(st.maxDepth));
 check('total temps', st.totalMin === 93, String(st.totalMin));
 check('plongées de nuit', st.nuit === 1, String(st.nuit));
 
+// --- Une séance de fosse ------------------------------------
+const { emptySeance } = await import(__p2u(path.join(ROOT, 'js/store.js')).href);
+const sf = emptySeance(d.id, 'fosse', '2026-07-16');
+Object.assign(sf, { heure: '20:00', dureeMin: 45, lieu: 'Fosse de Villeneuve', profMax: 20 });
+await store.saveSeance(sf);
+check('une séance ne compte pas comme plongée', (await store.stats(d.id)).count === 2);
+
 // --- Parcours de tous les écrans ---------------------------
-const routes = ['dives', `dive/${dv.id}`, `dive/${dv.id}/edit`, 'dive/new',
+const routes = ['dives', `dive/${dv.id}`, `dive/${dv.id}/edit`, 'dive/new', 'seances', 'seance/new', `seance/${sf.id}`,
                 'divers', `diver/${d.id}`, 'buddies', `buddy/${b.id}`, 'stats',
                 'reglages', 'setup', 'suunto', 'montre', 'montre-aide', 'urgence', 'route/inexistante'];
 for (const r of routes) {
@@ -138,6 +145,48 @@ for (const r of routes) {
   check(`route « ${r} » rend du contenu`, txt.length > 20 && !title().includes('Erreur'),
         title() + ' | ' + txt.slice(0, 100));
 }
+
+// --- Séances : compteurs, pointage, calendrier ---
+window.location.hash = '#/seances';
+window.dispatchEvent(new window.Event('hashchange'));
+await tick(120);
+check('séances : compteur de fosses', /1\s*fosse/.test(view()) || [...document.querySelectorAll('.seance-stat.s-fosse .n')].some(n => n.textContent.includes('1')), view().slice(0, 200));
+check('séances : la fosse est listée', view().includes('Fosse de Villeneuve'), view().slice(0, 300));
+check('séances : boutons pour pointer', [...document.querySelectorAll('.seances-ajout .btn')].length === 3);
+
+window.location.hash = '#/seance/new?type=piscine&date=2026-07-20';
+window.dispatchEvent(new window.Event('hashchange'));
+await tick(120);
+const formS = document.querySelector('#view form');
+check('nouvelle séance : type et date repris du lien',
+  formS?.querySelector('.seg button.on')?.textContent.includes('Piscine') && formS?.querySelector('input[type=date]')?.value === '2026-07-20',
+  formS?.querySelector('.seg button.on')?.textContent);
+formS.querySelector('input[list=seance-lieux]').value = 'Piscine de La Garenne';
+formS.dispatchEvent(new window.Event('submit', { cancelable: true }));
+await tick(150);
+const apres = await store.listSeances(d.id);
+check('nouvelle séance : enregistrée', apres.length === 2 && apres.some(s => s.type === 'piscine' && s.lieu === 'Piscine de La Garenne'), JSON.stringify(apres.map(s => s.type)));
+
+localStorage.setItem('plongee-journal:vue-dives', 'calendrier');
+localStorage.setItem('plongee-journal:cal-mode', 'mois');
+window.location.hash = '#/dives';
+window.dispatchEvent(new window.Event('hashchange'));
+await tick(150);
+const couches = [...document.querySelectorAll('.cal-couche input')];
+check('agenda : cases Plongées / Fosse / Piscine / Apnée', couches.length === 4, String(couches.length));
+const grilleCal = () => document.querySelector('.cal-carte');
+check('agenda : séances masquées tant qu’on ne les coche pas', !grilleCal()?.querySelector('.j.s-fosse'));
+couches[1].checked = true;
+couches[1].dispatchEvent(new window.Event('change'));
+await tick(60);
+check('agenda : fosse cochée, son jour se colore', !!grilleCal()?.querySelector('.j.s-fosse'), grilleCal()?.innerHTML.slice(0, 200));
+grilleCal().querySelector('.j.s-fosse').click();
+await tick(30);
+check('agenda : le jour montre la fosse et propose de pointer', /Fosse de Villeneuve/.test(view()) && /＋ 🏊 Piscine/.test(view()), view().slice(-300));
+couches[1].checked = false;
+couches[1].dispatchEvent(new window.Event('change'));
+localStorage.setItem('plongee-journal:vue-dives', 'liste');
+localStorage.removeItem('plongee-journal:cal-mode');
 
 // --- Import depuis la montre (Bluetooth) ---
 window.location.hash = '#/suunto';
@@ -211,9 +260,9 @@ const racine = document.querySelector('#view').firstElementChild;
 const blocs = [...racine.children];
 const iActions = blocs.findIndex(c => c.classList.contains('actions-fiche'));
 check('fiche : actions en tête', iActions === 1, `position ${iActions}`);
-check('fiche : Modifier et Supprimer présents',
-  [...blocs[iActions].querySelectorAll('.btn')].length === 2,
-  String(blocs[iActions]?.querySelectorAll('.btn').length));
+check('fiche : Modifier, En séance et Supprimer présents',
+  ['Modifier', 'En séance', 'Supprimer'].every(t => [...blocs[iActions].querySelectorAll('.btn')].some(b => b.textContent.includes(t))),
+  [...blocs[iActions].querySelectorAll('.btn')].map(b => b.textContent).join(' | '));
 
 // --- Identité dans la barre du haut ---
 window.location.hash = '#/dives';
@@ -233,8 +282,8 @@ check('liste : la carte d’identité ne double plus la barre du haut',
 // --- Calendrier ---
 
 const versCal = [...document.querySelectorAll('#view .seg button')]
-  .find(b => /Calendrier/.test(b.textContent));
-check('bascule calendrier présente', !!versCal, '');
+  .find(b => /Agenda/.test(b.textContent));
+check('bascule agenda présente', !!versCal, '');
 if (versCal) {
   localStorage.removeItem('plongee-journal:cal-mode');
   versCal.click();
@@ -334,8 +383,10 @@ if (versCal) {
     document.querySelectorAll('#view .mois-grille .j.grand').length === 31,
     String(document.querySelectorAll('#view .mois-grille .j.grand').length));
   check('cal/mois : une seule journée plongée en juillet',
-    carres('#view .mois-grille .j.grand').filter(c => !c.disabled).length === 1,
-    String(carres('#view .mois-grille .j.grand').filter(c => !c.disabled).length));
+    carres('#view .mois-grille .j.grand').filter(c => !c.classList.contains('n0')).length === 1,
+    String(carres('#view .mois-grille .j.grand').filter(c => !c.classList.contains('n0')).length));
+  check('cal/mois : chaque jour se touche (pour pointer une séance)',
+    carres('#view .mois-grille .j.grand').every(c => !c.disabled));
   document.querySelector('#view .cal-nav .btn')?.click();
   await tick(120);
   check('cal/mois : navigation vers juin',
