@@ -364,3 +364,6 @@ button.tuile:hover { border-color: var(--accent); }
 .cv-mat div { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 12px; padding: 9px 12px; }
 .cv-mat span { font-size: 12px; color: var(--text-mute); }
 .cv + .btn-row, .cv .btn-row { margin-top: 14px; }
+
+.urgence-pays { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; }
+.urgence-pays select { flex: 1; min-width: 0; }

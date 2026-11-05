@@ -5,6 +5,9 @@
 import { el, fmtDate } from '../lib.js';
 import { lire } from '../urgence.js';
 import { navigate } from '../router.js';
+import { PAYS, DAN_EUROPE, paysDe } from '../secours.js';
+
+const CLE_PAYS = 'plongee-journal:secours-pays';
 
 export async function urgenceView() {
   const f = lire();
@@ -70,20 +73,48 @@ export async function urgenceView() {
     wrap.append(el('div.section', {}, el('h2', { text: 'Informations' }), fiche));
   }
 
-  wrap.append(el('div.section', {},
-    el('h2', { text: 'Secours' }),
-    el('div.card', {},
-      el('a.urgence-secours', { href: 'tel:112' },
-        el('b', { text: '112' }), el('span', { text: 'Urgences européennes' })),
-      el('a.urgence-secours', { href: 'tel:196' },
-        el('b', { text: '196' }), el('span', { text: 'Secours en mer (France)' })),
-      el('a.urgence-secours', { href: 'tel:15' },
-        el('b', { text: '15' }), el('span', { text: 'SAMU' })),
+  // Les secours du pays où l'on est : le GPS du téléphone le devine
+  // (sans réseau), sinon on le choisit. Le choix est retenu.
+  const secours = el('div.card');
+  let paysId = (() => { try { return localStorage.getItem(CLE_PAYS) || 'FR'; } catch { return 'FR'; } })();
+  const choix = el('select', { 'aria-label': 'Pays' }, ...PAYS.map(p => el('option', { value: p.id, text: `${p.drapeau} ${p.nom}` })));
+  const etatGps = el('span.hint', { style: { margin: 0 } });
+  const choisir = id => {
+    paysId = PAYS.some(p => p.id === id) ? id : 'AUTRE';
+    choix.value = paysId;
+    try { localStorage.setItem(CLE_PAYS, paysId); } catch { /* privé */ }
+    rendreSecours();
+  };
+  choix.onchange = () => choisir(choix.value);
+  const localiser = () => {
+    if (!navigator.geolocation) { etatGps.textContent = 'Pas de GPS sur cet appareil.'; return; }
+    etatGps.textContent = 'Recherche de ta position…';
+    navigator.geolocation.getCurrentPosition(pos => {
+      const p = paysDe(pos.coords.latitude, pos.coords.longitude);
+      etatGps.textContent = p ? `Position : ${p.nom}` : 'Pays non reconnu : choisis-le.';
+      choisir(p ? p.id : 'AUTRE');
+    }, () => { etatGps.textContent = 'Position indisponible : choisis le pays.'; },
+    { enableHighAccuracy: false, timeout: 15000, maximumAge: 600000 });
+  };
+
+  function rendreSecours() {
+    const p = PAYS.find(x => x.id === paysId) || PAYS[0];
+    secours.replaceChildren(
+      el('div.urgence-pays', {}, choix,
+        el('button.btn.sm', { type: 'button', text: '📍 Où suis-je ?', onclick: localiser })),
+      etatGps,
+      ...p.numeros.map(([num, libelle]) => el('a.urgence-secours', { href: `tel:${num.replace(/\s+/g, '')}` },
+        el('b', { text: num }), el('span', { text: libelle }))),
+      el('a.urgence-secours', { href: `tel:${DAN_EUROPE.num.replace(/\s+/g, '')}` },
+        el('b', { text: 'DAN' }), el('span', { text: `${DAN_EUROPE.num} · ${DAN_EUROPE.libelle}` })),
       el('div.hint', { style: { marginBottom: 0 },
         text: 'En cas d’accident de plongée, précise systématiquement qu’il s’agit '
-            + 'd’un accident de décompression : la prise en charge n’est pas la même.' }),
-    ),
-  ));
+            + 'd’un accident de plongée (décompression possible) : la prise en charge n’est pas la même. '
+            + 'Vérifie les numéros locaux auprès du centre en arrivant.' }));
+  }
+  choix.value = paysId;
+  rendreSecours();
+  wrap.append(el('div.section', {}, el('h2', { text: 'Secours' }), secours));
 
   wrap.append(el('div.hint', { style: { textAlign: 'center' },
     text: `Copie locale de ta fiche plongeur, mise à jour le ${fmtDate((f.majLe || '').slice(0, 10))}. `
