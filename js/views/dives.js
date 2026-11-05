@@ -2,7 +2,7 @@
 //  Liste des plongées + fiche détaillée
 // ============================================================
 
-import { el, fmtDate, fmtDateLong, fmtDuration, fullName, toast, confirmBox, openModal, debounce } from '../lib.js';
+import { el, fmtDate, fmtDateLong, fmtDuration, fullName, nomPlongeur, toast, confirmBox, openModal, debounce } from '../lib.js';
 import { apercuPlongee, apercuSeance } from '../apercu.js';
 import { store, TYPES_SEANCE } from '../store.js';
 import { staticMap } from '../map.js';
@@ -94,7 +94,7 @@ export async function divesView() {
   const dives = await store.listDives(diverId);
   const seances = await store.listSeances(diverId);
   const buddies = await store.listBuddies();
-  const buddyName = id => fullName(buddies.find(b => b.id === id)) || '?';
+  const buddyName = id => nomPlongeur(buddies.find(b => b.id === id)) || '?';
 
   const wrap = el('div');
 
@@ -372,7 +372,7 @@ export async function diveView({ id }) {
   if (!d) return { title: 'Introuvable', node: el('div.empty', { text: 'Plongée introuvable.' }), back: true };
 
   const buddies = await store.listBuddies();
-  const buddyName = bid => fullName(buddies.find(b => b.id === bid)) || '?';
+  const buddyName = bid => nomPlongeur(buddies.find(b => b.id === bid)) || '?';
   const wrap = el('div.fiche');
 
   const kv = (k, v) => (v === null || v === undefined || v === '' || v === '—')

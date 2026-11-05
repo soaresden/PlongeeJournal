@@ -8,7 +8,7 @@
 //  saisie. La fiche complète reste à un geste.
 // ============================================================
 
-import { el, fmtDate, fmtDateLong, fmtDuration, fullName, num, toast } from './lib.js';
+import { el, fmtDate, fmtDateLong, fmtDuration, fullName, nomPlongeur, num, toast } from './lib.js';
 import { store, TYPES_SEANCE, typeSeance, niveauALaDate, NIVEAUX } from './store.js';
 import { DIVE_TYPES } from './config.js';
 import { navigate } from './router.js';
@@ -155,7 +155,7 @@ export async function apercuPlongee(id, { retour = null, onClose = null } = {}) 
   if (!d) return toast('Plongée introuvable', true);
   const certifs = await store.listCertifications(d.diverId);
   const buddies = await store.listBuddies();
-  const nom = bid => fullName(buddies.find(b => b.id === bid)) || '?';
+  const nom = bid => nomPlongeur(buddies.find(b => b.id === bid)) || '?';
 
   const temoin = el('span.apercu-temoin');
   const sauvegarde = enregistreur(() => store.saveDive(d), temoin);

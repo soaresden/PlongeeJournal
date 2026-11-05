@@ -383,14 +383,14 @@ window.location.hash = '#/buddies';
 window.dispatchEvent(new window.Event('hashchange'));
 await tick(120);
 check('Plongeurs : titre', title().includes('Plongeurs'), title());
-check('Plongeurs : une ligne par plongeur, dans un annuaire',
-  document.querySelectorAll('#view .annuaire .personne').length === 1,
-  String(document.querySelectorAll('#view .annuaire .personne').length));
+check('Plongeurs : une carte par plongeur, tous mélangés',
+  document.querySelectorAll('#view .pgrille .pcarte').length === 1,
+  String(document.querySelectorAll('#view .pgrille .pcarte').length));
 check('Plongeurs : plus de lignes pleine largeur',
   document.querySelectorAll('#view .card.clickable').length === 0,
   String(document.querySelectorAll('#view .card.clickable').length));
-check('Plongeurs : regroupé par club',
-  document.querySelectorAll('#view .club-bloc').length >= 1, '');
+check('Plongeurs : filtres par catégorie (Tous, Moniteurs…)',
+  document.querySelectorAll('#view .cat-filtres .cat-filtre').length >= 1, '');
 check('Plongeurs : filtre présent', !!document.querySelector('#view input[type=search]'), '');
 
 window.location.hash = '#/dives';

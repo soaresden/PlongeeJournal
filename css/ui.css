@@ -273,3 +273,37 @@ button.tuile:hover { border-color: var(--accent); }
 .dive-card .dive-buddies > span:last-child { overflow: hidden; text-overflow: ellipsis; }
 .dive-card .dive-buddies.vide { color: var(--text-mute); font-style: italic; }
 .dive-card .dive-buddies.vide .metr-ico { opacity: .55; }
+
+/* ---------- Plongeurs : tout le monde mélangé, des catégories en couleur ---------- */
+.cat-filtres { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; margin-bottom: 12px; }
+.cat-filtres::-webkit-scrollbar { display: none; }
+.cat-filtre { --cat: var(--accent); display: inline-flex; align-items: center; gap: 6px; flex: 0 0 auto;
+  padding: 6px 11px; border-radius: 99px; border: 1px solid var(--line); background: var(--surface);
+  color: var(--text-dim); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.cat-filtre i { width: 9px; height: 9px; border-radius: 50%; background: var(--cat); }
+.cat-filtre small { font-size: 11px; color: var(--text-mute); font-weight: 700; }
+.cat-filtre.on { background: color-mix(in srgb, var(--cat) 18%, var(--surface)); border-color: var(--cat); color: var(--text); }
+.pgrille { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 10px; }
+.pcarte { display: flex; align-items: center; gap: 11px; text-align: left; width: 100%;
+  padding: 10px 12px; border-radius: 14px; border: 1px solid var(--line); background: var(--surface);
+  color: var(--text); font: inherit; cursor: pointer; }
+.pcarte:hover { border-color: color-mix(in srgb, var(--accent) 50%, var(--line)); }
+.pcarte.mon { border-left: 4px solid var(--or, #f5c542); }
+.pcarte-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.pcarte-txt b { font-size: 15px; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pcarte-sous { font-size: 12px; color: var(--text-mute); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pcarte-badges { display: flex; flex-wrap: wrap; gap: 4px; }
+.pcarte-badges:empty { display: none; }
+.badge-mon { font-size: 10.5px; font-weight: 800; letter-spacing: .02em; color: #2a1a00;
+  background: linear-gradient(135deg, #ffd96a, #f5a623); border-radius: 6px; padding: 2px 7px; }
+.cat { --cat: var(--accent); font-size: 11px; font-weight: 700; color: color-mix(in srgb, var(--cat) 70%, var(--text));
+  background: color-mix(in srgb, var(--cat) 16%, transparent); border: 1px solid color-mix(in srgb, var(--cat) 40%, transparent);
+  border-radius: 6px; padding: 1px 7px; }
+.cat-edition { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.cat-nouvelle { display: flex; gap: 6px; flex: 1 1 220px; }
+.cat-nouvelle input { flex: 1; min-width: 0; }
+@media (max-width: 600px) {
+  .annuaire-barre { flex-wrap: wrap; }
+  .annuaire-barre input { flex: 1 1 100%; }
+  .annuaire-barre .seg { flex: 1; }
+}

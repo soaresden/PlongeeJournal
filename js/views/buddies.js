@@ -2,8 +2,8 @@
 //  Plongeurs : compagnons de palanquée, tampons et signatures
 // ============================================================
 
-import { el, fullName, toast, confirmBox, fileToDataURL, uid, openModal } from '../lib.js';
-import { store, emptyBuddy, parClub } from '../store.js';
+import { el, fullName, nomPlongeur, couleurCategorie, toast, confirmBox, fileToDataURL, uid, openModal } from '../lib.js';
+import { store, emptyBuddy } from '../store.js';
 import { navigate } from '../router.js';
 import { ouvrirApercu, ligneApercu, apercuPlongee } from '../apercu.js';
 
@@ -111,76 +111,88 @@ export async function buddiesView() {
     return { title: 'Plongeurs', node: wrap };
   }
 
-  // Un annuaire : une ligne par plongeur, rangé par club en colonnes.
-  // Tout tient à l'écran sur tablette ; la fiche s'ouvre sur le bord.
+  // Tout le monde mélangé, en cartes. Les catégories (OGN, Cap-Vert,
+  // Cherbourg…) sont celles que tu donnes : elles servent de filtre.
+  // Un centre de plongée, c'est « un moniteur du centre », nom ou pas.
   const CLE_TRI = 'plongee-journal:plongeurs-tri';
-  let tri = (() => { try { return localStorage.getItem(CLE_TRI) || 'club'; } catch { return 'club'; } })();
+  const CLE_FILTRE = 'plongee-journal:plongeurs-filtre';
+  const lireCle = (k, def) => { try { return localStorage.getItem(k) || def; } catch { return def; } };
+  let tri = lireCle(CLE_TRI, 'frequents');
+  if (!['frequents', 'az'].includes(tri)) tri = 'frequents';
+  let filtre = lireCle(CLE_FILTRE, '');
 
-  const recherche = el('input', { type: 'search', placeholder: 'Nom, club, licence…', autocapitalize: 'off' });
+  const recherche = el('input', { type: 'search', placeholder: 'Nom, catégorie, club…', autocapitalize: 'off' });
   const seg = el('div.seg');
+  const puces = el('div.cat-filtres');
   const liste = el('div');
   wrap.append(el('div.annuaire-barre', {}, recherche, seg,
-    el('button.btn.primary.sm', { type: 'button', text: '＋ Ajouter', onclick: () => navigate('buddy/new') })), liste);
+    el('button.btn.primary.sm', { type: 'button', text: '＋ Ajouter', onclick: () => navigate('buddy/new') })), puces, liste);
 
   const n = b => st.buddyCount[b.id] || 0;
   const empreinte = b => (b.stamps || []).find(x => x.type !== 'signature') || (b.stamps || [])[0];
-  const initiales = b => ((b.prenom?.[0] || '') + (b.nom?.[0] || '')).toUpperCase() || '?';
+  const initiales = b => (b.structure ? (b.prenom || '?').slice(0, 2) : (b.prenom?.[0] || '') + (b.nom?.[0] || '')).toUpperCase() || '?';
+  const cats = b => (b.categories || []).filter(Boolean);
+  const estMoniteur = b => !!(b.moniteur || b.structure);
 
-  function ligne(b) {
+  function carte(b) {
     const e = empreinte(b);
     const nb = n(b);
-    return el('button.personne', { type: 'button', onclick: () => apercuPlongeur(b.id, { onClose: recharger }) },
+    const sous = b.structure
+      ? (nomPlongeur(b) === `Moniteur · ${b.prenom}` ? 'nom pas noté' : '')
+      : [b.club, b.licence].filter(Boolean).join(' · ');
+    return el(`button.pcarte${estMoniteur(b) ? '.mon' : ''}`, { type: 'button', onclick: () => apercuPlongeur(b.id, { onClose: recharger }) },
       el('span.personne-av', {}, e ? el('img', { src: e.dataUrl, alt: '', loading: 'lazy' }) : initiales(b)),
-      el('span.personne-txt', {},
-        el('b', {}, fullName(b) || 'Sans nom',
-          b.structure ? el('span.marque-club', { text: 'CLUB' }) : b.moniteur ? el('span.marque-mon', { text: 'MON' }) : null),
-        el('span', { text: [tri !== 'club' ? b.club : null, b.licence || null].filter(Boolean).join(' · ') || '' })),
+      el('span.pcarte-txt', {},
+        el('b', { text: b.structure ? (b.prenom || 'Centre') : (nomPlongeur(b) || 'Sans nom') }),
+        el('span.pcarte-badges', {},
+          estMoniteur(b) ? el('span.badge-mon', { text: b.structure ? 'Moniteur du centre' : 'Moniteur' }) : null,
+          ...cats(b).map(c => el('span.cat', { style: { '--cat': couleurCategorie(c) }, text: c }))),
+        sous ? el('span.pcarte-sous', { text: sous }) : null),
       nb ? el('span.personne-n', { title: `${nb} plongée${nb > 1 ? 's' : ''} ensemble`, text: String(nb) }) : null);
-  }
-
-  function bloc(titre, membres) {
-    return el('div.club-bloc', {},
-      el('div.club-tete', {}, el('b', { text: titre }), el('span', { text: String(membres.length) })),
-      ...membres.map(ligne));
   }
 
   function rendre() {
     seg.innerHTML = '';
-    [['club', 'Par club'], ['frequents', 'Fréquents'], ['az', 'A–Z']].forEach(([id, label]) => {
+    [['frequents', 'Fréquents'], ['az', 'A–Z']].forEach(([id, label]) => {
       const bt = el('button', { type: 'button', text: label });
       if (id === tri) bt.classList.add('on');
       bt.onclick = () => { tri = id; try { localStorage.setItem(CLE_TRI, id); } catch { /* privé */ } rendre(); };
       seg.append(bt);
     });
 
+    // Les filtres : tout, les moniteurs, chaque catégorie, sans catégorie.
+    const compte = new Map();
+    buddies.forEach(b => cats(b).forEach(c => compte.set(c, (compte.get(c) || 0) + 1)));
+    const categories = [...compte.keys()].sort((x, y) => x.localeCompare(y, 'fr'));
+    if (filtre.startsWith('cat:') && !compte.has(filtre.slice(4))) filtre = '';
+    const choix = [
+      ['', 'Tous', buddies.length, null],
+      ['mon', 'Moniteurs', buddies.filter(estMoniteur).length, null],
+      ...categories.map(c => [`cat:${c}`, c, compte.get(c), couleurCategorie(c)]),
+      ['sans', 'Sans catégorie', buddies.filter(b => !cats(b).length).length, null],
+    ];
+    puces.replaceChildren(...choix.filter(([id, , nb]) => nb || !id).map(([id, label, nb, couleur]) => {
+      const p = el(`button.cat-filtre${id === filtre ? '.on' : ''}`, { type: 'button',
+        style: couleur ? { '--cat': couleur } : null,
+        onclick: () => { filtre = id; try { localStorage.setItem(CLE_FILTRE, id); } catch { /* privé */ } rendre(); } },
+        couleur ? el('i') : null, label, el('small', { text: String(nb) }));
+      return p;
+    }));
+
     const q = recherche.value.trim().toLowerCase();
-    const filtres = q
-      ? buddies.filter(b => `${fullName(b)} ${b.club || ''} ${b.licence || ''}`.toLowerCase().includes(q))
-      : buddies;
+    let filtres = buddies.filter(b => {
+      if (filtre === 'mon' && !estMoniteur(b)) return false;
+      if (filtre === 'sans' && cats(b).length) return false;
+      if (filtre.startsWith('cat:') && !cats(b).includes(filtre.slice(4))) return false;
+      return !q || `${nomPlongeur(b)} ${fullName(b)} ${b.club || ''} ${b.licence || ''} ${cats(b).join(' ')}`.toLowerCase().includes(q);
+    });
+    filtres = tri === 'az'
+      ? filtres.sort((x, y) => nomPlongeur(x).localeCompare(nomPlongeur(y), 'fr'))
+      : filtres.sort((x, y) => n(y) - n(x) || nomPlongeur(x).localeCompare(nomPlongeur(y), 'fr'));
 
-    liste.innerHTML = '';
-    if (!filtres.length) { liste.append(el('div.empty', { text: 'Aucun plongeur ne correspond.' })); return; }
-
-    const annuaire = el('div.annuaire');
-    if (tri === 'club') {
-      parClub(filtres).forEach(g => annuaire.append(bloc(g.titre,
-        g.membres.sort((x, y) => (y.moniteur ? 1 : 0) - (x.moniteur ? 1 : 0) || n(y) - n(x)
-          || fullName(x).localeCompare(fullName(y), 'fr')))));
-    } else if (tri === 'frequents') {
-      const avec = filtres.filter(n).sort((x, y) => n(y) - n(x));
-      const sans = filtres.filter(b => !n(b));
-      if (avec.length) annuaire.append(bloc('Plongé ensemble', avec));
-      if (sans.length) annuaire.append(bloc('Pas encore de plongée', sans));
-    } else {
-      const parLettre = new Map();
-      filtres.slice().sort((x, y) => fullName(x).localeCompare(fullName(y), 'fr')).forEach(b => {
-        const l = (fullName(b)[0] || '#').toUpperCase();
-        if (!parLettre.has(l)) parLettre.set(l, []);
-        parLettre.get(l).push(b);
-      });
-      parLettre.forEach((m, l) => annuaire.append(bloc(l, m)));
-    }
-    liste.append(annuaire);
+    liste.replaceChildren(filtres.length
+      ? el('div.pgrille', {}, ...filtres.map(carte))
+      : el('div.empty', { text: 'Aucun plongeur ne correspond.' }));
   }
 
   async function recharger() {
@@ -200,7 +212,9 @@ export async function apercuPlongeur(id, { onClose = null } = {}) {
   if (!b) return toast('Plongeur introuvable', true);
   const diverId = await store.getActiveDiverId();
   const ensemble = diverId ? (await store.listDives(diverId)).filter(d => (d.buddyIds || []).includes(b.id)) : [];
-  const clubs = [...new Set((await store.listBuddies()).map(x => (x.club || '').trim()).filter(Boolean))].sort();
+  const tous = await store.listBuddies();
+  const clubs = [...new Set(tous.map(x => (x.club || '').trim()).filter(Boolean))].sort();
+  const connues = [...new Set(tous.flatMap(x => x.categories || []).filter(Boolean))].sort((x, y) => x.localeCompare(y, 'fr'));
 
   const temoin = el('span.apercu-temoin');
   let t = null;
@@ -233,22 +247,50 @@ export async function apercuPlongeur(id, { onClose = null } = {}) {
   note.value = b.note || '';
   note.addEventListener('input', () => maj({ note: note.value }));
 
+  // Catégories : celles déjà données à quelqu'un, à cocher ; ou une nouvelle.
+  const zoneCats = el('div.cat-edition');
+  const rendreCats = () => {
+    const mes = new Set(b.categories || []);
+    const toutes = [...new Set([...connues, ...mes])].sort((x, y) => x.localeCompare(y, 'fr'));
+    const nouvelle = el('input', { type: 'text', placeholder: 'Nouvelle : OGN, Cap-Vert…', enterkeyhint: 'done' });
+    const ajouter = () => {
+      const v = nouvelle.value.trim();
+      if (!v) return;
+      const deja = toutes.find(c => c.toLowerCase() === v.toLowerCase()) || v;
+      if (!connues.includes(deja)) connues.push(deja);
+      maj({ categories: [...new Set([...(b.categories || []), deja])] });
+      rendreCats();
+    };
+    nouvelle.addEventListener('keydown', ev => { if (ev.key === 'Enter') { ev.preventDefault(); ajouter(); } });
+    zoneCats.replaceChildren(
+      ...toutes.map(c => el(`button.cat-filtre${mes.has(c) ? '.on' : ''}`, { type: 'button', style: { '--cat': couleurCategorie(c) },
+        onclick: () => {
+          const s = new Set(b.categories || []);
+          s.has(c) ? s.delete(c) : s.add(c);
+          maj({ categories: [...s] });
+          rendreCats();
+        } }, el('i'), c)),
+      el('span.cat-nouvelle', {}, nouvelle, el('button.btn.sm', { type: 'button', text: 'Ajouter', onclick: ajouter })));
+  };
+  rendreCats();
+
   const e = (b.stamps || []).find(x => x.type !== 'signature') || (b.stamps || [])[0];
   const tete = el('div.apercu-tete-plongee', {},
     el('span.personne-av', { style: { width: '52px', height: '52px', flex: '0 0 52px', fontSize: '17px' } },
       e ? el('img', { src: e.dataUrl, alt: '' }) : ((b.prenom?.[0] || '') + (b.nom?.[0] || '')).toUpperCase() || '?'),
     el('div', {},
-      el('div.apercu-t1', { text: fullName(b) || 'Sans nom' }),
+      el('div.apercu-t1', { text: b.structure ? (b.prenom || 'Centre') : (nomPlongeur(b) || 'Sans nom') }),
       el('div.apercu-t2', { text: [b.club, ensemble.length ? `${ensemble.length} plongée${ensemble.length > 1 ? 's' : ''} ensemble` : 'pas encore plongé ensemble'].filter(Boolean).join(' · ') })));
 
   const rouvrir = () => apercuPlongeur(id, { onClose });
   const corps = el('div', {},
     el('div.apercu-grille', {},
-      champ(b.structure ? 'Nom du club / centre' : 'Prénom', saisie('prenom')),
+      champ(b.structure ? 'Centre de plongée' : 'Prénom', saisie('prenom')),
       b.structure ? null : champ('Nom', saisie('nom')),
-      champ('Club', saisie('club', { list: 'clubs-apercu' })),
+      b.structure ? null : champ('Club / centre', saisie('club', { list: 'clubs-apercu' })),
       b.structure ? null : champ('Licence', saisie('licence')),
-      el('div.apercu-champ.large', {}, coche('moniteur', 'Moniteur'), coche('structure', 'Club / centre de plongée')),
+      el('div.apercu-champ.large', {}, coche('moniteur', 'Moniteur'), coche('structure', 'Un moniteur du centre, sans son nom')),
+      el('div.apercu-champ.large', {}, el('span', { text: 'Catégories' }), zoneCats),
       champ('Note', note, true)),
     el('datalist', { id: 'clubs-apercu' }, clubs.map(c => el('option', { value: c }))),
     (b.stamps || []).length ? el('div.apercu-bloc', {}, el('div.apercu-lbl', { text: 'Tampons et signatures' }),

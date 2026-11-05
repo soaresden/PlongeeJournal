@@ -145,6 +145,27 @@ export function fullName(p) {
   return [p.prenom, p.nom].filter(Boolean).join(' ').trim();
 }
 
+/**
+ * Le nom d'un compagnon tel qu'on le lit dans le carnet. Un centre de
+ * plongée, c'est « un moniteur du centre » : on n'a pas toujours son nom.
+ */
+export function nomPlongeur(p) {
+  if (!p) return '';
+  if (p.structure) return `Moniteur · ${(p.prenom || '').trim() || 'centre'}`;
+  const nom = fullName(p);
+  if (nom) return nom;
+  return p.moniteur && p.club ? `Moniteur · ${p.club}` : '';
+}
+
+const COULEURS_CATEGORIES = ['#f0427a', '#7c4dff', '#1c9cf0', '#12b886', '#f59f00', '#e8590c', '#be4bdb', '#0b9f8f', '#4c6ef5', '#d6336c', '#74b816', '#fd7e14'];
+/** Une couleur stable par catégorie (« OGN » a toujours la même). */
+export function couleurCategorie(nom = '') {
+  const k = nom.trim().toLowerCase();
+  let h = 0;
+  for (const c of k) h = (h * 31 + c.codePointAt(0)) >>> 0;
+  return COULEURS_CATEGORIES[h % COULEURS_CATEGORIES.length];
+}
+
 /** Lit un fichier image, le redimensionne et renvoie un data-URL. */
 export function fileToDataURL(file, maxSize = 700, quality = 0.82) {
   return new Promise((resolve, reject) => {
