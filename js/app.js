@@ -26,6 +26,7 @@ import { montreAideView }                 from './views/montre-aide.js';
 import { urgenceView }                    from './views/urgence.js';
 import { seanceFormView }                 from './views/seances.js';
 import { cvView }                         from './views/cv.js';
+import { mn90View }                       from './views/mn90.js';
 
 // ---------- Routes ----------
 route('dives',            divesView);
@@ -47,6 +48,7 @@ route('montre',           montreView);
 route('montre-aide',      montreAideView);
 route('urgence',          urgenceView);
 route('cv',               cvView);
+route('mn90',             mn90View);
 // Les séances s'affichent dans l'écran Plongées (onglet « Séances »).
 route('seances',          () => { try { localStorage.setItem('plongee-journal:discipline', 'seances'); } catch { /* privé */ } return divesView(); });
 route('seance/new',       seanceFormView);
@@ -267,6 +269,8 @@ onRender(async path => {
   }
 
   viewEl.innerHTML = '';
+  // Un écran « plein » (MN90) prend toute la place, sans marges.
+  document.body.classList.toggle('vue-pleine', !!result.plein);
   viewEl.append(result.node);
   viewEl.removeAttribute('aria-busy');
   titleEl.textContent = result.title || 'Carnet de plongée';
@@ -299,7 +303,7 @@ onRender(async path => {
     dives: 'dives', dive: path === 'dive/new' ? 'dive/new' : 'dives',
     divers: 'divers', diver: 'divers',
     buddies: 'buddies', buddy: 'buddies', stats: 'stats',
-    reglages: 'reglages', cv: 'divers', suunto: 'divers', 'suunto-cloud': 'divers', montre: 'divers', 'montre-aide': 'divers', urgence: 'divers',
+    reglages: 'reglages', mn90: 'mn90', cv: 'divers', suunto: 'divers', 'suunto-cloud': 'divers', montre: 'divers', 'montre-aide': 'divers', urgence: 'divers',
     seances: 'dives', seance: 'dives',
   }[root];
   $$('#tabbar .tab').forEach(t => t.classList.toggle('active', t.dataset.route === tabFor));

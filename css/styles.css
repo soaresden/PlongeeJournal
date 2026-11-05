@@ -173,7 +173,7 @@ body { background-image: var(--bg-image); background-attachment: fixed; }
 /* ---------- Onglets (téléphone : en bas) ---------- */
 #tabbar {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 45;
-  display: grid; grid-template-columns: repeat(5, 1fr);
+  display: grid; grid-template-columns: repeat(6, 1fr);
   height: calc(var(--tabbar-h) + var(--safe-b));
   padding: 0 env(safe-area-inset-right) var(--safe-b) env(safe-area-inset-left);
   background: var(--bar);
@@ -222,6 +222,8 @@ body { background-image: var(--bg-image); background-attachment: fixed; }
   .rail-logo { display: grid !important; place-items: center; padding: 2px 0 10px; order: -2; }
   .rail-logo img { width: 44px; height: 44px; border-radius: 13px; }
   .tab-rail-only { display: flex !important; margin-top: auto; }
+  .tab-mn90 { margin-top: auto; }
+  .tab-mn90 ~ .tab-rail-only { margin-top: 0; }
   .tab { padding: 10px 4px; border-radius: 14px; font-size: 11.5px; gap: 5px; }
   .tab:hover { background: rgba(var(--accent-rgb), .07); }
   .tab.active { background: var(--tab-actif-fond, rgba(var(--accent-rgb), .14)); }

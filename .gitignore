@@ -44,3 +44,6 @@ __pycache__/
 
 # Copies locales du carnet (données perso)
 sauvegardes/
+
+# MN90 : copié dans www/mn90 au moment de l'APK
+mn90src/

@@ -40,6 +40,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # MN90 (dépôt public) : embarqué dans l'APK pour l'onglet MN90 hors ligne.
+      - uses: actions/checkout@v4
+        with:
+          repository: soaresden/MN90Mobile
+          path: mn90src
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
