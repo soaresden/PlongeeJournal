@@ -29,6 +29,28 @@ function grouperParLieu(dives) {
   return [...groupes.values()].sort((a, b) => b.plongees.length - a.plongees.length);
 }
 
+/**
+ * Les lieux trop proches À L'ÉCRAN, au zoom courant, se cumulent en un
+ * seul repère : dézoomé, la Martinique est une bulle « 12 » ; zoomé, on
+ * retrouve chaque spot. `projeter` donne la position en pixels d'un lieu.
+ * @returns {{lat:number, lng:number, lieux:object[], n:number}[]}
+ */
+export function cumulerALEcran(groupes, projeter, rayonPx = 46) {
+  const amas = [];
+  // Les lieux les plus fréquentés d'abord : ils donnent le centre de l'amas.
+  for (const g of groupes) {
+    const p = projeter(g);
+    const proche = amas.find(a => Math.hypot(a.x - p.x, a.y - p.y) < rayonPx);
+    if (proche) {
+      proche.lieux.push(g);
+      proche.n += g.plongees.length;
+    } else {
+      amas.push({ x: p.x, y: p.y, lat: g.lat, lng: g.lng, lieux: [g], n: g.plongees.length });
+    }
+  }
+  return amas;
+}
+
 export function carteDesPlongees(dives, { buddies = [] } = {}) {
   const wrap = el('div');
   const nomCompagnon = id => fullName(buddies.find(b => b.id === id)) || '?';
@@ -67,28 +89,10 @@ export function carteDesPlongees(dives, { buddies = [] } = {}) {
 
     if (couche) couche.remove();
     couche = L.layerGroup().addTo(carte);
+    groupesAffiches = groupes;
 
     if (!groupes.length) return;
-
-    groupes.forEach(g => {
-      const n = g.plongees.length;
-      // Un disque dont la taille suit le nombre de plongées : on repère
-      // ses spots habituels sans rien lire.
-      const taille = Math.min(46, 24 + Math.log2(n) * 8);
-
-      const marqueur = L.marker([g.lat, g.lng], {
-        icon: L.divIcon({
-          className: 'carte-pin',
-          html: `<div class="carte-pin-bulle" style="width:${taille}px;height:${taille}px">${n}</div>`,
-          iconSize: [taille, taille],
-          iconAnchor: [taille / 2, taille / 2],
-        }),
-        title: `${g.nom} — ${n} plongée${n > 1 ? 's' : ''}`,
-      });
-
-      marqueur.on('click', () => afficherLieu(g));
-      couche.addLayer(marqueur);
-    });
+    placerReperes();
 
     // Un seul lieu : fitBounds collerait au maximum de zoom et on ne
     // verrait qu'une tache d'eau. On cadre alors sur ~15 km.
@@ -99,6 +103,43 @@ export function carteDesPlongees(dives, { buddies = [] } = {}) {
       const bornes = L.latLngBounds(groupes.map(g => [g.lat, g.lng]));
       carte.fitBounds(bornes, { padding: [36, 36], maxZoom: 12 });
     }
+  }
+
+  let groupesAffiches = [];
+
+  /** Les repères du zoom courant : un lieu seul, ou plusieurs cumulés. */
+  function placerReperes() {
+    if (!carte || !couche) return;
+    couche.clearLayers();
+    const z = carte.getZoom();
+    const amas = cumulerALEcran(groupesAffiches, g => carte.project([g.lat, g.lng], z));
+    amas.forEach(a => {
+      const seul = a.lieux.length === 1;
+      // Un disque dont la taille suit le nombre de plongées : on repère
+      // ses spots habituels sans rien lire.
+      const taille = Math.min(seul ? 46 : 58, (seul ? 24 : 30) + Math.log2(a.n) * 8);
+      const nomLieux = seul ? a.lieux[0].nom : `${a.lieux.length} lieux`;
+      const marqueur = L.marker([a.lat, a.lng], {
+        icon: L.divIcon({
+          className: 'carte-pin',
+          html: `<div class="carte-pin-bulle${seul ? '' : ' amas'}" style="width:${taille}px;height:${taille}px">${a.n}</div>`,
+          iconSize: [taille, taille],
+          iconAnchor: [taille / 2, taille / 2],
+        }),
+        title: `${nomLieux} — ${a.n} plongée${a.n > 1 ? 's' : ''}`,
+      });
+      marqueur.on('click', () => {
+        if (seul) return afficherLieu(a.lieux[0]);
+        // Plusieurs lieux : on zoome dessus. S'ils sont trop serrés pour
+        // se séparer, on montre leurs plongées ensemble.
+        const bornes = L.latLngBounds(a.lieux.map(g => [g.lat, g.lng]));
+        const zCible = Math.min(carte.getBoundsZoom(bornes.pad(0.3)), carte.getMaxZoom());
+        if (zCible > carte.getZoom()) carte.flyToBounds(bornes.pad(0.3), { duration: 0.6 });
+        else afficherLieu({ nom: a.lieux.map(g => g.nom).filter((v, i, t) => t.indexOf(v) === i).join(' · '),
+          lat: a.lat, lng: a.lng, plongees: a.lieux.flatMap(g => g.plongees) });
+      });
+      couche.addLayer(marqueur);
+    });
   }
 
   function afficherLieu(g) {
@@ -196,6 +237,7 @@ export function carteDesPlongees(dives, { buddies = [] } = {}) {
     ]);
     plan.addTo(carte);
     L.control.layers({ Plan: plan, Satellite: sat }, {}, { position: 'topright' }).addTo(carte);
+    carte.on('zoomend', placerReperes);
     L.control.scale({ imperial: false, position: 'bottomleft' }).addTo(carte);
 
     setTimeout(() => { carte.invalidateSize(); dessiner(); }, 80);

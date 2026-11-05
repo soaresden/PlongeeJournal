@@ -1055,6 +1055,11 @@ input[type=time]::-webkit-date-and-time-value { text-align: left; }
   border: 2px solid var(--on-accent); font-weight: 800; font-size: 13px;
   box-shadow: 0 2px 8px rgba(0,0,0,.4);
 }
+/* Plusieurs lieux cumulés au dézoom : un halo, pour les distinguer d'un spot. */
+.carte-pin-bulle.amas {
+  background: linear-gradient(150deg, var(--accent), var(--accent-2)); font-size: 14px;
+  box-shadow: 0 0 0 5px rgba(var(--accent-rgb), .28), 0 0 0 10px rgba(var(--accent-rgb), .12), 0 2px 8px rgba(0,0,0,.4);
+}
 
 @media (max-width: 400px) {
   .mois-grille { gap: 4px; }

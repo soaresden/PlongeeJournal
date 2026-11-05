@@ -51,7 +51,11 @@ globalThis.fetch = async (url) => {
   return { ok: true, status: 200, json: async () => [] };
 };
 // Leaflet en doublure
-const chain = () => new Proxy(() => {}, { get: () => chain(), apply: () => chain() });
+// (project et getZoom rendent de vrais nombres : la carte cumule les points à l'écran)
+const chain = () => new Proxy(() => {}, {
+  get: (_, k) => (k === 'project' ? ([lat, lng]) => ({ x: lng * 10, y: -lat * 10 }) : k === 'getZoom' ? () => 5 : chain()),
+  apply: () => chain(),
+});
 globalThis.L = chain();
 window.L = globalThis.L;
 globalThis.structuredClone ??= v => JSON.parse(JSON.stringify(v));
