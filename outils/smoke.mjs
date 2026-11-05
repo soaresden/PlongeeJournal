@@ -286,13 +286,15 @@ check('réglages : carte Compte Suunto avec les trois clés',
   /Compte Suunto/.test(view()) && /Identifiant client/.test(view()) && /Secret client/.test(view()) && /Clé d’abonnement/.test(view()), '');
 check('réglages : adresse de retour à déclarer affichée', /soaresden\.github\.io\/PlongeeJournal\//.test(view()), '');
 
-const { fitPlongee } = await import(__p2u(path.join(ROOT, 'outils/fit-fabrique.mjs')).href);
+const { fitPlongee, FitWriter } = await import(__p2u(path.join(ROOT, 'outils/fit-fabrique.mjs')).href);
+const fitVide = () => { const w = new FitWriter(); w.def(0, 0, [[0, 1, 0]]); w.msg(0, [[1, 4]]); return w.fin(); };
 const isoLocal = txt => new Date(txt).toISOString();
 const ACTS = [
   { workoutKey: 'aaaaaaaaaaaaaaaaaaaaaaa1', activityId: 78, iso: isoLocal('2026-06-02T23:40:00'), fit: {} },               // = dv2
   { workoutKey: 'aaaaaaaaaaaaaaaaaaaaaaa2', activityId: 78, iso: isoLocal('2023-05-10T10:00:00'), fit: {} },               // ancienne
   { workoutKey: 'aaaaaaaaaaaaaaaaaaaaaaa3', activityId: 21, iso: isoLocal('2026-07-20T12:00:00'), fit: { sport: 5, sub: 17 } }, // natation
   { workoutKey: 'aaaaaaaaaaaaaaaaaaaaaaa4', activityId: 1, iso: isoLocal('2026-07-21T07:00:00'), fit: { sport: 1, sub: 0 } },  // course
+  { workoutKey: 'aaaaaaaaaaaaaaaaaaaaaaa5', activityId: 90, iso: isoLocal('2025-08-12T10:00:00'), vide: true },               // snorkeling, .fit vide
 ];
 let fitsDemandes = [];
 window.Capacitor = { isNativePlatform: () => true, Plugins: { CapacitorHttp: { request: async ({ url, headers, responseType }) => {
@@ -307,7 +309,7 @@ window.Capacitor = { isNativePlatform: () => true, Plugins: { CapacitorHttp: { r
   const a = ACTS.find(x => x.workoutKey === k);
   if (!a || responseType !== 'arraybuffer') return { status: 404, data: '', headers: {} };
   fitsDemandes.push(k);
-  return { status: 200, data: Buffer.from(fitPlongee({ ...a.fit, debutIso: a.iso })).toString('base64'), headers: {} };
+  return { status: 200, data: Buffer.from(a.vide ? fitVide() : fitPlongee({ ...a.fit, debutIso: a.iso })).toString('base64'), headers: {} };
 } } } };
 window.localStorage.setItem('plongee-journal:suunto', JSON.stringify({ version: 1, clientId: 'id-smoke', clientSecret: 'secret-smoke',
   cleAbonnement: 'abo-smoke', redirectUri: 'https://soaresden.github.io/PlongeeJournal/', compte: 'denis.smoke',
@@ -328,13 +330,13 @@ await tick(200);
 const bouton = txt => [...document.querySelectorAll('#view button')].find(x => txt.test(x.textContent));
 bouton(/Chercher mes activités/).click();
 await tick(500);
-check('Suunto : 4 activités, la course ignorée', /4 activités sur ton compte/.test(view()) && /1 autre sport ignoré/.test(view()),
+check('Suunto : 5 activités, la course ignorée', /5 activités sur ton compte/.test(view()) && /1 autre sport ignoré/.test(view()),
   view().slice(view().indexOf('activité(s) sur'), view().indexOf('activité(s) sur') + 160));
 check('Suunto : plongée et natation reconnues sans .fit, la course en un seul', fitsDemandes.length === 1, fitsDemandes.join(','));
 bouton(/Analyser/).click();
 await tick(500);
 check('Suunto : par défaut, seulement ce qui manque (la plongée du 2 juin n’est pas touchée)',
-  /Appliquer : 1 plongée \+ 1 séance$/.test(bouton(/Appliquer/)?.textContent || '') && /1 déjà au carnet/.test(view()) && /Déjà au carnet · 1/.test(view()),
+  /Appliquer : 1 plongée \+ 2 séances$/.test(bouton(/Appliquer/)?.textContent || '') && /1 déjà au carnet/.test(view()) && /Déjà au carnet · 1/.test(view()),
   bouton(/Appliquer/)?.textContent);
 const caseCompleter = [...document.querySelectorAll('#view label')].find(l => /Compléter aussi celles déjà au carnet/.test(l.textContent))?.querySelector('input');
 caseCompleter.checked = true;
@@ -344,8 +346,8 @@ bouton(/Analyser/).click();
 await tick(500);
 const dv2Avant = structuredClone(await store.getDive(dv2.id));
 const btnAppliquer = bouton(/Appliquer/);
-check('Suunto : proposition 1 plongée + 1 séance + 1 à compléter',
-  /1 plongée \+ 1 séance \+ 1 à compléter/.test(btnAppliquer?.textContent || ''), btnAppliquer?.textContent);
+check('Suunto : proposition 1 plongée + 2 séances + 1 à compléter',
+  /1 plongée \+ 2 séances \+ 1 à compléter/.test(btnAppliquer?.textContent || ''), btnAppliquer?.textContent);
 check('Suunto : la plongée du 2 juin sera complétée (bloc, profil)', /↻ n°2 : profil.*pression du bloc/.test(view()),
   view().slice(view().indexOf('↻'), view().indexOf('↻') + 200));
 check('Suunto : renumérotation proposée (plongée de 2023)', /Renuméroter le carnet/.test(view()), '');
@@ -358,6 +360,9 @@ check('Suunto : plongée ajoutée au carnet', apresSuunto.length === 3 && apresS
 check('Suunto : plongée existante complétée sans écraser', dv2Apres.pressionDepart === 200 && dv2Apres.samples?.length > 50
   && dv2Apres.profMax === 18 && dv2Apres.lat === 43.2 && dv2Apres.suuntoKeys.includes('suunto:aaaaaaaaaaaaaaaaaaaaaaa1'), JSON.stringify({ p: dv2Apres.pressionDepart, prof: dv2Apres.profMax, lat: dv2Apres.lat }));
 check('Suunto : natation rangée en séance piscine', (await store.listSeances(d.id)).some(x => x.type === 'piscine' && x.source === 'suunto-cloud'), '');
+check('Suunto : .fit vide → séance faite depuis la liste (snorkeling, date, durée)',
+  (await store.listSeances(d.id)).some(x => x.type === 'snorkeling' && x.date === '2025-08-12' && x.heure === '10:00' && x.dureeMin === 45),
+  JSON.stringify((await store.listSeances(d.id)).filter(x => x.source === 'suunto-cloud').map(x => [x.type, x.date, x.heure, x.dureeMin])));
 check('Suunto : numéros inchangés sans la case cochée', apresSuunto.find(x => x.date === '2023-05-10').numero === 3, '');
 // On remet le carnet comme avant pour la suite des vérifications.
 for (const x of apresSuunto.filter(x => x.suunto?.source === 'suunto-cloud')) await store.deleteDive(x.id);

@@ -15,7 +15,7 @@
 import { el, toast, fmtDuration, confirmBox } from '../lib.js';
 import { store, TYPES_SEANCE, typeSeance } from '../store.js';
 import { navigate } from '../router.js';
-import { fitToDive } from '../fit.js';
+import { fitToDive, decodeFit, genreFit } from '../fit.js';
 import { creerPlongeeImportee } from './suunto.js';
 import { seanceDepuisImport, commePlongees } from '../seances.js';
 import {
@@ -104,6 +104,7 @@ export async function suuntoCloudView() {
     groupesOuverts: new Set(),
     groupesFermes: new Set(),
     sansFit: null,             // raison, quand Suunto refuse les .fit
+    fitsVides: 0,              // .fit sans données (journalisés les premiers)
     occupe: false,
     arret: false,
   };
@@ -153,8 +154,30 @@ export async function suuntoCloudView() {
       r = dec ? { dec } : { erreur: 'date inconnue' };
     } else {
       try {
-        const dec = fitToDive(await client.fit(act.cle));
-        r = dec ? { dec } : { erreur: 'aucune donnée dans le .fit' };
+        const octets = await client.fit(act.cle);
+        const liste = decDepuisListe(act);
+        let dec = null, souci = '';
+        try { dec = fitToDive(octets); } catch (e) { souci = e.message; }
+        if (dec) {
+          // Ce que le .fit n'a pas (heure, durée, lieu…), la liste le donne.
+          for (const k of ['start', 'dureeMin', 'profMax', 'lieu', 'tempFond']) {
+            if ((dec[k] === null || dec[k] === undefined) && liste?.[k] != null) dec[k] = liste[k];
+          }
+          r = { dec };
+        } else {
+          // .fit sans données de plongée : la fiche vient de la liste, et
+          // le sport du .fit (s'il y en a un) sert à reconnaître le type.
+          let messages = [];
+          try { ({ messages } = decodeFit(octets)); } catch { /* illisible */ }
+          const session = messages.find(m => m.global === 18)?.fields || {};
+          if (etat.fitsVides++ < 3) {
+            const ids = [...new Set(messages.map(m => m.global))].slice(0, 15).join(',');
+            log(`.fit sans profil pour ${act.cle} (${octets.length} octets ; messages ${ids || 'aucun'}`
+              + `${souci ? ` ; ${souci}` : ''}) : fiche faite depuis la liste`);
+          }
+          r = liste ? { dec: { ...liste, genre: liste.genre ?? genreFit(session[5], session[6]) } }
+            : { erreur: 'aucune donnée dans le .fit' };
+        }
       } catch (e) {
         if (e.status === 429 || e.reconnecter) throw e;
         if (!e.systeme) { r = { erreur: e.message }; }
