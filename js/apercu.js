@@ -14,6 +14,32 @@ import { DIVE_TYPES } from './config.js';
 import { navigate } from './router.js';
 import { profileSvg } from './fit.js';
 import { ambianceDe, stylesAmbiance, vignetteLieu, etiquetteAmbiance } from './ambiance.js';
+import { agendaBranche, agendaLisible, chargerAgenda, evenementsDu, lieuPropose } from './agenda.js';
+
+/**
+ * « Ce jour-là dans ton agenda » : les événements du jour, chacun avec un
+ * bouton pour en faire le lieu. Rien si l'agenda n'est pas relié.
+ */
+function blocAgenda(date, champLieu, appliquer) {
+  if (!agendaBranche() || !agendaLisible() || !date) return null;
+  const bloc = el('div.apercu-bloc.agenda-jour', {}, el('div.apercu-lbl', { text: '📅 Ce jour-là dans ton agenda' }));
+  const liste = el('div.agenda-liste', {}, el('div.hint', { text: 'Lecture de l’agenda…' }));
+  bloc.append(liste);
+  chargerAgenda().then(ev => {
+    const du = evenementsDu(ev, date);
+    liste.replaceChildren(...(du.length ? du.map(e => el('div.agenda-ev', {},
+      el('div.agenda-ev-txt', {}, el('b', { text: e.titre || '(sans titre)' }),
+        e.lieu ? el('span', { text: e.lieu }) : null,
+        e.debut !== e.fin ? el('span', { text: `du ${fmtDate(e.debut)} au ${fmtDate(e.fin)}` }) : null),
+      el('button.btn.sm.ghost', { type: 'button', text: 'Comme lieu', onclick: () => {
+        const l = lieuPropose(e);
+        champLieu.value = l;
+        appliquer(l);
+        toast(`Lieu : ${l}`);
+      } }))) : [el('div.hint', { text: 'Rien dans l’agenda ce jour-là.' })]));
+  }).catch(e => liste.replaceChildren(el('div.hint', { text: e.message })));
+  return bloc;
+}
 
 let racine = null;
 let surFermeture = null;
@@ -145,6 +171,7 @@ export async function apercuPlongee(id, { retour = null, onClose = null } = {}) 
   selNiveau.onchange = () => maj({ niveau: selNiveau.value });
 
   const date = saisie('date', d.date, v => { maj({ date: v }); majNiveau(); });
+  const lieuDive = saisie('text', d.lieuNom, v => maj({ lieuNom: v }));
 
   const a = ambianceDe(d);
   const tete = el('div.apercu-tete-plongee', {},
@@ -164,7 +191,7 @@ export async function apercuPlongee(id, { retour = null, onClose = null } = {}) 
     el('div.apercu-grille', {},
       champ('N°', saisie('text', d.numero, v => maj({ numero: num(v) }), { inputmode: 'numeric' })),
       champ('Date', date),
-      champ('Lieu', saisie('text', d.lieuNom, v => maj({ lieuNom: v })), { large: true }),
+      champ('Lieu', lieuDive, { large: true }),
       champ('Site', saisie('text', d.site, v => maj({ site: v })), { large: true }),
       champ('Immersion', saisie('time', d.heureImmersion, v => maj({ heureImmersion: v }))),
       champ('Durée (min)', saisie('text', d.dureeMin, v => maj({ dureeMin: num(v) }), { inputmode: 'numeric' })),
@@ -175,6 +202,7 @@ export async function apercuPlongee(id, { retour = null, onClose = null } = {}) 
       champ('Ce que j’ai fait', saisie('textarea', d.fait, v => maj({ fait: v })), { large: true }),
       champ('Ce que j’ai vu', saisie('textarea', d.vu, v => maj({ vu: v })), { large: true }),
       champ('Notes', saisie('textarea', d.observations, v => maj({ observations: v })), { large: true })),
+    blocAgenda(d.date, lieuDive, v => maj({ lieuNom: v })),
     (d.buddyIds || []).length
       ? el('div.apercu-bloc', {}, el('div.apercu-lbl', { text: 'Palanquée' }),
           el('div.chips', {}, ...d.buddyIds.map(b => el('span.chip', { text: nom(b) }))))
@@ -206,6 +234,7 @@ export async function apercuSeance(id, { retour = null, onClose = null } = {}) {
   const temoin = el('span.apercu-temoin');
   const sauvegarde = enregistreur(() => store.saveSeance(s), temoin);
   const maj = p => { Object.assign(s, p); sauvegarde.planifier(); };
+  const lieuSeance = saisie('text', s.lieu, v => maj({ lieu: v }));
 
   const tete = el('div.apercu-tete-plongee', {},
     el('span.seance-pastille', { class: `s-${t.id}`, style: { width: '52px', height: '52px', flex: '0 0 52px', fontSize: '26px' }, text: t.icone }),
@@ -222,12 +251,13 @@ export async function apercuSeance(id, { retour = null, onClose = null } = {}) {
     el('div.apercu-grille', {},
       champ('Type', liste(TYPES_SEANCE.map(x => [x.id, `${x.icone} ${x.label}`]), s.type, v => maj({ type: v }))),
       champ('Date', saisie('date', s.date, v => maj({ date: v }))),
-      champ('Lieu', saisie('text', s.lieu, v => maj({ lieu: v })), { large: true }),
+      champ('Lieu', lieuSeance, { large: true }),
       champ('Heure', saisie('time', s.heure, v => maj({ heure: v }))),
       champ('Durée (min)', saisie('text', s.dureeMin, v => maj({ dureeMin: num(v) }), { inputmode: 'numeric' })),
       champ('Prof. max (m)', saisie('text', s.profMax, v => maj({ profMax: num(v) }), { inputmode: 'decimal' })),
       champ('Eau (°C)', saisie('text', s.tempEau, v => maj({ tempEau: num(v) }), { inputmode: 'decimal' })),
-      champ('Notes', saisie('textarea', s.notes, v => maj({ notes: v })), { large: true })));
+      champ('Notes', saisie('textarea', s.notes, v => maj({ notes: v })), { large: true })),
+    blocAgenda(s.date, lieuSeance, v => maj({ lieu: v })));
 
   const pied = el('div.apercu-actions', {},
     temoin,

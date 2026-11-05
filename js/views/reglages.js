@@ -25,6 +25,10 @@ import {
   estApk, versionInstallee, verifier, nouveautes, telechargerApk, taillePropre,
 } from '../maj-apk.js';
 
+import {
+  lienAgenda, enregistrerLienAgenda, oublierAgenda, lienValide, agendaLisible, chargerAgenda,
+} from '../agenda.js';
+
 const PAGES = 'https://soaresden.github.io/PlongeeJournal/';
 const APK = 'https://github.com/soaresden/PlongeeJournal/releases/latest/download/PlongeeJournal.apk';
 
@@ -54,7 +58,8 @@ export async function reglagesView() {
   wrap.append(el('div.section', {},
     el('h2', { text: 'Comptes' }),
     carteGitHub(),
-    carteSuunto()));
+    carteSuunto(),
+    carteAgenda()));
 
   wrap.append(sectionApparence());
   wrap.append(sectionDonnees());
@@ -262,6 +267,63 @@ function sectionDonnees() {
 }
 
 /** Compte Suunto : les clés de l'appli Suunto, puis la connexion. L'import, lui, est dans Divers → Suunto. */
+/**
+ * Mon agenda Google : le lien iCal secret, gardé sur l'appareil. Sert à
+ * proposer un lieu d'après l'événement du jour de la plongée.
+ */
+function carteAgenda() {
+  const etat = el('div.hint.compte-etat');
+  const { carte, corps, changer } = carteCompte({ classe: 'local', icone: 'i-cloud', titre: 'Mon agenda', etat });
+
+  const rendre = () => {
+    corps.replaceChildren();
+    const lien = lienAgenda();
+    if (lien) {
+      changer('ok');
+      etat.textContent = agendaLisible() ? 'Relié sur cet appareil' : 'Relié · lisible seulement dans l’APK';
+      const resultat = el('div.hint');
+      corps.append(
+        el('div.hint', { style: { marginTop: 0 }, text: 'Sur la fiche d’une plongée ou d’une séance sans lieu, l’appli te montre ce que dit ton agenda ce jour-là et te propose d’en faire le lieu.' }),
+        agendaLisible() ? null : el('div.hint', { style: { color: 'var(--warn)' },
+          text: 'Google ne laisse pas une page web lire ton agenda : ça ne marche que dans l’appli Android.' }),
+        resultat,
+        el('div.btn-row', {},
+          agendaLisible() ? el('button.btn.sm', { type: 'button', text: 'Relire maintenant', onclick: async () => {
+            resultat.textContent = 'Lecture…';
+            try { const ev = await chargerAgenda({ forcer: true }); resultat.textContent = `${ev.length} événements lus.`; }
+            catch (e) { resultat.textContent = e.message; }
+          } }) : null,
+          el('button.btn.sm.danger', { type: 'button', text: 'Oublier le lien', onclick: async () => {
+            if (!(await confirmBox('Oublier le lien de ton agenda sur cet appareil ?', 'Oublier'))) return;
+            oublierAgenda(); toast('Lien oublié'); rendre();
+          } })));
+      return;
+    }
+
+    changer('local');
+    etat.textContent = 'Pas relié';
+    const champ = el('input', { type: 'password', autocomplete: 'off', spellcheck: 'false',
+      placeholder: 'https://calendar.google.com/calendar/ical/…/basic.ics' });
+    corps.append(
+      el('div.hint', { style: { marginTop: 0 }, text: 'Pour retrouver où tu étais le jour d’une plongée. Dans Google Agenda sur ordinateur : Paramètres → ton agenda → « Adresse secrète au format iCal ». Copie-la ici.' }),
+      el('div.hint', { style: { color: 'var(--warn)' }, text: 'Ce lien donne accès à tout ton agenda : il reste sur cet appareil, il n’est jamais envoyé sur GitHub. À coller sur chaque appareil.' }),
+      el('div.field', { style: { marginTop: '10px' } }, el('label.lbl', { text: 'Adresse secrète iCal' }), champ),
+      el('button.btn.primary.sm', { type: 'button', text: 'Relier mon agenda', onclick: async () => {
+        const url = champ.value.trim();
+        if (!lienValide(url)) return toast('Ce n’est pas une adresse iCal (https://…/ical/…)', true);
+        enregistrerLienAgenda(url);
+        champ.value = '';
+        if (agendaLisible()) {
+          try { const ev = await chargerAgenda({ forcer: true }); toast(`Agenda relié : ${ev.length} événements`); }
+          catch (e) { toast(e.message, true); }
+        } else toast('Lien gardé : il servira dans l’appli Android');
+        rendre();
+      } }));
+  };
+  rendre();
+  return carte;
+}
+
 function carteSuunto() {
   const etat = el('div.hint.compte-etat', { text: 'Chargement…' });
   const { carte, corps, changer } = carteCompte({ classe: 'local', icone: 'i-montre', titre: 'Compte Suunto', etat });

@@ -246,3 +246,10 @@ button.tuile:hover { border-color: var(--accent); }
   display: grid; place-items: center; font-size: 10px; color: var(--text-mute); padding: 0; border: 0; }
 .mm-grille .j.mm-j span { pointer-events: none; }
 .mm-grille .j.mm-j:not(.n0) span, .mm-grille .j.mm-j[class*=" s-"] span { color: #fff; font-weight: 700; }
+
+/* ---------- Agenda du jour, dans l'aperçu ---------- */
+.agenda-liste { display: flex; flex-direction: column; gap: 6px; }
+.agenda-ev { display: flex; align-items: center; gap: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px; }
+.agenda-ev-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.agenda-ev-txt b { font-size: 14px; }
+.agenda-ev-txt span { font-size: 12px; color: var(--text-mute); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
