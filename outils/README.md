@@ -11,6 +11,8 @@ fabrication de l'APK.
 | `fit-test.mjs` | décodage des fichiers `.fit` d'ordinateur de plongée |
 | `ocean-test.mjs` | Suunto Ocean en Bluetooth : trames, Heatshrink, décodage d'une vraie plongée (`fixtures/`), session contre une fausse montre |
 | `seance-test.mjs` | séances (fosse, piscine, apnée) : stockage, fusion, tri des activités de la montre |
+| `suunto-cloud-test.mjs` | compte Suunto (API officielle) : connexion, jetons, liste, `.fit`, alignement avec le carnet, contre un faux Suunto |
+| `fit-fabrique.mjs` | fabrique de faux `.fit` de plongée (bloc, gaz, GPS) pour les tests |
 | `maj-apk-test.mjs` | bouton « Mise à jour » de l’APK : numéro embarqué, comparaison avec la release GitHub |
 | `geo-test.mjs` | eau douce / salée, altitude |
 | `lieu-test.mjs` | recherche de lieux, cadrage des cartes |

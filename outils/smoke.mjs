@@ -148,7 +148,7 @@ await store.saveSeance(sf);
 check('une séance ne compte pas comme plongée', (await store.stats(d.id)).count === 2);
 
 // --- Parcours de tous les écrans ---------------------------
-const routes = ['dives', `dive/${dv.id}`, `dive/${dv.id}/edit`, 'dive/new', 'seances', 'seance/new', `seance/${sf.id}`,
+const routes = ['suunto-cloud', 'dives', `dive/${dv.id}`, `dive/${dv.id}/edit`, 'dive/new', 'seances', 'seance/new', `seance/${sf.id}`,
                 'divers', `diver/${d.id}`, 'buddies', `buddy/${b.id}`, 'stats',
                 'reglages', 'setup', 'suunto', 'montre', 'montre-aide', 'urgence', 'route/inexistante'];
 for (const r of routes) {
@@ -272,8 +272,90 @@ window.dispatchEvent(new window.Event('hashchange'));
 await tick(200);
 check('APK : « dernière version » quand c’est à jour',
   /Tu as la dernière version/.test(view()) && /Vérifier à nouveau/.test(boutonMaj()?.textContent || ''), boutonMaj()?.textContent);
-delete window.Capacitor;
 fausseRelease = null;
+
+// --- Compte Suunto : réglages (site) puis récupération (APK) ---
+delete window.Capacitor;
+window.location.hash = '#/dives';
+window.dispatchEvent(new window.Event('hashchange'));
+await tick(80);
+window.location.hash = '#/reglages';
+window.dispatchEvent(new window.Event('hashchange'));
+await tick(200);
+check('réglages : carte Compte Suunto avec les trois clés',
+  /Compte Suunto/.test(view()) && /Identifiant client/.test(view()) && /Secret client/.test(view()) && /Clé d’abonnement/.test(view()), '');
+check('réglages : adresse de retour à déclarer affichée', /soaresden\.github\.io\/PlongeeJournal\//.test(view()), '');
+
+const { fitPlongee } = await import(__p2u(path.join(ROOT, 'outils/fit-fabrique.mjs')).href);
+const isoLocal = txt => new Date(txt).toISOString();
+const ACTS = [
+  { workoutKey: 'aaaaaaaaaaaaaaaaaaaaaaa1', activityId: 83, iso: isoLocal('2026-06-02T23:40:00'), fit: {} },               // = dv2
+  { workoutKey: 'aaaaaaaaaaaaaaaaaaaaaaa2', activityId: 83, iso: isoLocal('2023-05-10T10:00:00'), fit: {} },               // ancienne
+  { workoutKey: 'aaaaaaaaaaaaaaaaaaaaaaa3', activityId: 21, iso: isoLocal('2026-07-20T12:00:00'), fit: { sport: 5, sub: 17 } }, // natation
+  { workoutKey: 'aaaaaaaaaaaaaaaaaaaaaaa4', activityId: 1, iso: isoLocal('2026-07-21T07:00:00'), fit: { sport: 1, sub: 0 } },  // course
+];
+let fitsDemandes = [];
+window.Capacitor = { isNativePlatform: () => true, Plugins: { CapacitorHttp: { request: async ({ url, headers, responseType }) => {
+  const u = new URL(url);
+  if (headers['Ocp-Apim-Subscription-Key'] !== 'abo-smoke' || !/^Bearer /.test(headers.Authorization)) return { status: 401, data: 'refusé', headers: {} };
+  if (u.pathname === '/v2/workouts') {
+    const liste = u.searchParams.get('until') || u.searchParams.get('since') ? [] : ACTS.map(a => ({ workoutKey: a.workoutKey, activityId: a.activityId,
+      startTime: Date.parse(a.iso), totalTime: 2700 }));
+    return { status: 200, data: JSON.stringify({ error: null, payload: liste }), headers: {} };
+  }
+  const k = /exportFit\/(\w+)/.exec(u.pathname)?.[1];
+  const a = ACTS.find(x => x.workoutKey === k);
+  if (!a || responseType !== 'arraybuffer') return { status: 404, data: '', headers: {} };
+  fitsDemandes.push(k);
+  return { status: 200, data: Buffer.from(fitPlongee({ ...a.fit, debutIso: a.iso })).toString('base64'), headers: {} };
+} } } };
+window.localStorage.setItem('plongee-journal:suunto', JSON.stringify({ version: 1, clientId: 'id-smoke', clientSecret: 'secret-smoke',
+  cleAbonnement: 'abo-smoke', redirectUri: 'https://soaresden.github.io/PlongeeJournal/', compte: 'denis.smoke',
+  jeton: { acces: 'x.eyJ1c2VyIjoiZGVuaXMifQ.y', refresh: 'R', expire: Date.now() + 864e5 }, types: {}, majLe: new Date().toISOString() }));
+window.location.hash = '#/dives';
+window.dispatchEvent(new window.Event('hashchange'));
+await tick(80);
+window.location.hash = '#/reglages';
+window.dispatchEvent(new window.Event('hashchange'));
+await tick(200);
+check('réglages APK : compte relié affiché', /denis\.smoke/.test(view()) && /Récupérer mes activités/.test(view()), '');
+window.location.hash = '#/suunto';
+window.dispatchEvent(new window.Event('hashchange'));
+await tick(150);
+check('import : bouton « Récupérer depuis mon compte Suunto »', !!document.getElementById('btn-suunto-cloud'), '');
+document.getElementById('btn-suunto-cloud').click();
+await tick(200);
+const bouton = txt => [...document.querySelectorAll('#view button')].find(x => txt.test(x.textContent));
+bouton(/Chercher mes activités/).click();
+await tick(500);
+check('Suunto : 4 activités, la course ignorée', /4 activité\(s\) sur ton compte/.test(view()) && /1 autre\(s\) sport\(s\) ignoré/.test(view()),
+  view().slice(view().indexOf('activité(s) sur'), view().indexOf('activité(s) sur') + 160));
+check('Suunto : un seul .fit par type pour apprendre (3 types)', fitsDemandes.length === 3, fitsDemandes.join(','));
+bouton(/Analyser/).click();
+await tick(500);
+const dv2Avant = structuredClone(await store.getDive(dv2.id));
+const btnAppliquer = bouton(/Appliquer/);
+check('Suunto : proposition 1 plongée + 1 séance + 1 à compléter',
+  /1 plongée \+ 1 séance \+ 1 à compléter/.test(btnAppliquer?.textContent || ''), btnAppliquer?.textContent);
+check('Suunto : la plongée du 2 juin sera complétée (bloc, profil)', /plongée n°2 .*ajoute .*profil.*pression du bloc/.test(view()),
+  view().slice(view().indexOf('↻'), view().indexOf('↻') + 200));
+check('Suunto : renumérotation proposée (plongée de 2023)', /Renuméroter le carnet/.test(view()), '');
+btnAppliquer.click();
+await tick(500);
+const apresSuunto = await store.listDives(d.id);
+const dv2Apres = apresSuunto.find(x => x.id === dv2.id);
+check('Suunto : plongée ajoutée au carnet', apresSuunto.length === 3 && apresSuunto.some(x => x.suunto?.source === 'suunto-cloud' && x.date === '2023-05-10'),
+  apresSuunto.map(x => `${x.numero}:${x.date}`).join(' '));
+check('Suunto : plongée existante complétée sans écraser', dv2Apres.pressionDepart === 200 && dv2Apres.samples?.length > 50
+  && dv2Apres.profMax === 18 && dv2Apres.lat === 43.2 && dv2Apres.suuntoKeys.includes('suunto:aaaaaaaaaaaaaaaaaaaaaaa1'), JSON.stringify({ p: dv2Apres.pressionDepart, prof: dv2Apres.profMax, lat: dv2Apres.lat }));
+check('Suunto : natation rangée en séance piscine', (await store.listSeances(d.id)).some(x => x.type === 'piscine' && x.source === 'suunto-cloud'), '');
+check('Suunto : numéros inchangés sans la case cochée', apresSuunto.find(x => x.date === '2023-05-10').numero === 3, '');
+// On remet le carnet comme avant pour la suite des vérifications.
+for (const x of apresSuunto.filter(x => x.suunto?.source === 'suunto-cloud')) await store.deleteDive(x.id);
+for (const x of (await store.listSeances(d.id)).filter(x => x.source === 'suunto-cloud')) await store.deleteSeance(x.id);
+await store.saveDive(dv2Avant);
+delete window.Capacitor;
+window.localStorage.removeItem('plongee-journal:suunto');
 
 // --- Écran Plongeurs : vignettes, pas des lignes ---
 window.location.hash = '#/buddies';

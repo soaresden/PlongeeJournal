@@ -32,6 +32,20 @@ export async function suuntoView() {
   const liste = el('div');
   const actions = el('div.btn-row');
 
+  // Tout l'historique, depuis le compte Suunto (API officielle).
+  wrap.append(el('div.card', {},
+    el('div', { style: { fontWeight: '650', marginBottom: '4px' },
+      text: '☁️ Depuis ton compte Suunto : tout l’historique' }),
+    el('div.hint', {
+      text: 'Récupère toutes les plongées et séances de l’appli Suunto, et les aligne sur le carnet : '
+          + 'ajoute ce qui manque, complète ce qui y est déjà (profil, bloc, température).' }),
+    el('button#btn-suunto-cloud.btn.primary.block', {
+      type: 'button', style: { marginTop: '10px' },
+      text: '☁️ Récupérer depuis mon compte Suunto',
+      onclick: () => navigate('suunto-cloud'),
+    }),
+  ));
+
   // Directement depuis la montre, sans passer par l'appli Suunto.
   wrap.append(el('div.card', {},
     el('div', { style: { fontWeight: '650', marginBottom: '4px' },
@@ -39,7 +53,7 @@ export async function suuntoView() {
     el('div.hint', {
       text: 'Le carnet lit les plongées dans la montre en Bluetooth : profil, températures, '
           + 'pression du Tank POD, gaz. L’appli Suunto peut rester installée et appairée.' }),
-    el('button#btn-montre-ble.btn.primary.block', {
+    el('button#btn-montre-ble.btn.block', {
       type: 'button', style: { marginTop: '10px' },
       text: '⌚ Importer depuis la montre (Bluetooth)',
       onclick: () => navigate('montre'),
@@ -202,6 +216,7 @@ export async function creerPlongeeImportee(diverId, fusion, { cles, suunto = nul
     dive.gazO2 = fusion.gazO2;
     dive.gazHe = fusion.gazHe;
   }
+  if (fusion.eau && !dive.eau) dive.eau = fusion.eau;
   if (fusion.lieu && dive.lat == null) {
     dive.lat = fusion.lieu.lat;
     dive.lng = fusion.lieu.lng;

@@ -18,6 +18,8 @@ import { buddiesView, buddyFormView }     from './views/buddies.js';
 import { statsView }                      from './views/stats.js';
 import { reglagesView }                   from './views/reglages.js';
 import { suuntoView }                     from './views/suunto.js';
+import { suuntoCloudView }                from './views/suunto-cloud.js';
+import { verifierEtat, chargerLiaison, echangerCode, sauverLiaison } from './suunto-cloud.js';
 import { montreView }                     from './views/montre.js';
 import { montreAideView }                 from './views/montre-aide.js';
 import { urgenceView }                    from './views/urgence.js';
@@ -38,6 +40,7 @@ route('buddy/:id',        buddyFormView);
 route('reglages',         reglagesView);
 route('setup',            reglagesView);   // ancien lien
 route('suunto',           suuntoView);
+route('suunto-cloud',     suuntoCloudView);
 route('montre',           montreView);
 route('montre-aide',      montreAideView);
 route('urgence',          urgenceView);
@@ -287,7 +290,7 @@ onRender(async path => {
     dives: 'dives', dive: path === 'dive/new' ? 'dive/new' : 'dives',
     divers: 'divers', diver: 'divers',
     buddies: 'buddies', buddy: 'buddies', stats: 'stats',
-    reglages: 'reglages', suunto: 'divers', montre: 'divers', 'montre-aide': 'divers', urgence: 'divers',
+    reglages: 'reglages', suunto: 'divers', 'suunto-cloud': 'divers', montre: 'divers', 'montre-aide': 'divers', urgence: 'divers',
     seances: 'dives', seance: 'dives',
   }[root];
   $$('#tabbar .tab').forEach(t => t.classList.toggle('active', t.dataset.route === tabFor));
@@ -359,5 +362,30 @@ window.addEventListener('error', e => {
 });
 
 // ------------------------------------------------------------
+//  Retour de Suunto après « Connecter mon compte » :
+//  …/PlongeeJournal/?code=…&state=… → jetons, puis Réglages.
+// ------------------------------------------------------------
 
+async function retourSuunto() {
+  const q = new URLSearchParams(location.search);
+  if (!q.has('state') || !(q.has('code') || q.has('error'))) return;
+  const code = q.get('code');
+  const etatOk = verifierEtat(q.get('state'));
+  const refus = q.get('error');
+  // L'adresse est nettoyée tout de suite : le code ne sert qu'une fois.
+  history.replaceState(null, '', `${location.pathname}#/reglages`);
+  if (refus) { toast(`Suunto : connexion refusée (${refus})`, true); return; }
+  if (!etatOk) { toast('Retour de Suunto inattendu ou trop ancien : relance « Connecter mon compte ».', true); return; }
+  try {
+    const { liaison, sha } = await chargerLiaison();
+    const reliee = await echangerCode(liaison, code);
+    await sauverLiaison(reliee, { sha, message: 'Suunto : compte relié' });
+    toast(`Compte Suunto relié${reliee.compte ? ` (${reliee.compte})` : ''} ✓`);
+  } catch (e) {
+    toast(`Suunto : ${e.message}`, true);
+  }
+  if (currentPath() === 'reglages') navigate('reglages', true);
+}
+
+retourSuunto();
 startRouter();

@@ -4,10 +4,12 @@
 //  Le format FIT est auto-descriptif : chaque fichier commence par
 //  des « messages de définition » qui annoncent la forme des données
 //  qui suivent. On décode donc tout génériquement, puis on ne
-//  s'intéresse qu'à quatre types de messages :
-//    18  session      — début, durée, sport
+//  s'intéresse qu'à quelques types de messages :
+//    18  session      — début, durée, sport, position de départ
 //    20  record       — échantillons (profondeur, température)
 //    268 dive_summary — profondeur max/moyenne, temps au fond
+//    258 dive_settings, 259 dive_gas — gradients, eau, mélange
+//    319 tank_update, 323 tank_summary — pression du bloc (Tank POD)
 //    0   file_id      — fabricant, date de création
 // ============================================================
 
@@ -131,6 +133,17 @@ const fitDate = v => (v === null || v === undefined ? null : new Date((v + FIT_E
 const mm = v => (v === null || v === undefined ? null : v / 1000);   // millimètres/millisecondes -> unité
 
 /**
+ * Le genre d'activité d'après le sport FIT : 53 = plongée (sous-sport
+ * 56/57 = apnée), 5 = natation, le reste = un autre sport.
+ */
+export function genreFit(sport, subSport) {
+  if (sport === 53) return subSport === 56 || subSport === 57 ? 'apnee' : 'plongee';
+  if (sport === 5) return 'natation';
+  if (sport == null) return null;
+  return 'sport';
+}
+
+/**
  * Extrait les informations de plongée d'un FIT.
  * Renvoie null si le fichier ne contient aucune donnée exploitable.
  */
@@ -172,6 +185,34 @@ export function fitToDive(buffer) {
 
   const temps = samples.map(s => s.temp).filter(v => v !== null && v !== undefined);
 
+  // --- bloc (Tank POD) : résumé 323, sinon relevés 319 ; en centièmes de bar ---
+  let pressionDepart = null, pressionFin = null;
+  const resumeBloc = messages.find(m => m.global === 323 && m.fields[1] != null)?.fields;
+  if (resumeBloc) {
+    pressionDepart = resumeBloc[1] / 100;
+    pressionFin = resumeBloc[2] != null ? resumeBloc[2] / 100 : null;
+  } else {
+    const releves = messages.filter(m => m.global === 319).map(m => m.fields[1]).filter(v => v != null);
+    if (releves.length) { pressionDepart = releves[0] / 100; pressionFin = releves[releves.length - 1] / 100; }
+  }
+  const bar = v => (v != null && v > 0 && v < 400 ? Math.round(v) : null);
+
+  // --- gaz (259) : le premier mélange activé ---
+  const gaz = messages.filter(m => m.global === 259).map(m => m.fields)
+    .find(f => f[1] != null && f[2] !== 0) || null;
+
+  // --- réglages de plongée (258) : gradients, type d'eau ---
+  const reglages = messages.find(m => m.global === 258)?.fields ?? {};
+  const gfBas = reglages[2], gfHaut = reglages[3];
+  const gf = gfBas >= 10 && gfHaut >= gfBas && gfHaut <= 100 ? { bas: gfBas, haut: gfHaut } : null;
+  const eau = reglages[4] === 0 ? 'douce' : reglages[4] === 1 ? 'salee' : null;
+
+  // --- position de départ (semi-cercles) ---
+  const semi = v => (v == null ? null : v * 180 / 2 ** 31);
+  const lat = semi(session[3]), lng = semi(session[4]);
+  const lieu = lat != null && lng != null && Math.abs(lat) > 0.01 && Math.abs(lat) <= 90
+    ? { lat: Math.round(lat * 1e6) / 1e6, lng: Math.round(lng * 1e6) / 1e6 } : null;
+
   const dive = {
     start,
     dureeMin: elapsedS != null ? Math.round(elapsedS / 60) : null,
@@ -184,6 +225,14 @@ export function fitToDive(buffer) {
     surfaceIntervalS: summary[4] ?? null,
     sport: session[5] ?? null,
     subSport: session[6] ?? null,
+    genre: genreFit(session[5], session[6]),
+    pressionDepart: bar(pressionDepart),
+    pressionFin: bar(pressionFin),
+    gazO2: gaz ? gaz[1] : null,
+    gazHe: gaz && gaz[0] ? gaz[0] : null,
+    gf,
+    eau,
+    lieu,
     samples,
     paliers: estimateStops(samples),
   };

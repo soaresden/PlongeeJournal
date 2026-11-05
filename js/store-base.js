@@ -196,6 +196,20 @@ export function creerStore(support) {
       await save({ table: 'dives', id, supprime: true });
     },
 
+    /** Applique des numéros (Map id → numéro), en une seule écriture. */
+    async renumeroter(diverId, numeros) {
+      const t = maintenant();
+      let n = 0;
+      for (const dv of db().dives) {
+        if (dv.diverId !== diverId || !numeros.has(dv.id)) continue;
+        dv.numero = numeros.get(dv.id);
+        dv.updatedAt = t;
+        n++;
+      }
+      if (n) await save({ table: 'dives' });
+      return n;
+    },
+
     async findDiveBySuunto(workoutKey) {
       return db().dives.find(d => (d.suuntoKeys || []).includes(workoutKey)) || null;
     },

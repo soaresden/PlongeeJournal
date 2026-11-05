@@ -3,7 +3,7 @@
 
 // À incrémenter à chaque livraison : un vieux cache sert un vieux
 // index.html, et les changements d'icônes ou de menu ne se voient pas.
-const CACHE = 'plongee-journal-v25';
+const CACHE = 'plongee-journal-v26';
 
 const ASSETS = [
   './',
@@ -31,6 +31,8 @@ const ASSETS = [
   './js/ocean-sbem.js',
   './js/seances.js',
   './js/maj-apk.js',
+  './js/suunto-cloud.js',
+  './js/suunto-aligner.js',
   './js/ble.js',
   './js/ble-journal.js',
   './js/geo.js',
@@ -52,6 +54,7 @@ const ASSETS = [
   './js/views/suunto.js',
   './js/views/montre.js',
   './js/views/seances.js',
+  './js/views/suunto-cloud.js',
   './js/views/montre-aide.js',
   './assets/icon.svg',
   './vendor/leaflet/leaflet.css',

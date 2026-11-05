@@ -103,6 +103,21 @@ Tank POD, gaz, gradients, position GPS de la mise à l'eau. Les plongées déjà
 importées (en `.fit` ou en Bluetooth) sont reconnues. Voir
 [Appairer la montre](#appairer-la-montre-suunto-ocean).
 
+**Compte Suunto (tout l'historique)** — avec l'API officielle Suunto (accès
+partenaire). Réglages → « Compte Suunto » : les trois clés de l'appli Suunto
+(profil API Zone), puis « Connecter mon compte Suunto », **depuis le site sur le
+PC** ; adresse de retour à déclarer dans API Zone :
+`https://soaresden.github.io/PlongeeJournal/`. Les clés et les jetons vivent dans
+`suunto.json`, à côté du carnet dans le dépôt privé (pas dedans) : le téléphone
+les retrouve seul. La récupération se fait **dans l'APK** (le serveur des
+activités de Suunto refuse les pages web) : Plongées → Importer → « Récupérer
+depuis mon compte Suunto ». Chaque activité est rapprochée du carnet : déjà
+liée → rien ; retrouvée par l'heure (Bluetooth, `.fit`, saisie) → complétée
+sans rien écraser (profil, Tank POD, température, GPS, mélange ; la pression
+pré-remplie 200 → 50 compte comme non saisie) ; absente → ajoutée en plongée ou
+en séance. Un seul `.fit` par type d'activité sert à reconnaître la course,
+le vélo… qui sont ensuite ignorés. Option : renuméroter dans l'ordre des dates.
+
 **Séances : fosse, piscine, apnée** — à côté du carnet, pas dedans : elles
 n'ont pas de numéro et ne comptent pas comme plongées, mais ont leurs
 compteurs (« 23 fosses, dont 9 cette année »). Un bouton par type pour pointer
@@ -214,12 +229,13 @@ outils/                      ← tests, génération www/ et icônes Android
 ```bash
 npm test                         # tout ce qui suit sauf smoke
 node outils/dive-test.mjs        # 159  règles métier : durées, paliers, niveaux, conso, PMU
-node outils/smoke.mjs            # 118  tous les écrans, dans un vrai DOM (npm i jsdom)
+node outils/smoke.mjs            # 158  tous les écrans, dans un vrai DOM (npm i jsdom)
 node outils/github-test.mjs      #  35  synchro GitHub : création, conflits, suppressions, hors ligne
 node outils/lieu-test.mjs        #  30  recherche de lieux, cadrage des cartes
 node outils/ocean-test.mjs       #  69  Suunto Ocean : trames, Heatshrink, décodage, session Bluetooth
 node outils/seance-test.mjs      #  38  séances : stockage, fusion, tri plongée / piscine / fosse
 node outils/maj-apk-test.mjs     #  29  mise à jour de l'APK : numéro embarqué, release GitHub
+node outils/suunto-cloud-test.mjs #  65  compte Suunto : OAuth, jetons, liste, .fit, alignement
 node outils/fit-test.mjs         #  27  décodage des fichiers .fit
 node outils/geo-test.mjs         #  22  eau douce / salée, altitude
 node outils/stamp-test.mjs       #  13  détourage des tampons
@@ -268,8 +284,12 @@ d'iNaturalist et de WoRMS, filtrées sur les indicateurs d'habitat.
   iNaturalist. L'app élargit la recherche automatiquement et le dit.
 - Le regroupement des lieux sur la carte se fait à ~100 m : deux mouillages
   distincts d'un même site sont fondus en un seul repère.
-- L'**API Suunto** n'est pas utilisée : elle exige un serveur détenant un secret
-  client. L'import `.fit` et l'import Bluetooth la remplacent.
+- Le **compte Suunto** n'a été testé que contre un faux Suunto : l'ordre de la
+  liste et ses paramètres de pagination ne sont pas documentés publiquement, le
+  carnet essaie les deux sens. Le premier vrai essai passera par le journal de
+  diagnostic de l'écran. L'abonnement « Development » limite le nombre
+  d'appels : sur un gros historique, Suunto peut demander une pause ; ce qui
+  est fait est gardé, on relance plus tard.
 - L'**import Bluetooth** n'a été testé que sur des enregistrements de
   référence et une montre simulée : les premiers essais sur une vraie Ocean
   passeront par le journal de diagnostic. La montre ne garde que ses

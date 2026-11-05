@@ -17,6 +17,9 @@ import {
 import { modeActuel, rebrancher, synchroniser, derniereSynchro, erreurGitHub } from '../store-github.js';
 import { THEMES, themeChoisi, choisirTheme } from '../theme.js';
 import {
+  chargerLiaison, sauverLiaison, estRelie, lienAutorisation, nouvelEtat, RETOUR_DEFAUT,
+} from '../suunto-cloud.js';
+import {
   estApk, versionInstallee, verifier, nouveautes, telechargerApk, taillePropre,
 } from '../maj-apk.js';
 
@@ -216,6 +219,9 @@ export async function reglagesView() {
               } catch (err) { toast(err.message, true); }
             } }))))));
 
+  // ---------- Compte Suunto ----------
+  wrap.append(carteSuunto());
+
   // ---------- Mise à jour de l'APK ----------
   if (estApk()) wrap.append(carteMiseAJour());
 
@@ -230,6 +236,89 @@ export async function reglagesView() {
       el('div.hint', { text: 'Même carnet partout : il suffit de brancher le même dépôt dans les réglages de chaque appareil.' }))));
 
   return { title: 'Réglages', node: wrap, back: true };
+}
+
+/** Carte « Compte Suunto » : les clés de l'appli Suunto, puis la connexion. */
+function carteSuunto() {
+  const corps = el('div.card.carte-suunto', {}, el('div.hint', { style: { marginTop: 0 }, text: 'Chargement…' }));
+  let liaison = null, sha = null;
+  const kv = (k, v) => el('div.kv', {}, el('span.k', { text: k }), el('span.v', { text: v }));
+  // append() natif écrirait « null » en texte : on filtre.
+  const ajouter = (...noeuds) => corps.append(...noeuds.filter(Boolean));
+  const dateHeure = iso => (iso ? new Date(iso).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : '—');
+
+  const rendre = () => {
+    corps.replaceChildren();
+    if (estRelie(liaison)) {
+      ajouter(
+        kv('Compte', liaison.compte || 'relié'),
+        kv('Relié le', dateHeure(liaison.lieLe)),
+        kv('Dernière récupération', dateHeure(liaison.derniereRecup)),
+        el('button.btn.primary.block', { type: 'button', style: { marginTop: '12px' },
+          text: '☁️ Récupérer mes activités', onclick: () => navigate('suunto-cloud') }),
+        estApk() ? null : el('div.hint', { text: 'La récupération se fait dans l’appli Android : le serveur des activités '
+          + 'de Suunto refuse les pages web.' }),
+        el('button.btn.block', { type: 'button', style: { marginTop: '8px' }, text: 'Délier le compte Suunto',
+          onclick: async () => {
+            if (!(await confirmBox('Délier le compte Suunto ? Le carnet ne bouge pas ; tu pourras le relier à nouveau.'))) return;
+            try {
+              ({ liaison, sha } = await sauverLiaison({ ...liaison, jeton: null, compte: null, delieLe: new Date().toISOString() },
+                { sha, message: 'Suunto : compte délié' }));
+              toast('Compte Suunto délié');
+            } catch (e) { toast(e.message, true); }
+            rendre();
+          } }));
+      return;
+    }
+
+    const champ = (nom, libelle, type = 'text') => {
+      const input = el('input', { type, value: liaison[nom] || '', autocomplete: 'off', spellcheck: 'false',
+        oninput: () => { liaison[nom] = input.value.trim(); } });
+      return el('label.champ', { style: { display: 'block', marginTop: '10px' } },
+        el('span', { style: { display: 'block', fontSize: '13px', color: 'var(--text-mute)', marginBottom: '4px' }, text: libelle }), input);
+    };
+    const retour = liaison.redirectUri || RETOUR_DEFAUT;
+    ajouter(
+      el('div.hint', { style: { marginTop: 0 }, text: 'Les clés de ton appli Suunto sont dans ton profil sur apizone.suunto.com : '
+        + 'identifiant et secret client dans « OAuth and application settings », clé d’abonnement dans « Your subscriptions ».' }),
+      champ('clientId', 'Identifiant client (Client Id)'),
+      champ('clientSecret', 'Secret client (Client secret)', 'password'),
+      champ('cleAbonnement', 'Clé d’abonnement (Subscription key)', 'password'),
+      el('div.kv', { style: { marginTop: '10px' } }, el('span.k', { text: 'Adresse de retour (Redirect URI)' }),
+        el('button.btn.sm', { type: 'button', text: '📋 Copier', onclick: async () => {
+          try { await navigator.clipboard.writeText(retour); toast('Adresse copiée'); } catch { toast(retour); }
+        } })),
+      el('div', { style: { fontFamily: 'monospace', fontSize: '12.5px', wordBreak: 'break-all' }, text: retour }),
+      el('div.hint', { text: 'À déclarer telle quelle dans les réglages OAuth de ton appli Suunto.' }),
+      el('div.hint', { text: estConfigure()
+        ? 'Les clés et la connexion sont gardées dans ton dépôt privé (suunto.json, à côté du carnet, pas dedans) : '
+          + 'le téléphone les retrouve tout seul.'
+        : 'Sans dépôt GitHub branché, elles restent sur cet appareil.' }),
+      el('button.btn.primary.block', { type: 'button', style: { marginTop: '12px' },
+        disabled: estApk(),
+        text: 'Connecter mon compte Suunto',
+        onclick: async (e) => {
+          if (!liaison.clientId || !liaison.clientSecret || !liaison.cleAbonnement) {
+            toast('Il manque une des trois clés', true); return;
+          }
+          e.currentTarget.disabled = true;
+          try {
+            ({ liaison, sha } = await sauverLiaison({ ...liaison, redirectUri: retour }, { sha, message: 'Suunto : clés de l’appli' }));
+            location.href = lienAutorisation(liaison, nouvelEtat());
+          } catch (err) {
+            toast(err.message, true);
+            e.currentTarget.disabled = false;
+          }
+        } }),
+      estApk() ? el('div.hint', { text: 'La connexion se fait depuis le site, sur le PC : c’est là que Suunto renvoie '
+        + 'après la connexion. Le téléphone récupère ensuite la liaison tout seul.' }) : null);
+  };
+
+  chargerLiaison()
+    .then(r => { liaison = r.liaison; sha = r.sha; rendre(); })
+    .catch(e => { corps.replaceChildren(el('div.hint', { text: e.message })); });
+
+  return el('div.section', {}, el('h2', { text: 'Compte Suunto' }), corps);
 }
 
 function dateCourte(iso) {
