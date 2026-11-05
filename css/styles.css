@@ -82,10 +82,18 @@ body { background-image: var(--bg-image); background-attachment: fixed; }
   font-size: 10.5px; color: var(--bar-mute, var(--text-mute)); line-height: 1.15;
   max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+#topLogo { width: 30px; height: 30px; border-radius: 9px; flex: 0 0 30px; margin-right: 2px; }
+#topIdent { flex-direction: row; align-items: center; gap: 8px; }
+.ident-txt { display: flex; flex-direction: column; align-items: flex-end; min-width: 0; }
+.ident-ico { display: grid; place-items: center; width: 32px; height: 32px; flex: 0 0 32px; border-radius: 10px;
+  background: rgba(255,255,255,.12); border: 1px solid color-mix(in srgb, currentColor 25%, transparent); }
+.ident-ico .ico { width: 19px; height: 19px; }
 @media (max-width: 480px) {
-  body.avec-ident #topTitle { display: none; }
-  body.avec-ident #topIdent { flex: 1; align-items: flex-start; max-width: none; }
+  #topTitle { font-size: 16px; }
+  #topIdent { max-width: 52%; padding: 4px 4px; }
+  .ident-sous, .ident-long { display: none; }
 }
+@media (min-width: 481px) { .ident-court { display: none; } }
 
 .icon-btn {
   display: inline-grid; place-items: center;

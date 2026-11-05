@@ -103,6 +103,7 @@ export async function divesView() {
   const st = await store.stats(diverId);
   const identite = {
     nom: fullName(diver) || 'Carnet',
+    prenom: diver?.prenom || '',
     compte: `${st.count} plongée${st.count > 1 ? 's' : ''}`,
     derniere: st.lastDate ? fmtDate(st.lastDate) : '',
   };

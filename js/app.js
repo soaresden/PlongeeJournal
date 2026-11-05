@@ -2,9 +2,9 @@
 //  Point d'entrée de l'application
 // ============================================================
 
-import { $, $$, el, toast } from './lib.js';
+import { $, $$, el, toast, fullName, fmtDate } from './lib.js';
 import { route, onRender, navigate, match, startRouter, currentPath } from './router.js';
-import { initStore } from './store.js';
+import { initStore, store } from './store.js';
 import { modeActuel, synchroniser, vider, erreurGitHub } from './store-github.js';
 import { configGitHub, estConfigure } from './github.js';
 import { appliquerTheme } from './theme.js';
@@ -25,6 +25,7 @@ import { montreView }                     from './views/montre.js';
 import { montreAideView }                 from './views/montre-aide.js';
 import { urgenceView }                    from './views/urgence.js';
 import { seanceFormView }                 from './views/seances.js';
+import { cvView }                         from './views/cv.js';
 
 // ---------- Routes ----------
 route('dives',            divesView);
@@ -45,6 +46,7 @@ route('suunto-cloud',     suuntoCloudView);
 route('montre',           montreView);
 route('montre-aide',      montreAideView);
 route('urgence',          urgenceView);
+route('cv',               cvView);
 // Les séances s'affichent dans l'écran Plongées (onglet « Séances »).
 route('seances',          () => { try { localStorage.setItem('plongee-journal:discipline', 'seances'); } catch { /* privé */ } return divesView(); });
 route('seance/new',       seanceFormView);
@@ -272,14 +274,19 @@ onRender(async path => {
   // Identité du carnet dans la barre du haut : ces deux lignes n'ont pas
   // besoin d'une carte à elles seules, et la place gagnée revient au
   // contenu — c'est visible sur le calendrier.
+  // Toujours là, sur chaque écran : le toucher montre « qui je suis ».
+  const identite = result.identite || await identiteParDefaut();
   identEl.innerHTML = '';
-  identEl.hidden = !result.identite;
-  if (result.identite) {
-    const { nom, compte, derniere } = result.identite;
+  identEl.hidden = !identite;
+  if (identite) {
+    const { nom, prenom, compte, derniere } = identite;
     identEl.append(
-      el('span.ident-nom', { text: nom }),
-      el('span.ident-sous', { text: derniere ? `${compte} · ${derniere}` : String(compte) }));
-    identEl.onclick = () => navigate('divers');
+      el('span.ident-txt', {},
+        el('span.ident-nom', {}, el('span.ident-long', { text: nom }), el('span.ident-court', { text: prenom || nom })),
+        el('span.ident-sous', { text: derniere ? `${compte} · ${derniere}` : String(compte) })),
+      el('span.ident-ico', { html: '<svg class="ico"><use href="#i-carte"/></svg>' }));
+    identEl.title = 'Qui je suis, en plongée';
+    identEl.onclick = () => navigate('cv');
     document.body.classList.add('avec-ident');
   } else {
     document.body.classList.remove('avec-ident');
@@ -292,7 +299,7 @@ onRender(async path => {
     dives: 'dives', dive: path === 'dive/new' ? 'dive/new' : 'dives',
     divers: 'divers', diver: 'divers',
     buddies: 'buddies', buddy: 'buddies', stats: 'stats',
-    reglages: 'reglages', suunto: 'divers', 'suunto-cloud': 'divers', montre: 'divers', 'montre-aide': 'divers', urgence: 'divers',
+    reglages: 'reglages', cv: 'divers', suunto: 'divers', 'suunto-cloud': 'divers', montre: 'divers', 'montre-aide': 'divers', urgence: 'divers',
     seances: 'dives', seance: 'dives',
   }[root];
   $$('#tabbar .tab').forEach(t => t.classList.toggle('active', t.dataset.route === tabFor));
@@ -300,6 +307,21 @@ onRender(async path => {
   viewEl.scrollTop = scrollMemory.get(path) ?? 0;
   lastPath = path;
 });
+
+/** Nom et compte du carnet actif, pour la barre du haut. */
+async function identiteParDefaut() {
+  try {
+    const id = await store.getActiveDiverId();
+    if (!id) return null;
+    const [diver, st] = await Promise.all([store.getDiver(id), store.stats(id)]);
+    return {
+      nom: fullName(diver) || 'Carnet',
+      prenom: diver?.prenom || '',
+      compte: `${st.count} plongée${st.count > 1 ? 's' : ''}`,
+      derniere: st.lastDate ? fmtDate(st.lastDate) : '',
+    };
+  } catch { return null; }
+}
 
 // ------------------------------------------------------------
 //  Navigation
