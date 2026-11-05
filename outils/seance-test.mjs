@@ -123,6 +123,8 @@ check('le lieu tranche : la fosse, même un mardi',
   const bloc = []; for (let t = 0; t < 2400; t += 10) bloc.push({ t, d: t < 60 || t > 2300 ? 0.5 : 15 });
   check('jeudi en vacances, courbe de plongée : plongée',
     S.suggererRangement({ genre: 'plongee', profMax: 15, date: jeudi, lieu: { lat: 36.0, lng: 14.3 }, samples: bloc }, [fosse]) === 'plongee');
+  check('jeudi à midi sans GPS (Cap-Vert) : plongée',
+    S.suggererRangement({ genre: 'plongee', profMax: 22, date: new Date('2026-09-03T12:23:00') }) === 'plongee');
   check('jeudi sans GPS, courbe de plongée : fosse',
     S.suggererRangement({ genre: 'plongee', profMax: 15, date: jeudi, samples: bloc }) === 'fosse');
 }

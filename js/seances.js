@@ -105,12 +105,13 @@ export function verdictProfil(p, { lieu = null } = {}) {
  * Le jeudi, c'est la fosse… à la maison. La fosse est sous un toit : la
  * montre n'y prend pas de point GPS. Un jeudi avec un point GPS, c'est
  * dehors (vacances, sortie en mer) : une plongée, sauf si ce point est
- * celui d'une fosse déjà connue.
+ * celui d'une fosse déjà connue. Et la fosse, c'est le soir : un jeudi
+ * à midi, c'est une plongée (en voyage, la montre n'a pas toujours le GPS).
  */
 function jeudiDeFosse(date, lieu, connu, prof) {
   if (!date || prof > 25) return false;
-  const jour = new Date(typeof date === 'string' ? `${date}T12:00:00` : date).getDay();
-  if (jour !== 4) return false;
+  const quand = new Date(typeof date === 'string' && !date.includes('T') ? `${date}T20:00:00` : date);
+  if (quand.getDay() !== 4 || quand.getHours() < 18) return false;
   return !lieu || connu === 'fosse';
 }
 

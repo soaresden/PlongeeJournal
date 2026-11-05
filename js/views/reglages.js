@@ -228,6 +228,7 @@ function sectionApparence() {
         b.setAttribute('aria-pressed', 'true');
       } },
       el('span.theme-apercu', { style: { background: fond } },
+        t.barre ? el('span.theme-barre', { style: { background: t.barre } }) : null,
         el('span.theme-carte', { style: { background: surface } },
           el('span.theme-trait', { style: { background: accent } }),
           el('span.theme-trait.court', { style: { background: accent, opacity: '.45' } })),

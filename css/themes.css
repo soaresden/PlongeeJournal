@@ -14,6 +14,11 @@
      --bg-image ........... dégradé décoratif du fond
      --overlay ............ voile derrière les fenêtres
      --cal-* .............. cases vides du calendrier
+   Facultatives (barres en couleur) :
+     --bar-text / --bar-mute  texte sur les barres
+     --tab-actif(-fond) ... onglet actif posé sur la barre
+     --add-fond / --add-text  le bouton « ＋ » des onglets
+     --status ............. barre d'état Android (sinon --bg)
    ============================================================ */
 
 :root,
@@ -159,4 +164,51 @@
   --overlay: rgba(2,8,6,.72);
   --cal-0: #12302a;  --cal-we: #1a3f35;  --cal-hors: #0a1b16;  --cal-hors-we: #0d221c;
   --shadow: 0 8px 28px rgba(0,0,0,.4);
+}
+
+:root[data-theme="dauphin"] {
+  /* Un dauphin qui saute au coucher du soleil : gris perle, rose, violet, orangé. */
+  --bg: #f4f1fb;  --bg-2: #ffffff;
+  --surface: #ffffff;  --surface-2: #eeeafa;  --deep: #e3ddf6;
+  --line: #ddd6f1;
+  --text: #251f4d;  --text-dim: #5a5486;  --text-mute: #8d88b2;
+  --accent: #f0427a;  --accent-2: #7c4dff;  --accent-rgb: 240,66,122;
+  --on-accent: #ffffff;
+  --warn: #df8700;  --danger: #e0294f;  --ok: #0f9e78;  --or: #e0a526;
+  --bar: linear-gradient(105deg, rgba(110,72,240,.95) 0%, rgba(236,72,134,.95) 58%, rgba(255,146,84,.95) 100%);
+  --bar-text: #ffffff;  --bar-mute: rgba(255,255,255,.78);
+  --tab-actif: #ffffff;  --tab-actif-fond: rgba(255,255,255,.22);
+  --add-fond: #ffffff;  --add-text: #7c4dff;
+  --status: #6e48f0;
+  --bg-image:
+    radial-gradient(55% 35% at 0% 0%, rgba(240,66,122,.13) 0%, transparent 70%),
+    radial-gradient(55% 40% at 100% 100%, rgba(0,190,205,.14) 0%, transparent 70%),
+    linear-gradient(#f7f4fd, #efecfa);
+  --overlay: rgba(37,31,77,.42);
+  --cal-0: #ebe6f8;  --cal-we: #ded6f3;  --cal-hors: #f7f5fd;  --cal-hors-we: #f0edf9;
+  --shadow: 0 6px 22px rgba(90,60,170,.13);
+}
+
+:root[data-theme="tortue"] {
+  /* Une tortue sur l'herbier : carapace verte et ambrée, eau turquoise, soleil. */
+  --bg: #f1f4e3;  --bg-2: #fffef6;
+  --surface: #fffef6;  --surface-2: #e8eed3;  --deep: #dde5c3;
+  --line: #d6debb;
+  --text: #1e3323;  --text-dim: #4c644e;  --text-mute: #879884;
+  --accent: #1f8f5b;  --accent-2: #c67812;  --accent-rgb: 31,143,91;
+  --on-accent: #ffffff;
+  --warn: #c97a00;  --danger: #cf3b2f;  --ok: #1f8f5b;  --or: #d9a21b;
+  --bar: linear-gradient(105deg, rgba(25,104,72,.96) 0%, rgba(74,132,58,.96) 55%, rgba(184,124,34,.96) 100%);
+  --bar-text: #fffbea;  --bar-mute: rgba(255,251,234,.74);
+  --tab-actif: #ffd970;  --tab-actif-fond: rgba(255,255,255,.16);
+  --add-fond: linear-gradient(150deg, #ffd970, #f0a530);  --add-text: #3b2905;
+  --status: #19684a;
+  --bg-image:
+    radial-gradient(85% 45% at 50% -12%, rgba(30,185,185,.20) 0%, transparent 72%),
+    repeating-linear-gradient(60deg, rgba(31,90,50,.035) 0 1px, transparent 1px 34px),
+    repeating-linear-gradient(-60deg, rgba(31,90,50,.035) 0 1px, transparent 1px 34px),
+    linear-gradient(#f3f6e6, #ecf0da);
+  --overlay: rgba(30,51,35,.42);
+  --cal-0: #e3e9cd;  --cal-we: #d4ddb6;  --cal-hors: #f6f8ec;  --cal-hors-we: #eef2df;
+  --shadow: 0 6px 22px rgba(40,80,30,.13);
 }

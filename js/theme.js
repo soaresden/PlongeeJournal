@@ -20,6 +20,8 @@ export const THEMES = [
   { id: 'corail',    nom: 'Récif corallien', sous: 'Nuit tropicale, corail et anémone', apercu: ['#1a0f1d', '#2a1830', '#ff6f61'] },
   { id: 'epave',     nom: 'Épave',         sous: 'Acier rouillé, laiton, eau verte', apercu: ['#0f1512', '#1b2420', '#d99a3d'] },
   { id: 'kelp',      nom: 'Forêt de kelp', sous: 'Vert océan, lumière filtrée',     apercu: ['#071612', '#0f2620', '#5fd39a'] },
+  { id: 'dauphin',   nom: 'Dauphin',       sous: 'Coucher de soleil : rose, violet, orangé', apercu: ['#f4f1fb', '#ffffff', '#f0427a'], barre: 'linear-gradient(105deg, #6e48f0, #ec4886 58%, #ff9254)' },
+  { id: 'tortue',    nom: 'Tortue',        sous: 'Carapace verte et ambrée, eau turquoise', apercu: ['#f1f4e3', '#fffef6', '#1f8f5b'], barre: 'linear-gradient(105deg, #19684a, #4a843a 55%, #b87c22)' },
 ];
 
 const SOMBRES = new Set(['plongee', 'abysse', 'corail', 'epave', 'kelp']);
@@ -44,7 +46,8 @@ export function appliquerTheme(id = themeChoisi()) {
 
   // Couleur de la barre d'état Android / iOS : celle du fond du thème.
   requestAnimationFrame(() => {
-    const fond = window.getComputedStyle?.(racine).getPropertyValue('--bg').trim();
+    const style = window.getComputedStyle?.(racine);
+    const fond = (style?.getPropertyValue('--status') || style?.getPropertyValue('--bg') || '').trim();
     const meta = document.querySelector('meta[name=theme-color]');
     if (meta && fond) meta.setAttribute('content', fond);
     window.Capacitor?.Plugins?.StatusBar?.setBackgroundColor?.({ color: fond }).catch?.(() => {});
