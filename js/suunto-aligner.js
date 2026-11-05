@@ -25,7 +25,7 @@ export const ACTIVITES_SUUNTO = {
   78: 'plongee',       // Scubadiving
   79: 'apnee',         // Freediving
   85: 'natation',      // Openwater swimming
-  90: 'natation',      // Snorkeling
+  90: 'snorkeling',    // Snorkeling (randonnée palmée)
   100: 'apnee',        // Mermaiding
   101: 'apnee',        // Spearfishing
 };
@@ -39,6 +39,23 @@ export const genreConnu = (types, activite) => (activite == null ? null
  * « plongée » dans le .fit), sinon le sport du .fit.
  */
 export const genreActivite = (act, dec) => ACTIVITES_SUUNTO[Number(act?.activite)] ?? dec?.genre ?? null;
+
+/**
+ * Ce que la liste Suunto dit d'une activité, sous la forme d'un .fit
+ * décodé : date, heure, durée, profondeur. Quand le .fit est refusé, on
+ * crée la fiche avec ça (sans profil ni bloc).
+ */
+export function decDepuisListe(act) {
+  if (!Number.isFinite(act?.debut)) return null;
+  return {
+    start: new Date(act.debut),
+    dureeMin: act.dureeS ? Math.round(act.dureeS / 60) : null,
+    profMax: act.profMax ?? null,
+    samples: [],
+    genre: ACTIVITES_SUUNTO[Number(act.activite)] ?? null,
+    sansFit: true,
+  };
+}
 
 /** Faut-il télécharger le .fit de cette activité ? */
 export function aExaminer(act, types) {
@@ -149,7 +166,7 @@ export function completerSeance(seance, dec) {
 }
 
 /** Genre FIT → genre attendu par suggererRangement. */
-const genrePourRangement = g => (g === 'apnee' ? 'apnee' : g === 'natation' ? 'autre' : '');
+const genrePourRangement = g => (g === 'apnee' ? 'apnee' : g === 'natation' ? 'autre' : g === 'snorkeling' ? 'snorkeling' : '');
 
 /**
  * La proposition pour une activité décodée.

@@ -1291,23 +1291,26 @@ a.btn { text-decoration: none; }
   --s-fosse: #8b5cf6;
   --s-piscine: #3b82f6;
   --s-apnee: #e86fb0;
+  --s-snorkeling: #14b8a6;
 }
 .s-fosse   { --s: var(--s-fosse); }
 .s-piscine { --s: var(--s-piscine); }
 .s-apnee   { --s: var(--s-apnee); }
+.s-snorkeling { --s: var(--s-snorkeling); }
 .pt-fosse   { --pt: var(--s-fosse); }
 .pt-piscine { --pt: var(--s-piscine); }
 .pt-apnee   { --pt: var(--s-apnee); }
+.pt-snorkeling { --pt: var(--s-snorkeling); }
 
 /* Au calendrier : un jour de séance seule prend sa couleur ; un jour de
    plongée ET de séance garde sa chaleur, avec un coin de couleur. */
-.j.n0.s-fosse, .j.n0.s-piscine, .j.n0.s-apnee { background: var(--s); }
+.j.n0.s-fosse, .j.n0.s-piscine, .j.n0.s-apnee, .j.n0.s-snorkeling { background: var(--s); }
 .j.avec-s::after {
   content: ''; position: absolute; right: 0; bottom: 0;
   width: 45%; height: 45%; background: var(--pt);
   border-top-left-radius: 2px; border-bottom-right-radius: inherit;
 }
-.j.grand.s-fosse .mois-num, .j.grand.s-piscine .mois-num, .j.grand.s-apnee .mois-num { color: #fff; font-weight: 700; }
+.j.grand.s-fosse .mois-num, .j.grand.s-piscine .mois-num, .j.grand.s-apnee .mois-num, .j.grand.s-snorkeling .mois-num { color: #fff; font-weight: 700; }
 .mois-seances {
   position: absolute; left: 0; right: 0; bottom: 1px;
   display: flex; justify-content: center; gap: 1px;

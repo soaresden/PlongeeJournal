@@ -448,6 +448,7 @@ export const TYPES_SEANCE = [
   { id: 'fosse',   label: 'Fosse',   pluriel: 'fosses',            icone: '🤿', detail: 'plongée bouteille en fosse' },
   { id: 'piscine', label: 'Piscine', pluriel: 'séances de piscine', icone: '🏊', detail: 'natation' },
   { id: 'apnee',   label: 'Apnée',   pluriel: 'séances d’apnée',    icone: '🐬', detail: 'apnée' },
+  { id: 'snorkeling', label: 'Snorkeling', pluriel: 'sorties snorkeling', icone: '🐠', detail: 'randonnée palmée' },
 ];
 
 export const typeSeance = id => TYPES_SEANCE.find(t => t.id === id) || TYPES_SEANCE[0];
@@ -457,7 +458,7 @@ export function emptySeance(diverId, type = 'fosse', date = '') {
   return {
     id: uid(),
     diverId,
-    type,                 // fosse | piscine | apnee
+    type,                 // fosse | piscine | apnee | snorkeling
     date,                 // AAAA-MM-JJ
     heure: '',            // HH:MM
     dureeMin: null,

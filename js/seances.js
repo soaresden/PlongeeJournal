@@ -32,12 +32,13 @@ function typeDuLieu(lieu, seances) {
  * Plongée ou séance ? D'après ce que la montre en dit.
  * @param {{genre?:string, profMax?:number|null, date?:Date|string, lieu?:{lat,lng}|null}} a
  * @param {object[]} seances  les séances déjà rangées (pour reconnaître le lieu)
- * @returns {'plongee'|'fosse'|'piscine'|'apnee'}
+ * @returns {'plongee'|'fosse'|'piscine'|'apnee'|'snorkeling'}
  */
 export function suggererRangement({ genre = '', profMax = null, date = null, lieu = null } = {}, seances = []) {
   const prof = Number(profMax) || 0;
   const connu = lieu ? typeDuLieu(lieu, seances) : null;
 
+  if (genre === 'snorkeling') return 'snorkeling';
   if (genre === 'apnee') return connu === 'fosse' ? 'fosse' : 'apnee';
   // Natation (pas de profondeur) ou petit bain : une séance de piscine,
   // ou ce qui se fait d'habitude à cet endroit.

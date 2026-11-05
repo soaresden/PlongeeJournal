@@ -23,10 +23,11 @@ import {
 } from '../suunto-cloud.js';
 import {
   CLE_SUUNTO, aExaminer, genreConnu, genreActivite, trouverDansCarnet, proposer, metaSuunto, numerotationChronologique,
+  decDepuisListe,
 } from '../suunto-aligner.js';
 
 const GENRES = {
-  plongee: '🌊 Plongée', apnee: '🐬 Apnée', natation: '🏊 Natation', sport: 'Autre sport',
+  plongee: '🌊 Plongée', apnee: '🐬 Apnée', natation: '🏊 Natation', snorkeling: '🐠 Snorkeling', sport: 'Autre sport',
 };
 
 function fmtDateHeure(ms) {
@@ -92,6 +93,8 @@ export async function suuntoCloudView() {
     coches: new Map(),
     rangement: new Map(),
     renumeroter: false,
+    completer: false,          // aussi les activités déjà au carnet (champs vides seulement)
+    sansFit: null,             // raison, quand Suunto refuse les .fit
     occupe: false,
     arret: false,
   };
@@ -136,12 +139,25 @@ export async function suuntoCloudView() {
     const deja = etat.decodes.get(act.cle);
     if (deja) return deja;
     let r;
-    try {
-      const dec = fitToDive(await client.fit(act.cle));
-      r = dec ? { dec } : { erreur: 'aucune donnée dans le .fit' };
-    } catch (e) {
-      if (e.status === 429 || e.reconnecter) throw e;
-      r = { erreur: e.message };
+    if (etat.sansFit) {
+      const dec = decDepuisListe(act);
+      r = dec ? { dec } : { erreur: 'date inconnue' };
+    } else {
+      try {
+        const dec = fitToDive(await client.fit(act.cle));
+        r = dec ? { dec } : { erreur: 'aucune donnée dans le .fit' };
+      } catch (e) {
+        if (e.status === 429 || e.reconnecter) throw e;
+        if (!e.systeme) { r = { erreur: e.message }; }
+        else {
+          // Suunto refuse les .fit pour tout le compte : on se contente de
+          // ce que dit la liste (date, heure, durée, profondeur).
+          etat.sansFit = e.message;
+          log(`.fit refusé : fiches créées depuis la liste seulement (${e.message})`);
+          const dec = decDepuisListe(act);
+          r = dec ? { dec } : { erreur: 'date inconnue' };
+        }
+      }
     }
     etat.decodes.set(act.cle, r);
     return r;
@@ -182,8 +198,8 @@ export async function suuntoCloudView() {
 
       for (const a of candidats()) etat.coches.set(a.cle, true);
       dire(candidats().length
-        ? `${candidats().length} activité(s) à analyser. Décoche ce que tu ne veux pas, puis « Analyser ».`
-        : 'Tout est déjà aligné avec ton compte Suunto. ✓');
+        ? `${candidats().length} activité(s) manquent au carnet. Décoche ce que tu ne veux pas, puis « Analyser ».`
+        : 'Rien ne manque au carnet. ✓');
     } catch (e) {
       erreur(e, 'Recherche interrompue');
     } finally {
@@ -193,14 +209,22 @@ export async function suuntoCloudView() {
     }
   }
 
-  /** Plongées / séances du compte pas encore liées au carnet. */
+  /**
+   * Les plongées / séances du compte qui MANQUENT au carnet. Celles qui y
+   * sont déjà (par la clé, le .fit, le Bluetooth ou la date et l'heure)
+   * ne sont pas touchées, sauf si on demande à les compléter.
+   */
   function candidats() {
     if (!etat.activites) return [];
     return etat.activites.filter(a => {
       if (!aExaminer(a, liaison.types)) return false;
+      // Sans .fit, un type inconnu ne peut pas être reconnu : on le laisse.
+      if (etat.sansFit && !genreConnu(liaison.types, a.activite)) return false;
       const d = etat.decodes.get(a.cle);
       if (d?.dec && genreActivite(a, d.dec) === 'sport') return false;
-      return !trouverDansCarnet(a, connues())?.liee;
+      const t = trouverDansCarnet(a, connues());
+      if (!t) return true;
+      return etat.completer && !t.liee;
     });
   }
 
@@ -320,12 +344,33 @@ export async function suuntoCloudView() {
     if (!etat.activites) return;
 
     const cands = candidats();
-    const liees = etat.activites.filter(a => trouverDansCarnet(a, connues())?.liee).length;
-    const autres = etat.activites.filter(a => !aExaminer(a, liaison.types)).length;
-    resume.append(el('div.card', {},
+    const utiles = etat.activites.filter(a => aExaminer(a, liaison.types));
+    const presentes = utiles.filter(a => trouverDansCarnet(a, connues())).length;
+    const manquent = utiles.filter(a => !trouverDansCarnet(a, connues())
+      && !(etat.sansFit && !genreConnu(liaison.types, a.activite))
+      && !(etat.decodes.get(a.cle)?.dec && genreActivite(a, etat.decodes.get(a.cle).dec) === 'sport')).length;
+    const autres = etat.activites.length - utiles.length;
+    const completer = el('input', { type: 'checkbox', disabled: etat.occupe });
+    completer.checked = etat.completer;
+    completer.style.cssText = 'width:18px;height:18px;accent-color:var(--accent);flex:0 0 auto;margin-top:2px';
+    completer.onchange = () => {
+      etat.completer = completer.checked;
+      if (etat.completer) for (const a of candidats()) if (!etat.coches.has(a.cle)) etat.coches.set(a.cle, true);
+      rendre();
+    };
+    resume.append(...[el('div.card', {},
       el('div', { style: { fontWeight: '600' }, text: `${etat.activites.length} activité(s) sur ton compte` }),
-      el('div.hint', { text: [`${liees} déjà liée(s) au carnet`, `${cands.length} plongée(s) ou séance(s) à aligner`,
-        autres ? `${autres} autre(s) sport(s) ignoré(s)` : null].filter(Boolean).join(' · ') })));
+      el('div.hint', { text: [`${manquent} manque(nt) au carnet`, `${presentes} déjà au carnet, laissée(s) telle(s) quelle(s)`,
+        autres ? `${autres} autre(s) sport(s) ignoré(s)` : null].filter(Boolean).join(' · ') }),
+      el('label', { style: { display: 'flex', gap: '10px', alignItems: 'flex-start', marginTop: '10px', cursor: 'pointer' } },
+        completer, el('div', {},
+          el('div', { style: { fontSize: '14px', fontWeight: '600' }, text: 'Compléter aussi celles déjà au carnet' }),
+          el('div.hint', { style: { marginTop: '2px' }, text: 'Profil, bloc, température… seulement dans les champs vides : '
+            + 'rien de ce que tu as saisi n’est remplacé.' })))),
+      etat.sansFit ? el('div.card', { style: { borderColor: 'var(--warn, #d29922)' } },
+        el('div', { style: { fontWeight: '600' }, text: 'Fichiers .fit refusés par Suunto' }),
+        el('div.hint', { text: 'Les fiches sont créées avec ce que donne la liste : date, heure, durée, profondeur. '
+          + 'Sans profil ni bloc ; tu pourras les compléter plus tard.' })) : null].filter(Boolean));
 
     const props = new Map(propositions().map(x => [x.act.cle, x]));
     for (const a of [...cands].reverse()) {

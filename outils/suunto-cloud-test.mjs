@@ -196,6 +196,68 @@ function fauxSuunto({ ordre = 'recent', exigeBearer = true, version = 'v3' } = {
   check('profondeur lue dans les extensions', C.normaliserActivite({ workoutKey: 'k', extensions: [{ type: 'DiveHeaderExtension', maxDepth: 18.4 }] }).profMax === 18.4);
 }
 
+// ---------- .fit refusé, redirection ----------
+{
+  const acces = jwt({ user: 'denis.plongeur' });
+  const liaison = { ...C.liaisonVide(), ...cles, jeton: { acces, refresh: 'R1', expire: Date.now() + 86400000 } };
+  const sansOAuth = async () => { throw new Error('pas de renouvellement attendu'); };
+  const faux = (fitV3, fitV2) => {
+    const vus = [];
+    const http = async url => {
+      const u = new URL(url); vus.push(u.pathname);
+      if (u.pathname === '/v3/workouts') return { status: 200, ok: true, texte: JSON.stringify({ error: null, payload: [] }) };
+      if (u.pathname.startsWith('/v3/workouts/')) return fitV3;
+      return fitV2;
+    };
+    return { http, vus };
+  };
+  const ok = { status: 200, ok: true, octets: Uint8Array.from([9, 9]) };
+  const refus = { status: 401, ok: false, texte: 'Unauthorized' };
+
+  let f = faux(refus, ok);
+  let cl = new C.ClientSuunto(liaison, { http: f.http, fJeton: sansOAuth });
+  await cl.activites();
+  const o = await cl.fit('k1');
+  check('.fit v3 refusé, liste OK : on prend l’adresse v2, sans renouveler le jeton', o.length === 2 && f.vus.includes('/v2/workout/exportFit/k1'),
+    f.vus.join(' '));
+
+  f = faux(refus, { status: 404, ok: false, texte: '' });
+  cl = new C.ClientSuunto(liaison, { http: f.http, fJeton: sansOAuth });
+  await cl.activites();
+  let err = null;
+  try { await cl.fit('k2'); } catch (e) { err = e; }
+  check('.fit refusé partout : erreur « pour tout le compte », sans demander de reconnecter',
+    err?.systeme === true && !err.reconnecter && /refuse le \.fit \(401\)/.test(err.message), err?.message);
+
+  // Couche native : redirection vers un stockage, suivie SANS nos en-têtes.
+  const requetes = [];
+  globalThis.window = { Capacitor: { isNativePlatform: () => true, Plugins: { CapacitorHttp: { request: async opts => {
+    requetes.push(opts);
+    if (opts.url.startsWith('https://cloudapi.suunto.com/')) return { status: 302, headers: { Location: 'https://stockage.example/f.fit?sig=1' }, data: '' };
+    if (opts.headers.Authorization) return { status: 401, headers: {}, data: Buffer.from('<Error>jeton refusé</Error>').toString('base64') };
+    return { status: 200, headers: {}, data: Buffer.from([1, 2, 3]).toString('base64') };
+  } } } } };
+  const natif = C.httpParDefaut();
+  const r = await natif('https://cloudapi.suunto.com/v3/workouts/k/fit', { binaire: true, headers: { Authorization: 'Bearer x', 'Ocp-Apim-Subscription-Key': 'abo' } });
+  check('natif : redirection suivie sans le jeton ni la clé', r.ok && r.octets.length === 3 && requetes[0].disableRedirects === true
+    && Object.keys(requetes[1].headers).length === 0 && /stockage\.example/.test(r.redirige || ''), JSON.stringify(requetes.map(q => q.url)));
+  globalThis.window.Capacitor.Plugins.CapacitorHttp.request = async () => ({ status: 401, headers: {}, data: Buffer.from('Access denied: scope').toString('base64') });
+  const e401 = await natif('https://cloudapi.suunto.com/v3/workouts/k/fit', { binaire: true, headers: {} });
+  check('natif : le corps d’une erreur binaire est lisible dans le journal', e401.status === 401 && e401.texte === 'Access denied: scope', e401.texte);
+  globalThis.window = {};
+}
+
+// ---------- Snorkeling, fiche sans .fit ----------
+{
+  const act = { cle: 'sn1', activite: 90, debut: Date.parse('2025-08-10T09:30:00Z'), dureeS: 3540, profMax: 4.2 };
+  const dec = A.decDepuisListe(act);
+  check('sans .fit : date, durée, profondeur depuis la liste', dec.start.getTime() === act.debut && dec.dureeMin === 59 && dec.profMax === 4.2 && dec.sansFit);
+  const p = A.proposer(act, dec, []);
+  check('snorkeling (n°90) → séance snorkeling', A.genreActivite(act, dec) === 'snorkeling' && p.action === 'ajouter' && p.rangement === 'snorkeling', JSON.stringify(p));
+  check('apnée (n°79) → séance apnée', A.proposer({ ...act, activite: 79 }, A.decDepuisListe({ ...act, activite: 79 }), []).rangement === 'apnee');
+  check('natation (n°21) → séance piscine', A.proposer({ ...act, activite: 21 }, A.decDepuisListe({ ...act, activite: 21 }), []).rangement === 'piscine');
+}
+
 // ---------- FIT : bloc, gaz, gradients, GPS, sport ----------
 {
   const d = fitToDive(fitPlongee());

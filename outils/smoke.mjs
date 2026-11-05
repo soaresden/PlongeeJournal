@@ -166,7 +166,7 @@ window.dispatchEvent(new window.Event('hashchange'));
 await tick(120);
 check('séances : compteur de fosses', /1\s*fosse/.test(view()) || [...document.querySelectorAll('.seance-stat.s-fosse .n')].some(n => n.textContent.includes('1')), view().slice(0, 200));
 check('séances : la fosse est listée', view().includes('Fosse de Villeneuve'), view().slice(0, 300));
-check('séances : boutons pour pointer', [...document.querySelectorAll('.seances-ajout .btn')].length === 3);
+check('séances : boutons pour pointer (fosse, piscine, apnée, snorkeling)', [...document.querySelectorAll('.seances-ajout .btn')].length === 4);
 
 window.location.hash = '#/seance/new?type=piscine&date=2026-07-20';
 window.dispatchEvent(new window.Event('hashchange'));
@@ -187,7 +187,7 @@ window.location.hash = '#/dives';
 window.dispatchEvent(new window.Event('hashchange'));
 await tick(150);
 const couches = [...document.querySelectorAll('.cal-couche input')];
-check('agenda : cases Plongées / Fosse / Piscine / Apnée', couches.length === 4, String(couches.length));
+check('agenda : cases Plongées / Fosse / Piscine / Apnée / Snorkeling', couches.length === 5, String(couches.length));
 const grilleCal = () => document.querySelector('.cal-carte');
 check('agenda : séances masquées tant qu’on ne les coche pas', !grilleCal()?.querySelector('.j.s-fosse'));
 couches[1].checked = true;
@@ -331,6 +331,15 @@ await tick(500);
 check('Suunto : 4 activités, la course ignorée', /4 activité\(s\) sur ton compte/.test(view()) && /1 autre\(s\) sport\(s\) ignoré/.test(view()),
   view().slice(view().indexOf('activité(s) sur'), view().indexOf('activité(s) sur') + 160));
 check('Suunto : plongée et natation reconnues sans .fit, la course en un seul', fitsDemandes.length === 1, fitsDemandes.join(','));
+bouton(/Analyser/).click();
+await tick(500);
+check('Suunto : par défaut, seulement ce qui manque (la plongée du 2 juin n’est pas touchée)',
+  /Appliquer : 1 plongée \+ 1 séance$/.test(bouton(/Appliquer/)?.textContent || '') && /1 déjà au carnet, laissée/.test(view()),
+  bouton(/Appliquer/)?.textContent);
+const caseCompleter = [...document.querySelectorAll('#view label')].find(l => /Compléter aussi celles déjà au carnet/.test(l.textContent))?.querySelector('input');
+caseCompleter.checked = true;
+caseCompleter.dispatchEvent(new window.Event('change'));
+await tick(50);
 bouton(/Analyser/).click();
 await tick(500);
 const dv2Avant = structuredClone(await store.getDive(dv2.id));

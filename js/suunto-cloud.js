@@ -27,9 +27,10 @@ const CLE = 'plongee-journal:suunto';
 const CLE_ETAT = 'plongee-journal:suunto-etat';
 
 export class ErreurSuunto extends Error {
-  constructor(message, { status = 0, attente = 0, reconnecter = false } = {}) {
+  constructor(message, { status = 0, attente = 0, reconnecter = false, systeme = false } = {}) {
     super(message);
     this.status = status;
+    this.systeme = systeme;            // vaut pour toutes les activités : on arrête
     this.attente = attente;            // secondes à patienter (429)
     this.reconnecter = reconnecter;    // jetons refusés : refaire la connexion
   }
@@ -261,6 +262,20 @@ function base64EnOctets(b64) {
   return out;
 }
 
+/** Corps d'une erreur reçu en binaire (base64) → texte, pour le journal. */
+function texteDeBase64(b64) {
+  if (typeof b64 !== 'string') return b64 == null ? '' : JSON.stringify(b64);
+  try { return new TextDecoder().decode(base64EnOctets(b64)); } catch { return ''; }
+}
+
+const hote = u => { try { return new URL(u).host; } catch { return String(u).slice(0, 60); } };
+
+/** En-tête de réponse, sans tenir compte de la casse. */
+function entete(h, nom) {
+  for (const [k, v] of Object.entries(h || {})) if (k.toLowerCase() === nom) return v;
+  return null;
+}
+
 /**
  * Une requête GET qui renvoie { status, ok, texte, octets, entetes }.
  * Dans l'APK, passe par CapacitorHttp (requête faite par Android, que
@@ -271,10 +286,24 @@ export function httpParDefaut() {
     ? window.Capacitor?.Plugins?.CapacitorHttp : null;
   if (natif) {
     return async (url, { headers = {}, binaire = false } = {}) => {
-      const r = await natif.request({ url, method: 'GET', headers, responseType: binaire ? 'arraybuffer' : 'text' });
+      const responseType = binaire ? 'arraybuffer' : 'text';
+      // Le .fit peut être servi par un stockage externe (lien signé) : on
+      // suit la redirection nous-mêmes, SANS nos en-têtes — un stockage qui
+      // reçoit le jeton Suunto le refuse (401).
+      let r = await natif.request({ url, method: 'GET', headers, responseType, disableRedirects: binaire });
+      let redirige = null;
+      for (let i = 0; binaire && i < 3 && r.status >= 300 && r.status < 400; i++) {
+        const loc = entete(r.headers, 'location');
+        if (!loc) break;
+        redirige = new URL(loc, redirige || url).href;
+        r = await natif.request({ url: redirige, method: 'GET', headers: {}, responseType, disableRedirects: true });
+      }
       const ok = r.status >= 200 && r.status < 300;
-      const texte = binaire ? null : (typeof r.data === 'string' ? r.data : JSON.stringify(r.data ?? ''));
-      return { status: r.status, ok, texte, octets: binaire && ok ? base64EnOctets(r.data) : null, entetes: r.headers || {} };
+      const texte = binaire
+        ? (ok ? null : texteDeBase64(r.data))
+        : (typeof r.data === 'string' ? r.data : JSON.stringify(r.data ?? ''));
+      return { status: r.status, ok, texte, octets: binaire && ok ? base64EnOctets(r.data) : null,
+        entetes: r.headers || {}, redirige: redirige || (r.url && r.url !== url ? r.url : null) };
     };
   }
   return async (url, { headers = {}, binaire = false } = {}) => {
@@ -359,13 +388,23 @@ export class ClientSuunto {
           Accept: binaire ? 'application/octet-stream' : 'application/json',
         },
       });
-      if (r.ok) return r;
-      const corps = String(r.texte || '').slice(0, 200);
-      this.journal(`GET ${chemin} → ${r.status} ${corps}`);
+      const via = r.redirige ? ` (via ${hote(r.redirige)})` : '';
+      if (r.ok) {
+        if (!binaire) this.authConfirmee = true;
+        if (via && !this.redirectionVue) { this.redirectionVue = true; this.journal(`GET ${chemin} → ${r.status}${via}`); }
+        return r;
+      }
+      const corps = String(r.texte || '').replace(/\s+/g, ' ').slice(0, 200);
+      this.journal(`GET ${chemin} → ${r.status}${via} ${corps}`);
       // La passerelle répond 401 aussi pour une clé d'abonnement absente
       // ou fausse : à distinguer d'un jeton expiré.
       if ((r.status === 401 || r.status === 403) && /subscription key/i.test(corps)) {
         throw new ErreurSuunto('Clé d’abonnement refusée : colle la « Primary key » de ton profil API Zone (Your subscriptions).', { status: r.status });
+      }
+      // Un .fit refusé alors que la liste passe avec le même jeton : le
+      // compte va bien, inutile de changer d'en-tête ou de renouveler.
+      if ((r.status === 401 || r.status === 403) && binaire && this.authConfirmee) {
+        throw new ErreurSuunto(`Suunto refuse le .fit (${r.status})${via}. ${corps}`.trim(), { status: r.status });
       }
       // « Authorization: JWT » : avec ou sans « Bearer » selon les passerelles.
       if (r.status === 401 && !this.authEssayee) { this.authEssayee = true; this.authBrute = !this.authBrute; continue; }
@@ -448,10 +487,28 @@ export class ClientSuunto {
   /** Le .fit d'une activité. */
   async fit(cle) {
     const k = encodeURIComponent(cle);
-    let r = this.versionFit === 'v2' ? null : await this.appel(`/v3/workouts/${k}/fit`, { binaire: true, absentOk: true });
+    let r = null;
+    let refusV3 = null;
+    if (this.versionFit !== 'v2') {
+      try { r = await this.appel(`/v3/workouts/${k}/fit`, { binaire: true, absentOk: true }); }
+      catch (e) {
+        if (e.status !== 401 && e.status !== 403) throw e;
+        refusV3 = e;           // l'ancienne adresse v2 sert peut-être encore
+      }
+    }
     if (!r || r.status === 404) {
-      r = await this.appel(`/v2/workout/exportFit/${k}`, { binaire: true, absentOk: true });
-      if (r.status === 404) throw new ErreurSuunto('Activité introuvable chez Suunto.', { status: 404 });
+      try { r = await this.appel(`/v2/workout/exportFit/${k}`, { binaire: true, absentOk: true }); }
+      catch (e) {
+        if (!refusV3) throw e;
+        // Refusé partout : le problème vient du compte ou de l'abonnement,
+        // pas de cette activité. On arrête là plutôt que d'essayer les autres.
+        throw new ErreurSuunto(`${refusV3.message} — même refus par l’ancienne adresse v2 (${e.status || '?'}).`,
+          { status: refusV3.status, systeme: true });
+      }
+      if (r.status === 404) {
+        if (refusV3) throw new ErreurSuunto(refusV3.message, { status: refusV3.status, systeme: true });
+        throw new ErreurSuunto('Activité introuvable chez Suunto.', { status: 404 });
+      }
       if (this.versionFit !== 'v2') this.journal('.fit : v3 absente, passage en v2');
       this.versionFit = 'v2';
     }
