@@ -124,8 +124,23 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release delete android --yes --cleanup-tag || true
-          gh release create android PlongeeJournal.apk \
-            --title "Carnet de plongée — APK 2.0.${{ github.run_number }}" \
-            --notes "APK Android compilé depuis ${GITHUB_SHA::7}. Sur le téléphone ou la tablette : télécharger, ouvrir, autoriser l’installation depuis cette source." \
-            --latest
+          TITRE="Carnet de plongée — APK 2.0.${{ github.run_number }}"
+          NOTES="APK Android compilé depuis ${GITHUB_SHA::7}. Sur le téléphone ou la tablette : télécharger, ouvrir, autoriser l’installation depuis cette source."
+          # GitHub répond parfois 500 en passant : on réessaie, jusqu'à ce
+          # que la release porte bien le nouveau numéro.
+          for essai in 1 2 3 4 5; do
+            echo "Publication, essai $essai"
+            if gh release view android >/dev/null 2>&1; then
+              gh release delete android --yes --cleanup-tag || true
+            fi
+            git push --delete origin refs/tags/android 2>/dev/null || true
+            if gh release create android PlongeeJournal.apk --title "$TITRE" --notes "$NOTES" --latest; then
+              if [ "$(gh release view android --json name --jq .name)" = "$TITRE" ]; then
+                echo "Publiée : $TITRE"
+                exit 0
+              fi
+            fi
+            sleep $((essai * 15))
+          done
+          echo "::error::Publication impossible après 5 essais"
+          exit 1
