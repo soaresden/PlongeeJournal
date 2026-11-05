@@ -328,13 +328,13 @@ await tick(200);
 const bouton = txt => [...document.querySelectorAll('#view button')].find(x => txt.test(x.textContent));
 bouton(/Chercher mes activités/).click();
 await tick(500);
-check('Suunto : 4 activités, la course ignorée', /4 activité\(s\) sur ton compte/.test(view()) && /1 autre\(s\) sport\(s\) ignoré/.test(view()),
+check('Suunto : 4 activités, la course ignorée', /4 activités sur ton compte/.test(view()) && /1 autre sport ignoré/.test(view()),
   view().slice(view().indexOf('activité(s) sur'), view().indexOf('activité(s) sur') + 160));
 check('Suunto : plongée et natation reconnues sans .fit, la course en un seul', fitsDemandes.length === 1, fitsDemandes.join(','));
 bouton(/Analyser/).click();
 await tick(500);
 check('Suunto : par défaut, seulement ce qui manque (la plongée du 2 juin n’est pas touchée)',
-  /Appliquer : 1 plongée \+ 1 séance$/.test(bouton(/Appliquer/)?.textContent || '') && /1 déjà au carnet, laissée/.test(view()),
+  /Appliquer : 1 plongée \+ 1 séance$/.test(bouton(/Appliquer/)?.textContent || '') && /1 déjà au carnet/.test(view()) && /Déjà au carnet · 1/.test(view()),
   bouton(/Appliquer/)?.textContent);
 const caseCompleter = [...document.querySelectorAll('#view label')].find(l => /Compléter aussi celles déjà au carnet/.test(l.textContent))?.querySelector('input');
 caseCompleter.checked = true;
@@ -346,7 +346,7 @@ const dv2Avant = structuredClone(await store.getDive(dv2.id));
 const btnAppliquer = bouton(/Appliquer/);
 check('Suunto : proposition 1 plongée + 1 séance + 1 à compléter',
   /1 plongée \+ 1 séance \+ 1 à compléter/.test(btnAppliquer?.textContent || ''), btnAppliquer?.textContent);
-check('Suunto : la plongée du 2 juin sera complétée (bloc, profil)', /plongée n°2 .*ajoute .*profil.*pression du bloc/.test(view()),
+check('Suunto : la plongée du 2 juin sera complétée (bloc, profil)', /↻ n°2 : profil.*pression du bloc/.test(view()),
   view().slice(view().indexOf('↻'), view().indexOf('↻') + 200));
 check('Suunto : renumérotation proposée (plongée de 2023)', /Renuméroter le carnet/.test(view()), '');
 btnAppliquer.click();

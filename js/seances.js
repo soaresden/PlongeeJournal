@@ -38,7 +38,10 @@ export function suggererRangement({ genre = '', profMax = null, date = null, lie
   const prof = Number(profMax) || 0;
   const connu = lieu ? typeDuLieu(lieu, seances) : null;
 
-  if (genre === 'snorkeling') return 'snorkeling';
+  // Snorkeling : souvent le mode choisi sur la montre pour un
+  // entraînement en piscine ou en fosse. Au même endroit qu'une séance
+  // déjà rangée, on reprend son type.
+  if (genre === 'snorkeling') return connu || 'snorkeling';
   if (genre === 'apnee') return connu === 'fosse' ? 'fosse' : 'apnee';
   // Natation (pas de profondeur) ou petit bain : une séance de piscine,
   // ou ce qui se fait d'habitude à cet endroit.

@@ -335,8 +335,17 @@ export function normaliserActivite(w) {
   const plongee = ext.find(e => /dive/i.test(e.type || '')) || {};
   const prof = Number(w.maxDepth ?? w.diveMaxDepth ?? plongee.maxDepth ?? NaN);
   const decalage = w.timeOffsetInMinutes == null ? NaN : Number(w.timeOffsetInMinutes);
+  // Position de départ (x = longitude, y = latitude) et température
+  // moyenne (en kelvins dans le résumé) : de quoi ranger sans le .fit.
+  const pos = w.startPosition || w.centerPosition || null;
+  const lat = Number(pos?.y), lng = Number(pos?.x);
+  const resumeExt = ext.find(e => /summary/i.test(e.type || '')) || {};
+  let temp = Number(resumeExt.avgTemperature ?? NaN);
+  if (Number.isFinite(temp) && temp > 150) temp -= 273.15;
   return {
     cle,
+    lieu: Number.isFinite(lat) && Number.isFinite(lng) && (lat || lng) ? { lat, lng } : null,
+    tempMoy: Number.isFinite(temp) && temp > -5 && temp < 45 ? Math.round(temp * 10) / 10 : null,
     // Fuseau du lieu de l'activité (minutes) : l'heure saisie au carnet
     // est celle du lieu, pas forcément celle de l'appareil.
     decalageMin: Number.isFinite(decalage) ? decalage : null,

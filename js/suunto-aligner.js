@@ -20,6 +20,12 @@ export const CLE_SUUNTO = cle => `suunto:${cle}`;
  * N° d'activité de l'appli Suunto → genre, d'après la liste officielle
  * (API Zone, « Supported sport types »). Le reste s'apprend avec un .fit.
  */
+/** Noms des activités Suunto qui nous concernent (doc officielle). */
+export const NOMS_SUUNTO = {
+  21: 'Natation', 78: 'Plongée', 79: 'Apnée', 85: 'Nage en eau libre',
+  90: 'Snorkeling', 100: 'Mermaiding', 101: 'Chasse sous-marine',
+};
+
 export const ACTIVITES_SUUNTO = {
   21: 'natation',      // Swimming (piscine)
   78: 'plongee',       // Scubadiving
@@ -51,6 +57,8 @@ export function decDepuisListe(act) {
     start: new Date(act.debut),
     dureeMin: act.dureeS ? Math.round(act.dureeS / 60) : null,
     profMax: act.profMax ?? null,
+    lieu: act.lieu ?? null,
+    tempFond: act.tempMoy ?? null,
     samples: [],
     genre: ACTIVITES_SUUNTO[Number(act.activite)] ?? null,
     sansFit: true,
@@ -185,7 +193,10 @@ export function proposer(act, dec, connues, seances = []) {
     return { action: 'completer', entree: trouve.entree, champs: c.champs, libelles: c.libelles, comment: trouve.comment };
   }
   const rangement = suggererRangement({
-    genre: genrePourRangement(genre), profMax: dec.profMax, date: dec.start, lieu: dec.lieu,
+    genre: genrePourRangement(genre),
+    // La liste Suunto ne donne pas toujours la profondeur : une plongée
+    // sans profondeur connue reste une plongée (pas une piscine).
+    profMax: dec.profMax ?? (genre === 'plongee' ? 10 : null), date: dec.start, lieu: dec.lieu,
   }, seances);
   return { action: 'ajouter', rangement };
 }

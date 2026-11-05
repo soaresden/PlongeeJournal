@@ -255,6 +255,18 @@ function fauxSuunto({ ordre = 'recent', exigeBearer = true, version = 'v3' } = {
   const p = A.proposer(act, dec, []);
   check('snorkeling (n°90) → séance snorkeling', A.genreActivite(act, dec) === 'snorkeling' && p.action === 'ajouter' && p.rangement === 'snorkeling', JSON.stringify(p));
   check('apnée (n°79) → séance apnée', A.proposer({ ...act, activite: 79 }, A.decDepuisListe({ ...act, activite: 79 }), []).rangement === 'apnee');
+  const w = C.normaliserActivite({ workoutKey: 'k', activityId: 90, startTime: act.debut, startPosition: { x: 2.35, y: 48.85 },
+    extensions: [{ type: 'SummaryExtension', avgTemperature: 301.15 }] });
+  check('liste : lieu (x = longitude) et température en °C', w.lieu?.lat === 48.85 && w.lieu?.lng === 2.35 && w.tempMoy === 28, JSON.stringify(w));
+  const piscine = { type: 'piscine', lat: 48.8501, lng: 2.3501 };
+  const snorkelPiscine = { ...act, lieu: { lat: 48.85, lng: 2.35 } };
+  check('snorkeling à la piscine habituelle → séance piscine',
+    A.proposer(snorkelPiscine, A.decDepuisListe(snorkelPiscine), [], [piscine]).rangement === 'piscine');
+  check('snorkeling ailleurs (vacances) → snorkeling',
+    A.proposer({ ...act, lieu: { lat: 27.2, lng: 33.8 } }, A.decDepuisListe({ ...act, lieu: { lat: 27.2, lng: 33.8 } }), [], [piscine]).rangement === 'snorkeling');
+  const plongeeListe = { ...act, activite: 78, profMax: null, debut: Date.parse('2025-08-11T09:30:00Z') };
+  check('plongée (n°78) sans profondeur dans la liste → plongée, pas piscine',
+    A.proposer(plongeeListe, A.decDepuisListe(plongeeListe), []).rangement === 'plongee');
   check('natation (n°21) → séance piscine', A.proposer({ ...act, activite: 21 }, A.decDepuisListe({ ...act, activite: 21 }), []).rangement === 'piscine');
 }
 
