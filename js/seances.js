@@ -102,6 +102,19 @@ export function verdictProfil(p, { lieu = null } = {}) {
 }
 
 /**
+ * Le jeudi, c'est la fosse… à la maison. La fosse est sous un toit : la
+ * montre n'y prend pas de point GPS. Un jeudi avec un point GPS, c'est
+ * dehors (vacances, sortie en mer) : une plongée, sauf si ce point est
+ * celui d'une fosse déjà connue.
+ */
+function jeudiDeFosse(date, lieu, connu, prof) {
+  if (!date || prof > 25) return false;
+  const jour = new Date(typeof date === 'string' ? `${date}T12:00:00` : date).getDay();
+  if (jour !== 4) return false;
+  return !lieu || connu === 'fosse';
+}
+
+/**
  * Plongée ou séance ? D'après ce que la montre en dit.
  * @param {{genre?:string, profMax?:number|null, date?:Date|string, lieu?:{lat,lng}|null}} a
  * @param {object[]} seances  les séances déjà rangées (pour reconnaître le lieu)
@@ -120,8 +133,7 @@ export function suggererRangement({ genre = '', profMax = null, date = null, lie
   if (courbe === 'plongee' && (genre === 'apnee' || genre === 'autre') && !profil.sonde) courbe = null;
   if (courbe === 'plongee') {
     if (connu === 'fosse') return 'fosse';
-    const jour = date ? new Date(typeof date === 'string' ? `${date}T12:00:00` : date).getDay() : null;
-    return jour === 4 && prof <= 25 ? 'fosse' : 'plongee';
+    return jeudiDeFosse(date, lieu, connu, prof) ? 'fosse' : 'plongee';
   }
   if (courbe === 'piscine') return connu && connu !== 'fosse' ? connu : 'piscine';
   if (courbe) return connu && connu !== 'piscine' ? connu : courbe;
@@ -135,10 +147,8 @@ export function suggererRangement({ genre = '', profMax = null, date = null, lie
   // ou ce qui se fait d'habitude à cet endroit.
   if (genre === 'autre' || prof < 3) return connu && connu !== 'fosse' ? connu : 'piscine';
   if (connu) return connu;
-  // Le jeudi soir, entre 3 et 25 m : la fosse.
-  const jour = date ? new Date(typeof date === 'string' ? `${date}T12:00:00` : date).getDay() : null;
-  if (jour === 4 && prof <= 25) return 'fosse';
-  return 'plongee';
+  // Le jeudi soir, entre 3 et 25 m, sans GPS : la fosse.
+  return jeudiDeFosse(date, lieu, connu, prof) ? 'fosse' : 'plongee';
 }
 
 const pad = n => String(n).padStart(2, '0');

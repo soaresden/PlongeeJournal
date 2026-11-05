@@ -111,6 +111,21 @@ check('le lieu tranche : la fosse, même un mardi',
   check('courbe : la sonde de bouteille → plongée', S.suggererRangement({ genre: 'apnee', samples: avecSonde, date: '2026-10-17' }) === 'plongee');
   check('courbe : une plongée un jeudi soir sans GPS → fosse', S.suggererRangement({ genre: 'bouteille', samples: plongee, profMax: 12, date: '2026-10-15' }) === 'fosse');
 }
+// Le jeudi n'est la fosse qu'à la maison
+{
+  const jeudi = new Date('2026-11-12T20:30:00');
+  const fosse = { id: 'fz', type: 'fosse', lat: 49.18, lng: -0.37 };
+  check('jeudi sans GPS, 18 m : fosse', S.suggererRangement({ genre: 'plongee', profMax: 18, date: jeudi }) === 'fosse');
+  check('jeudi en vacances (GPS ailleurs) : plongée',
+    S.suggererRangement({ genre: 'plongee', profMax: 18, date: jeudi, lieu: { lat: 43.42, lng: 6.76 } }, [fosse]) === 'plongee');
+  check('jeudi au point GPS d’une fosse connue : fosse',
+    S.suggererRangement({ genre: 'plongee', profMax: 18, date: jeudi, lieu: { lat: 49.1801, lng: -0.3701 } }, [fosse]) === 'fosse');
+  const bloc = []; for (let t = 0; t < 2400; t += 10) bloc.push({ t, d: t < 60 || t > 2300 ? 0.5 : 15 });
+  check('jeudi en vacances, courbe de plongée : plongée',
+    S.suggererRangement({ genre: 'plongee', profMax: 15, date: jeudi, lieu: { lat: 36.0, lng: 14.3 }, samples: bloc }, [fosse]) === 'plongee');
+  check('jeudi sans GPS, courbe de plongée : fosse',
+    S.suggererRangement({ genre: 'plongee', profMax: 15, date: jeudi, samples: bloc }) === 'fosse');
+}
 // Apnée vraiment sous l'eau
 {
   const pas = (segments) => { const out = []; let t = 0; for (const [d, n] of segments) for (let i = 0; i < n; i++) { out.push({ t, d }); t += 10; } return out; };

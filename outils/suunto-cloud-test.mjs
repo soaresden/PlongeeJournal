@@ -328,8 +328,11 @@ function fauxSuunto({ ordre = 'recent', exigeBearer = true, version = 'v3' } = {
     !('pressionDepart' in A.completerPlongee({ ...saisie, pressionDepart: 210, pressionFin: 70 }, dec).champs));
   check('mélange déjà saisi : pas touché', !('gazType' in A.completerPlongee({ ...saisie, gazType: 'nitrox', gazO2: 36 }, dec).champs));
 
-  check('absente : ajoutée (jeudi soir ≤ 25 m → fosse)', A.proposer(act, dec, []).action === 'ajouter'
-    && A.proposer(act, dec, []).rangement === (new Date(debut).getDay() === 4 ? 'fosse' : 'plongee'));
+  const jeudi = new Date(debut).getDay() === 4;
+  check('absente, avec un point GPS : ajoutée en plongée, même un jeudi', A.proposer(act, dec, []).action === 'ajouter'
+    && A.proposer(act, dec, []).rangement === 'plongee');
+  check('absente, sans GPS : la fosse si c’est un jeudi',
+    A.proposer(act, { ...dec, lieu: null }, []).rangement === (jeudi ? 'fosse' : 'plongee'));
   const nage = { ...dec, genre: 'natation', profMax: null };
   check('natation → séance piscine', A.proposer(act, nage, []).rangement === 'piscine');
   check('apnée → séance apnée', A.proposer(act, { ...dec, genre: 'apnee' }, []).rangement === 'apnee');
