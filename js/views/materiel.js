@@ -126,13 +126,14 @@ export function editerMateriel(existant, onValider, onSupprimer) {
 }
 
 /** Ligne d'un tableau de matériel. */
-export function ligneMateriel(piece, { onClick, onRetirer } = {}) {
+export function ligneMateriel(piece, { onClick, onRetirer, fin } = {}) {
   const t = typeMateriel(piece.type);
   return el('div.mat-ligne', onClick ? { onclick: () => onClick(piece) } : {},
     el('span.mat-icone', { text: t.icone }),
     el('div.mat-corps', {},
       el('div.mat-type', { text: t.label }),
       el('div.mat-detail', { text: libelleMateriel(piece) })),
+    fin || null,
     onRetirer ? el('button.mat-suppr', {
       type: 'button', text: '×', title: 'Retirer',
       onclick: e => { e.stopPropagation(); onRetirer(piece); },

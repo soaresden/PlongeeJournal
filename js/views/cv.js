@@ -2,16 +2,19 @@
 //  Qui je suis, en plongée
 //
 //  Une page à montrer à ceux avec qui on va plonger : niveau et son
-//  équivalence, expérience, brevets, où j'ai plongé, mon matériel.
+//  équivalence, expérience, brevets, les pays (et la carte), ce que je porte.
 //  Dans la langue de la personne en face (sept langues).
 //  Rien de privé ici : ni adresse, ni contact d'urgence.
 // ============================================================
 
 import { el, toast } from '../lib.js';
 import { store } from '../store.js';
-import { estBapteme } from '../model.js';
+import { estBapteme, libelleMateriel, valeursMateriel } from '../model.js';
+import { paysDe } from '../secours.js';
+import { piecesEquipees, dessinPlongeur } from '../equipement.js';
+import { cumulerALEcran } from './carte.js';
 import { ambianceDe } from '../ambiance.js';
-import { rangNiveau } from '../config.js';
+import { rangNiveau, typeMateriel } from '../config.js';
 
 const CLE_LANGUE = 'plongee-journal:cv-langue';
 
@@ -116,6 +119,54 @@ const T = {
 /** FFESSM → CMAS : l'équivalence que tout le monde comprend. */
 const CMAS = { N1: 'CMAS ★', N2: 'CMAS ★★', N3: 'CMAS ★★★', N4: 'CMAS ★★★' };
 
+/** Le matériel, dans la langue d'en face (le français vient de config.js). */
+const MAT = {
+  en: { combinaison: 'Wetsuit', detendeur: 'Regulator', masque: 'Mask', palmes: 'Fins', phare: 'Torch', camera: 'Camera', ordinateur: 'Computer',
+    gilet: 'BCD', lestage: 'Weights', parachute: 'SMB', couteau: 'Knife', autre: 'Other', Humide: 'Wet', 'Semi-étanche': 'Semi-dry', 'Étanche': 'Drysuit' },
+  es: { combinaison: 'Traje', detendeur: 'Regulador', masque: 'Máscara', palmes: 'Aletas', phare: 'Linterna', camera: 'Cámara', ordinateur: 'Ordenador',
+    gilet: 'Chaleco (BCD)', lestage: 'Lastre', parachute: 'Boya (SMB)', couteau: 'Cuchillo', autre: 'Otro', Humide: 'Húmedo', 'Semi-étanche': 'Semiseco', 'Étanche': 'Seco' },
+  it: { combinaison: 'Muta', detendeur: 'Erogatore', masque: 'Maschera', palmes: 'Pinne', phare: 'Torcia', camera: 'Fotocamera', ordinateur: 'Computer',
+    gilet: 'GAV (BCD)', lestage: 'Zavorra', parachute: 'Boa di segnalazione', couteau: 'Coltello', autre: 'Altro', Humide: 'Umida', 'Semi-étanche': 'Semistagna', 'Étanche': 'Stagna' },
+  de: { combinaison: 'Anzug', detendeur: 'Atemregler', masque: 'Maske', palmes: 'Flossen', phare: 'Lampe', camera: 'Kamera', ordinateur: 'Tauchcomputer',
+    gilet: 'Jacket (BCD)', lestage: 'Blei', parachute: 'Boje (SMB)', couteau: 'Messer', autre: 'Sonstiges', Humide: 'Nass', 'Semi-étanche': 'Halbtrocken', 'Étanche': 'Trocken' },
+  pt: { combinaison: 'Fato', detendeur: 'Regulador', masque: 'Máscara', palmes: 'Barbatanas', phare: 'Lanterna', camera: 'Câmara', ordinateur: 'Computador',
+    gilet: 'Colete (BCD)', lestage: 'Lastro', parachute: 'Boia (SMB)', couteau: 'Faca', autre: 'Outro', Humide: 'Húmido', 'Semi-étanche': 'Semisseco', 'Étanche': 'Seco' },
+  pl: { combinaison: 'Pianka', detendeur: 'Automat', masque: 'Maska', palmes: 'Płetwy', phare: 'Latarka', camera: 'Aparat', ordinateur: 'Komputer',
+    gilet: 'Jacket (BCD)', lestage: 'Balast', parachute: 'Boja (SMB)', couteau: 'Nóż', autre: 'Inne', Humide: 'Mokra', 'Semi-étanche': 'Półsucha', 'Étanche': 'Sucha' },
+};
+const TXT_TOUT = { fr: 'Tout', en: 'All', es: 'Todo', it: 'Tutto', de: 'Alle', pt: 'Tudo', pl: 'Wszystko' };
+const TXT_PAYS = { fr: 'Pays', en: 'Countries', es: 'Países', it: 'Paesi', de: 'Länder', pt: 'Países', pl: 'Kraje' };
+const TXT_PORTE = { fr: 'Ce que je porte', en: 'What I dive with', es: 'Con qué buceo', it: 'Con cosa mi immergo',
+  de: 'Womit ich tauche', pt: 'Com o que mergulho', pl: 'W czym nurkuję' };
+
+/** Drapeau emoji d'un code pays (FR → 🇫🇷). */
+export const drapeau = code => String.fromCodePoint(...[...code].map(c => 0x1F1E6 + c.charCodeAt(0) - 65));
+
+/** Sans GPS : le pays d'après le nom du lieu ou l'adresse du centre. */
+const MOTS = [
+  [/martinique/i, 'MQ'], [/guadeloupe/i, 'GP'], [/r[ée]union/i, 'RE'],
+  [/corfou|corfu|gr[eè]ce|greece|cr[eè]te|rhodes|zakynth/i, 'GR'], [/malte|malta|gozo/i, 'MT'], [/albanie|albania|himar/i, 'AL'],
+  [/[ée]gypte|egypt|hurghada|urghada|marsa|sharm/i, 'EG'], [/cap[- ]?vert|cabo verde|santa maria/i, 'CV'],
+  [/espagne|spain|canari|lanzarote|tenerife|minorque|menorca|majorque|mallorca|ibiza|gran canaria/i, 'ES'],
+  [/portugal|a[çc]ores|azores|mad[èe]re|madeira/i, 'PT'], [/belgique|belgium/i, 'BE'], [/italie|italy|sardaigne|sicile|elbe/i, 'IT'],
+  [/croatie|croatia/i, 'HR'], [/france|cherbourg|marseille|bretagne|corse/i, 'FR'],
+];
+
+/** Le pays d'une plongée (code ISO), ou null. */
+export function paysPlongee(d) {
+  if (d.lat != null && d.lng != null) {
+    const p = paysDe(d.lat, d.lng);
+    if (p && p.id !== 'AUTRE') {
+      if (p.id !== 'FR') return p.id;
+      if (d.lat < -10) return 'RE';
+      if (d.lng < -55) return d.lat < 15.3 ? 'MQ' : 'GP';
+      return 'FR';
+    }
+  }
+  const texte = [d.lieuNom, d.lieuDetail, d.site, d.centreNom, d.centreAdresse].filter(Boolean).join(' ');
+  return MOTS.find(([re]) => re.test(texte))?.[1] || null;
+}
+
 const lireLangue = () => { try { return localStorage.getItem(CLE_LANGUE) || 'fr'; } catch { return 'fr'; } };
 
 const LOCALES = { fr: 'fr-FR', en: 'en-GB', es: 'es-ES', it: 'it-IT', de: 'de-DE', pt: 'pt-PT', pl: 'pl-PL' };
@@ -130,9 +181,18 @@ export function profilPublic(diver, dives, certifs, aujourdhui = new Date()) {
   const niveau = parRang.find(c => /^N[1-4]$/.test(c.nom))?.nom || diver?.niveau || '';
   const regions = {};
   vraies.forEach(d => { const id = ambianceDe(d).id; if (id !== 'aPreciser') regions[id] = (regions[id] || 0) + 1; });
-  const mat = (diver?.materiel || []).map(m => ({ type: m.type, v: m.valeurs || {} }));
+  const portes = piecesEquipees(diver);
+  const mat = portes.map(m => ({ type: m.type, v: valeursMateriel(m) }));
   const ordi = mat.find(m => m.type === 'ordinateur');
   const combi = mat.find(m => m.type === 'combinaison');
+  const pays = {};
+  vraies.forEach(d => { const c = paysPlongee(d); if (c) pays[c] = (pays[c] || 0) + 1; });
+  const lieux = new Map();
+  vraies.filter(d => d.lat != null && d.lng != null).forEach(d => {
+    const cle = `${d.lat.toFixed(3)},${d.lng.toFixed(3)}`;
+    if (!lieux.has(cle)) lieux.set(cle, { lat: d.lat, lng: d.lng, nom: d.lieuNom || '', pays: paysPlongee(d), plongees: [] });
+    lieux.get(cle).plongees.push(d.id);
+  });
   return {
     prenom: diver?.prenom || '', nom: diver?.nom || '', niveau,
     n: vraies.length,
@@ -147,13 +207,19 @@ export function profilPublic(diver, dives, certifs, aujourdhui = new Date()) {
     regions: Object.entries(regions).sort((a, b) => b[1] - a[1]),
     ordi: ordi ? [ordi.v.marque, ordi.v.modele].filter(Boolean).join(' ') : '',
     combi: combi ? [combi.v.sousType, combi.v.mm ? `${combi.v.mm} mm` : '', combi.v.marque].filter(Boolean).join(' · ') : '',
+    pays: Object.entries(pays).sort((a, b) => b[1] - a[1]),
+    lieux: [...lieux.values()].sort((a, b) => b.plongees.length - a.plongees.length),
+    // « Autre » (un câble, un flasheur…) n'intéresse pas ceux d'en face.
+    equipe: portes.filter(m => m.type !== 'autre').map(m => ({ type: m.type, valeurs: valeursMateriel(m), libelle: libelleMateriel(m) })),
   };
 }
 
 export async function cvView() {
   const diverId = await store.getActiveDiverId();
   if (!diverId) return { title: 'Qui je suis', node: el('div.empty', { text: 'Crée d’abord ton profil.' }) };
-  const p = profilPublic(await store.getDiver(diverId), await store.listDives(diverId), await store.listCertifications(diverId));
+  const diver = await store.getDiver(diverId);
+  const p = profilPublic(diver, await store.listDives(diverId), await store.listCertifications(diverId));
+  let carte = null;
   const wrap = el('div.cv');
   let langue = lireLangue();
 
@@ -174,15 +240,27 @@ export async function cvView() {
       atlantique: 'Îles atlantiques', nord: 'Manche & Atlantique', ocean: 'Océan', douce: 'Lac & carrière', fosse: 'Fosse' }[id] || id);
 
     const langues = el('div.cv-langues', {}, ...LANGUES.map(([id, nom, drapeau]) => el(`button.cat-filtre${id === langue ? '.on' : ''}`, {
-      type: 'button', title: nom, onclick: () => { langue = id; try { localStorage.setItem(CLE_LANGUE, id); } catch { /* privé */ } rendre(); },
+      type: 'button', title: nom, onclick: () => { langue = id; try { localStorage.setItem(CLE_LANGUE, id); } catch { /* privé */ } rendreTout(); },
     }, drapeau, ' ', nom)));
 
+    const nomPays = code => { try { return new Intl.DisplayNames([loc], { type: 'region' }).of(code); } catch { return code; } };
+    const nomMat = type => MAT[langue]?.[type] || typeMateriel(type).label;
+    const libelle = m => (MAT[langue] && m.type === 'combinaison'
+      ? [MAT[langue][m.valeurs.sousType] || m.valeurs.sousType, m.valeurs.mm ? `${m.valeurs.mm} mm` : '', m.valeurs.marque].filter(Boolean).join(' · ')
+      : m.libelle);
+    const boiteCarte = p.lieux.length ? el('div.cv-monde') : null;
+    const zoomPays = code => {
+      if (!carte) return;
+      const pts = p.lieux.filter(l => !code || l.pays === code).map(l => [l.lat, l.lng]);
+      if (pts.length) carte.flyToBounds(pts, { padding: [30, 30], maxZoom: code ? 10 : 6, duration: 0.6 });
+    };
     const chiffre = (n, l) => el('div.cv-chiffre', {}, el('b', { text: String(n) }), el('span', { text: l }));
     const texte = [
       t.phrase(p.prenom, p.niveau ? `${p.niveau}${CMAS[p.niveau] ? ` (${CMAS[p.niveau]})` : ''}` : '', p.n, annee),
       descNiv ? `${p.niveau} : ${descNiv}.` : '',
       `${t.profMax} : ${p.profMax} m · ${t.sousLEau} : ${heures} · ${t.derniere} : ${date(p.derniere)}.`,
       p.brevets.length ? `${t.brevets} : ${p.brevets.map(b => brevet(b.nom)).join(', ')}.` : '',
+      p.pays.length ? `${TXT_PAYS[langue] || TXT_PAYS.fr} : ${p.pays.map(([c, n]) => `${drapeau(c)} ${nomPays(c)} (${n})`).join(', ')}.` : '',
     ].filter(Boolean).join('\n');
 
     wrap.replaceChildren(
@@ -209,18 +287,53 @@ export async function cvView() {
             el('b', { text: brevet(b.nom) }),
             CMAS[b.nom] ? el('span', { text: `${t.equiv} ${CMAS[b.nom]}` }) : null,
             b.date ? el('span', { text: date(b.date) }) : null)))) : null,
-        p.regions.length ? el('div.cv-bloc', {}, el('h3', { text: t.ou }),
-          el('div.cv-regions', {}, ...p.regions.map(([id, n]) => el('span.cv-region', {},
-            nomRegion(id), el('small', { text: String(n) }))))) : null,
-        p.ordi || p.combi ? el('div.cv-bloc', {}, el('h3', { text: t.materiel }),
-          el('div.cv-mat', {},
-            p.ordi ? el('div', {}, el('span', { text: t.ordi }), el('b', { text: p.ordi })) : null,
-            p.combi ? el('div', {}, el('span', { text: t.combi }), el('b', { text: p.combi })) : null)) : null),
+        p.pays.length ? el('div.cv-bloc', {}, el('h3', { text: t.ou }),
+          el('div.cv-pays', {},
+            boiteCarte && p.pays.length > 1 ? el('button.cv-pays-puce', { type: 'button', onclick: () => zoomPays(null) },
+              el('span.cv-drapeau', { text: '🌍' }), el('span', { text: TXT_TOUT[langue] || TXT_TOUT.fr })) : null,
+            ...p.pays.map(([code, n]) => el('button.cv-pays-puce', { type: 'button', title: nomPays(code), onclick: () => zoomPays(code) },
+              el('span.cv-drapeau', { text: drapeau(code) }), el('span', { text: nomPays(code) }), el('small', { text: String(n) })))),
+          boiteCarte) : null,
+        p.equipe.length ? el('div.cv-bloc', {}, el('h3', { text: TXT_PORTE[langue] || TXT_PORTE.fr }),
+          el('div.cv-equipe', {},
+            el('div.equip-dessin.fixe', { html: dessinPlongeur(diver, { titre: nomMat }) }),
+            el('div.cv-mat', {}, ...p.equipe.map(m => el('div', {},
+              el('span', { text: `${typeMateriel(m.type).icone} ${nomMat(m.type)}` }), el('b', { text: libelle(m) })))))) : null),
       el('div.btn-row', {}, el('button.btn.sm', { type: 'button', text: `📋 ${t.copier}`, onclick: async () => {
         try { await navigator.clipboard.writeText(texte); toast(t.copie); } catch { toast(texte); }
       } })));
   }
 
-  rendre();
+  /** La carte des spots : on zoome, les spots proches se cumulent. */
+  function poserCarte() {
+    const boite = wrap.querySelector('.cv-monde');
+    if (carte) { carte.remove(); carte = null; }
+    if (!boite || typeof L === 'undefined') return;
+    carte = L.map(boite, { zoomControl: true, attributionControl: false, gestureHandling: true });
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18 }).addTo(carte);
+    const couche = L.layerGroup().addTo(carte);
+    const placer = () => {
+      couche.clearLayers();
+      cumulerALEcran(p.lieux, l => carte.project([l.lat, l.lng]), 34).forEach(a => {
+        const n = a.n;
+        const noms = a.lieux.map(l => l.nom).filter(Boolean);
+        const code = a.lieux[0].pays;
+        const taille = 24 + Math.min(16, n);
+        L.marker([a.lat, a.lng], { icon: L.divIcon({ className: 'cv-repere', html: `<span>${n}</span>`, iconSize: [taille, taille] }) })
+          .bindTooltip(`${code ? drapeau(code) + ' ' : ''}${noms.slice(0, 3).join(' · ')}${noms.length > 3 ? '…' : ''}` || String(n), { direction: 'top' })
+          .on('click', () => {
+            if (a.lieux.length > 1) carte.flyToBounds(a.lieux.map(l => [l.lat, l.lng]), { padding: [40, 40], maxZoom: 12, duration: 0.5 });
+          })
+          .addTo(couche);
+      });
+    };
+    carte.fitBounds(p.lieux.map(l => [l.lat, l.lng]), { padding: [24, 24], maxZoom: 6 });
+    carte.on('zoomend', placer);
+    placer();
+    setTimeout(() => carte && carte.invalidateSize(), 120);
+  }
+
+  const rendreTout = () => { rendre(); requestAnimationFrame(poserCarte); };
+  rendreTout();
   return { title: 'Qui je suis', back: true, node: wrap };
 }

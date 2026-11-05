@@ -374,3 +374,55 @@ body.vue-pleine #view > * { max-width: none; }
 .mn90 { height: 100%; }
 .mn90-cadre { display: block; width: 100%; height: 100%; border: 0; background: var(--bg); }
 @media (min-width: 760px) { body.vue-pleine #view { padding: 0; } }
+
+/* ---------- Équipé : le dessin et les lignes ---------- */
+.equip-grille { display: grid; grid-template-columns: minmax(150px, 210px) 1fr; gap: 16px; align-items: center; }
+.equip-dessin { display: grid; place-items: center; padding: 8px; border-radius: 18px;
+  background: radial-gradient(circle at 50% 40%, rgba(var(--accent-rgb), .16), transparent 70%); }
+.eq-dessin { width: 100%; max-width: 210px; height: auto; display: block; overflow: visible; }
+.eq-part, .eq-corps { cursor: pointer; transition: opacity .15s, filter .15s; outline: none; }
+.eq-part:hover, .eq-part:focus-visible, .eq-corps:hover { filter: drop-shadow(0 0 4px rgba(var(--accent-rgb), .9)); }
+.eq-off > :not(title) { fill: none !important; stroke: var(--text-mute) !important; stroke-width: 1.4 !important; stroke-dasharray: 3 3; opacity: .7; }
+.equip-dessin.fixe .eq-part, .equip-dessin.fixe .eq-corps { cursor: default; filter: none; }
+.equip-dessin.fixe .eq-off { display: none; }
+.equip-lignes { display: flex; flex-direction: column; min-width: 0; }
+.equip-ligne { display: flex; align-items: center; gap: 10px; padding: 9px 6px; border: 0; border-bottom: 1px solid var(--line);
+  background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; border-radius: 10px; }
+.equip-ligne:last-child { border-bottom: 0; }
+.equip-ligne:hover { background: var(--surface-2); }
+.equip-ligne .mat-corps { display: flex; flex-direction: column; }
+.equip-ligne.vide .mat-detail { color: var(--text-mute); font-style: italic; }
+.equip-nb { font-size: 11px; font-weight: 650; color: var(--text-mute); white-space: nowrap; }
+.equip-badge { font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 99px; white-space: nowrap;
+  background: rgba(var(--accent-rgb), .16); color: var(--accent); }
+.equip-choix { display: flex; align-items: center; gap: 10px; width: 100%; padding: 12px; margin-bottom: 6px;
+  border: 1px solid var(--line); border-radius: 12px; background: var(--surface); color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.equip-choix.on { border-color: var(--accent); background: rgba(var(--accent-rgb), .1); font-weight: 650; }
+.equip-coche { display: grid; place-items: center; width: 22px; height: 22px; flex: 0 0 22px; border-radius: 50%;
+  border: 2px solid var(--line); color: var(--on-accent); font-size: 13px; font-weight: 800; }
+.equip-choix.on .equip-coche { background: var(--accent); border-color: var(--accent); }
+@media (max-width: 520px) {
+  .equip-grille { grid-template-columns: 1fr; }
+  .equip-dessin .eq-dessin { max-width: 170px; }
+}
+
+/* ---------- Qui je suis : pays, carte, ce que je porte ---------- */
+.cv-pays { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.cv-pays-puce { display: inline-flex; align-items: center; gap: 7px; padding: 6px 12px 6px 8px; border-radius: 99px;
+  border: 1px solid var(--line); background: var(--surface-2); color: inherit; font: inherit; font-size: 14px; font-weight: 620; cursor: pointer; }
+.cv-pays-puce:hover { border-color: var(--accent); }
+.cv-pays-puce small { color: var(--text-mute); font-weight: 700; }
+.cv-drapeau { font-size: 20px; line-height: 1; }
+.cv-monde { height: 300px; border-radius: 16px; overflow: hidden; border: 1px solid var(--line); background: var(--surface-2); }
+.cv-repere { display: grid; place-items: center; }
+.cv-repere span { display: grid; place-items: center; width: 100%; height: 100%; border-radius: 50%;
+  background: var(--accent); color: var(--on-accent); font-size: 12px; font-weight: 800;
+  border: 2px solid #fff; box-shadow: 0 2px 8px rgba(0,0,0,.35); }
+.cv-equipe { display: grid; grid-template-columns: 150px 1fr; gap: 14px; align-items: center; }
+.cv-equipe .equip-dessin { padding: 4px; }
+@media (max-width: 520px) {
+  .cv-equipe { grid-template-columns: 1fr; }
+  .cv-equipe .eq-dessin { max-width: 140px; }
+  .cv-monde { height: 240px; }
+}
+.cv-equipe .cv-mat { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }

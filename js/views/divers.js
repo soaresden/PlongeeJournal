@@ -4,7 +4,9 @@
 
 import { el, fullName, toast, confirmBox, fmtDate, openModal } from '../lib.js';
 import { store, emptyDiver, emptyCertification, CERTIFS_COURANTES } from '../store.js';
-import { BLOOD_TYPES, typeMateriel, COMBI_TYPES, COMBI_MM } from '../config.js';
+import { BLOOD_TYPES, typeMateriel, TYPES_MATERIEL } from '../config.js';
+import { idsEquipes, piecesEquipees, equiper, dessinPlongeur, UN_SEUL } from '../equipement.js';
+import { libelleMateriel } from '../model.js';
 import { editerMateriel, ligneMateriel } from './materiel.js';
 import { navigate } from '../router.js';
 
@@ -352,37 +354,110 @@ export async function diverFormView({ id }) {
     ));
   }
 
-  // ---------- Matériel personnel ----------
+  // ---------- Matériel : le stock, et ce que je porte ----------
   //
-  // Un tableau de lignes, pas des cases figées : on peut avoir deux
-  // détendeurs et aucun phare. On choisit le type, puis on ajoute.
+  // Le STOCK, c'est tout ce que j'ai (deux combis, un vieil ordi…).
+  // L'ÉQUIPÉ, c'est ce que je porte en ce moment, choisi dans le stock :
+  // c'est lui qui part sur une nouvelle plongée et sur « Qui je suis ».
   d.materiel ||= [];
 
-  const tableauMateriel = el('div');
+  const zoneEquipe = el('div');
+  const zoneStock = el('div');
+  const titreType = type => {
+    const t = typeMateriel(type);
+    const p = piecesEquipees(d).filter(m => m.type === type);
+    return `${t.label}${p.length ? ' · ' + p.map(libelleMateriel).join(', ') : ' (pas porté)'}`;
+  };
+
+  /** Choisir, pour un type, ce que je porte parmi le stock. */
+  function choisirPour(type) {
+    const t = typeMateriel(type);
+    const pieces = d.materiel.filter(m => m.type === type);
+    openModal(close => {
+      const liste = el('div');
+      const rendre = () => {
+        const ids = idsEquipes(d);
+        liste.replaceChildren(
+          ...pieces.map(m => el(`button.equip-choix${ids.includes(m.id) ? '.on' : ''}`, { type: 'button',
+            onclick: () => {
+              equiper(d, m.id, !ids.includes(m.id));
+              rendreMateriel();
+              if (UN_SEUL.has(type) && idsEquipes(d).includes(m.id)) close(); else rendre();
+            } },
+            el('span.equip-coche', { text: ids.includes(m.id) ? '✓' : '' }),
+            el('span', { text: libelleMateriel(m) }))),
+          UN_SEUL.has(type) ? el(`button.equip-choix${pieces.some(m => ids.includes(m.id)) ? '' : '.on'}`, { type: 'button',
+            onclick: () => { pieces.forEach(m => equiper(d, m.id, false)); rendreMateriel(); close(); } },
+            el('span.equip-coche', { text: pieces.some(m => ids.includes(m.id)) ? '' : '✓' }),
+            el('span', { text: 'Rien de ce type' })) : null);
+      };
+      rendre();
+      return el('div', {},
+        el('h3', { text: `${t.icone} ${t.label} : ce que je porte` }),
+        el('div.hint', { style: { marginTop: 0 }, text: UN_SEUL.has(type)
+          ? 'Un seul à la fois : choisis dans ton stock.'
+          : 'Tu peux en porter plusieurs (un de secours, par exemple).' }),
+        liste,
+        el('div.btn-row', {}, el('button.btn.ghost', { type: 'button', text: 'Fermer', onclick: close })));
+    });
+  }
 
   function rendreMateriel() {
-    tableauMateriel.innerHTML = '';
+    const ids = idsEquipes(d);
+    const types = TYPES_MATERIEL.map(t => t.id).filter(id => d.materiel.some(m => m.type === id));
 
+    // --- Équipé : le dessin, et une ligne par type ---
     if (!d.materiel.length) {
-      tableauMateriel.append(el('div.hint', { style: { marginTop: 0 },
-        text: 'Aucun matériel enregistré.' }));
-      return;
+      zoneEquipe.replaceChildren(el('div.hint', { style: { marginTop: 0 },
+        text: 'Ajoute d’abord ton matériel au stock, plus bas : tu choisiras ensuite ce que tu portes.' }));
+    } else {
+      const dessin = el('div.equip-dessin', { html: dessinPlongeur(d, { cliquable: true, titre: titreType }) });
+      dessin.addEventListener('click', e => {
+        const g = e.target.closest('[data-type]');
+        if (g && d.materiel.some(m => m.type === g.dataset.type)) choisirPour(g.dataset.type);
+      });
+      dessin.addEventListener('keydown', e => {
+        const g = e.target.closest('[data-type]');
+        if (g && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); choisirPour(g.dataset.type); }
+      });
+      const lignes = el('div.equip-lignes', {}, ...types.map(type => {
+        const t = typeMateriel(type);
+        const portes = d.materiel.filter(m => m.type === type && ids.includes(m.id));
+        const nb = d.materiel.filter(m => m.type === type).length;
+        return el(`button.equip-ligne${portes.length ? '' : '.vide'}`, { type: 'button', onclick: () => choisirPour(type) },
+          el('span.mat-icone', { text: t.icone }),
+          el('span.mat-corps', {},
+            el('span.mat-type', { text: t.label }),
+            el('span.mat-detail', { text: portes.length ? portes.map(libelleMateriel).join(' + ') : 'Pas porté' })),
+          nb > 1 ? el('span.equip-nb', { text: `${nb} au stock` }) : null,
+          el('span.sec-fleche', { text: '›' }));
+      }));
+      zoneEquipe.replaceChildren(el('div.equip-grille', {}, dessin, lignes));
     }
 
-    d.materiel.forEach(m => tableauMateriel.append(ligneMateriel(m, {
+    // --- Stock : tout ce que j'ai ---
+    zoneStock.replaceChildren();
+    if (!d.materiel.length) {
+      zoneStock.append(el('div.hint', { style: { marginTop: 0 }, text: 'Aucun matériel enregistré.' }));
+    }
+    d.materiel.forEach(m => zoneStock.append(ligneMateriel(m, {
+      fin: ids.includes(m.id) ? el('span.equip-badge', { text: 'Équipé' }) : null,
       onClick: piece => editerMateriel(piece,
         modifie => {
           const i = d.materiel.findIndex(x => x.id === modifie.id);
           if (i >= 0) d.materiel[i] = modifie;
+          if (idsEquipes(d).includes(modifie.id)) equiper(d, modifie.id);   // combi : épaisseur à jour
           rendreMateriel();
         },
         piece2 => {
           d.materiel = d.materiel.filter(x => x.id !== piece2.id);
+          equiper(d, piece2.id, false);
           rendreMateriel();
         }),
       onRetirer: async piece => {
-        if (!await confirmBox(`Retirer ${typeMateriel(piece.type).label} ?`, 'Retirer')) return;
+        if (!await confirmBox(`Retirer ${typeMateriel(piece.type).label} du stock ?`, 'Retirer')) return;
         d.materiel = d.materiel.filter(x => x.id !== piece.id);
+        equiper(d, piece.id, false);
         rendreMateriel();
       },
     })));
@@ -390,43 +465,28 @@ export async function diverFormView({ id }) {
 
   rendreMateriel();
 
-  const combiSegProfil = el('div.seg');
-  COMBI_TYPES.forEach(t => {
-    const b = el('button', { type: 'button', text: t });
-    if (t === d.combiType) b.classList.add('on');
-    b.onclick = () => {
-      combiSegProfil.querySelectorAll('button').forEach(x => x.classList.remove('on'));
-      b.classList.add('on');
-      set({ combiType: t });
-    };
-    combiSegProfil.append(b);
-  });
-
-  const mmSelProfil = el('select');
-  mmSelProfil.append(el('option', { value: '', text: '— mm —' }));
-  COMBI_MM.forEach(m => mmSelProfil.append(el('option', { value: m, text: `${m} mm` })));
-  mmSelProfil.value = d.combiMm || '';
-  mmSelProfil.onchange = () => set({ combiMm: mmSelProfil.value });
-
   form.append(el('div.section', {},
-    el('h2', { text: 'Mon matériel' }),
+    el('h2', { text: 'Équipé' }),
     el('div.card', {},
       el('div.hint', { style: { marginTop: 0 },
-        text: 'Saisi une fois ici, repris automatiquement sur chaque nouvelle plongée. '
-            + 'Tu peux toujours l’ajuster plongée par plongée.' }),
-      field('Combinaison habituelle', combiSegProfil),
-      field('Épaisseur', mmSelProfil),
-      el('div.lbl', { style: { marginTop: '18px' }, text: 'Mon équipement' }),
-      tableauMateriel,
+        text: 'Ce que je porte en ce moment, choisi dans mon stock. Repris sur chaque nouvelle '
+            + 'plongée et sur ma page « Qui je suis ». Touche le dessin ou une ligne pour changer.' }),
+      zoneEquipe),
+  ), el('div.section', {},
+    el('h2', { text: 'Mon stock' }),
+    el('div.card', {},
+      el('div.hint', { style: { marginTop: 0 }, text: 'Tout ce que j’ai, même ce que je ne porte pas.' }),
+      zoneStock,
       el('div.btn-row', {},
-        el('button.btn.sm', { type: 'button', text: '+ Ajouter du matériel',
+        el('button.btn.sm', { type: 'button', text: '+ Ajouter au stock',
           onclick: () => editerMateriel(null, piece => {
             d.materiel.push(piece);
+            // Premier de son type : on le porte d'office.
+            if (!d.materiel.some(m => m.type === piece.type && m.id !== piece.id)) equiper(d, piece.id);
             rendreMateriel();
           }) })),
     ),
   ));
-
 
   return { title: isNew ? 'Nouveau plongeur' : fullName(d) || 'Profil', node: form, back: true };
 }

@@ -9,6 +9,7 @@ import { store, emptyDive, emptyBuddy, reconcileTimes, validerPlongee,
          appliquerOptionsAuto, niveauCourant, niveauALaDate, libelleGaz, pmuNitrox,
          libelleMateriel, consommation } from '../store.js';
 import { editerMateriel, ligneMateriel } from './materiel.js';
+import { idsEquipes, combiEquipee } from '../equipement.js';
 import { DIVE_TYPES, DIVE_OPTIONS, DIVE_GOALS, PALANQUEE_MODES,
          OPTIONS_AUTO, VISIBILITES, COMBI_TYPES, COMBI_MM, NIVEAUX,
          GAZ, gazParId, BLOC_TYPES, BLOC_MATIERES, typeMateriel,
@@ -535,10 +536,15 @@ export async function diveFormView({ id }) {
   const profil = await store.getDiver(diverId);       // pour le matériel personnel
   const set = patch => Object.assign(dive, patch);
 
-  // Combinaison : celle du profil sert de valeur de départ.
-  if (isNew && !dive.combiType && profil?.combiType) {
-    dive.combiType = profil.combiType;
-    dive.combiMm = profil.combiMm || '';
+  // Nouvelle plongée : ce que je porte (l'« équipé » du profil) est
+  // repris tel quel, combinaison comprise. Ajustable ensuite.
+  if (isNew && profil) {
+    if (dive.materielIds == null) dive.materielIds = idsEquipes(profil);
+    const combi = combiEquipee(profil);
+    if (!dive.combiType && (combi?.combiType || profil.combiType)) {
+      dive.combiType = combi?.combiType || profil.combiType;
+      dive.combiMm = combi ? combi.combiMm : (profil.combiMm || '');
+    }
   }
 
   const form = el('form', { onsubmit: e => e.preventDefault() });
