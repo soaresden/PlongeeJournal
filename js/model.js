@@ -135,6 +135,9 @@ export function emptyDive(diverId, numero) {
     // Un tampon par plongeur présent : { buddyId: stampId }
     tampons: {},
     stampBuddyId: '', stampId: '', stampImage: '',
+    // Photo de la page du carnet papier : seulement une référence,
+    // { ref: 'photos/….jpg', l, h, le } — l'image vit à part (photos.js).
+    photoCarnet: null,
 
     fait: '', vu: '', observations: '',
 

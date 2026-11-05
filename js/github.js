@@ -111,9 +111,11 @@ async function appel(cfg, chemin, options = {}, delai = 20000) {
   return r;
 }
 
-const cheminFichier = cfg =>
+const cheminContenu = (cfg, chemin) =>
   `/repos/${encodeURIComponent(cfg.owner)}/${encodeURIComponent(cfg.repo)}/contents/`
-  + cfg.path.split('/').map(encodeURIComponent).join('/');
+  + String(chemin).split('/').map(encodeURIComponent).join('/');
+
+const cheminFichier = cfg => cheminContenu(cfg, cfg.path);
 
 /**
  * Lit le carnet. Renvoie { data, sha } ou { data: null, sha: null }
@@ -181,4 +183,76 @@ export async function testerConnexion(cfg) {
     throw new ErreurGitHub(`Le jeton peut lire ${depot.full_name} mais pas y écrire.`);
   }
   return { prive: !!depot.private, nom: depot.full_name };
+}
+
+// ------------------------------------------------------------
+//  Autres fichiers du dépôt (photos du carnet papier)
+//
+//  Ils se rangent à côté du carnet : si le carnet est dans
+//  « donnees/carnet.json », les photos vont dans « donnees/photos/ ».
+//  Le contenu circule en base64, comme l'API l'exige.
+// ------------------------------------------------------------
+
+/** Dossier qui contient le carnet, avec sa barre finale ('' à la racine). */
+export function dossierCarnet(cfg = configGitHub()) {
+  const i = String(cfg.path || '').lastIndexOf('/');
+  return i < 0 ? '' : cfg.path.slice(0, i + 1);
+}
+
+const depotApi = cfg => `/repos/${encodeURIComponent(cfg.owner)}/${encodeURIComponent(cfg.repo)}`;
+
+/** Lit un fichier : { base64, sha }, ou null s'il n'existe pas. */
+export async function lireFichierBase64(chemin, cfg = configGitHub()) {
+  const r = await appel(cfg, `${cheminContenu(cfg, chemin)}?ref=${encodeURIComponent(cfg.branch)}`, {}, 60000);
+  if (r.status === 404) return null;
+  if (!r.ok) throw new ErreurGitHub(expliquer(r.status, await r.text(), cfg), { status: r.status });
+  const meta = await r.json();
+  if (meta.content && meta.encoding === 'base64') {
+    return { base64: String(meta.content).replace(/\s/g, ''), sha: meta.sha };
+  }
+  // Au-delà de 1 Mo, le contenu n'est servi que par le blob.
+  const b = await appel(cfg, `${depotApi(cfg)}/git/blobs/${meta.sha}`, {}, 60000);
+  if (!b.ok) throw new ErreurGitHub(expliquer(b.status, await b.text(), cfg), { status: b.status });
+  return { base64: String((await b.json()).content || '').replace(/\s/g, ''), sha: meta.sha };
+}
+
+/** Version (sha) d'un fichier, ou null s'il n'existe pas. */
+async function shaDe(chemin, cfg) {
+  const r = await appel(cfg, `${cheminContenu(cfg, chemin)}?ref=${encodeURIComponent(cfg.branch)}`);
+  if (r.status === 404) return null;
+  if (!r.ok) throw new ErreurGitHub(expliquer(r.status, await r.text(), cfg), { status: r.status });
+  return (await r.json()).sha || null;
+}
+
+/**
+ * Écrit un fichier (contenu déjà en base64). S'il existe déjà, on
+ * récupère sa version et on le remplace : le chemin d'une photo est
+ * unique, la remplacer ne peut venir que d'un envoi déjà fait.
+ */
+export async function ecrireFichierBase64(chemin, base64, message, cfg = configGitHub()) {
+  const envoyer = sha => appel(cfg, cheminContenu(cfg, chemin), {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message: message || `Ajout de ${chemin}`, content: base64,
+      branch: cfg.branch, ...(sha ? { sha } : {}) }),
+  }, 90000);
+
+  let r = await envoyer(null);
+  if (r.status === 409 || r.status === 422) r = await envoyer(await shaDe(chemin, cfg));
+  if (!r.ok) throw new ErreurGitHub(expliquer(r.status, await r.text(), cfg), { status: r.status });
+  return (await r.json()).content?.sha || null;
+}
+
+/** Supprime un fichier. Déjà absent : rien à faire, ce n'est pas une erreur. */
+export async function supprimerFichier(chemin, message, cfg = configGitHub()) {
+  const sha = await shaDe(chemin, cfg);
+  if (!sha) return false;
+  const r = await appel(cfg, cheminContenu(cfg, chemin), {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message: message || `Suppression de ${chemin}`, sha, branch: cfg.branch }),
+  });
+  if (r.status === 404) return false;
+  if (!r.ok) throw new ErreurGitHub(expliquer(r.status, await r.text(), cfg), { status: r.status });
+  return true;
 }

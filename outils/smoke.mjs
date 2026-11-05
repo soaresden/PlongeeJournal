@@ -677,6 +677,61 @@ check('formulaire : gaz par défaut sur Air',
 check('formulaire : chips objectifs cochées',
   [...document.querySelectorAll('#view .chip.on')].some(c => c.textContent === 'Épaves'), '');
 
+// --- Page du carnet papier ---------------------------------
+check('formulaire : section « Page du carnet papier »',
+  [...document.querySelectorAll('#view .sec-titre')].some(x => /Page du carnet papier/.test(x.textContent)), '');
+const btnPhoto = [...document.querySelectorAll('#view button')].find(b => /Photographier la page/.test(b.textContent));
+check('carnet papier : bouton « Photographier la page »', !!btnPhoto, '');
+if (btnPhoto) {
+  let champ = null;
+  const ancienClic = window.HTMLInputElement.prototype.click;
+  window.HTMLInputElement.prototype.click = function () { champ = this; };
+  btnPhoto.click();
+  window.HTMLInputElement.prototype.click = ancienClic;
+  check('carnet papier : appareil photo arrière demandé',
+    champ?.type === 'file' && champ.getAttribute('accept') === 'image/*'
+      && champ.getAttribute('capture') === 'environment', champ?.outerHTML || 'aucun champ');
+  champ?.remove();
+}
+check('carnet papier : pas de panneau tant qu’il n’y a pas de photo',
+  document.querySelector('#view .carnet-dock')?.hidden === true, '');
+
+// Une plongée qui a déjà sa photo (rangée sur l'appareil, sans GitHub).
+{
+  const P = await import(__p2u(path.join(ROOT, 'js/photos.js')).href);
+  const img = 'data:image/jpeg;base64,' + Buffer.from('jpeg').toString('base64');
+  const ref = P.nouvelleRef(dv.id, 42);
+  await P.enregistrerPhoto(ref, img);
+  const avecPhoto = { ...(await store.getDive(dv.id)), photoCarnet: { ref, l: 10, h: 10, le: '2026-11-05T10:00:00Z' } };
+  await store.saveDive(avecPhoto);
+  const carnetBrut = await store.exportAll();
+  check('carnet papier : carnet.json ne garde que la référence',
+    carnetBrut.includes(ref) && !carnetBrut.includes(P.versBase64(img)), '');
+
+  window.location.hash = `#/dive/${dv.id}`;
+  window.dispatchEvent(new window.Event('hashchange'));
+  await tick(160);
+  check('fiche : la page du carnet est affichée',
+    document.querySelector('#view .carnet-fiche img')?.getAttribute('src') === img,
+    document.querySelector('#view .carnet-fiche')?.outerHTML?.slice(0, 160) || 'absente');
+
+  window.location.hash = `#/dive/${dv.id}/edit`;
+  window.dispatchEvent(new window.Event('hashchange'));
+  await tick(160);
+  check('formulaire : la photo s’affiche à côté des champs',
+    document.querySelector('#view .carnet-dock') && !document.querySelector('#view .carnet-dock').hidden
+      && !!document.querySelector('#view .carnet-dock .zoom-img'), '');
+  check('formulaire : état « sur cet appareil » en mode local',
+    /Sur cet appareil/.test(view()), '');
+  const retirer = [...document.querySelectorAll('#view button')].find(b => /Retirer la photo/.test(b.textContent));
+  retirer?.click();
+  await tick(60);
+  check('formulaire : la photo se retire (avant enregistrement)',
+    document.querySelector('#view .carnet-dock')?.hidden === true, '');
+  check('formulaire : retirer sans enregistrer ne touche pas la plongée',
+    (await store.getDive(dv.id)).photoCarnet?.ref === ref, '');
+}
+
 // --- Export / import ---------------------------------------
 const json = await store.exportAll();
 await store.wipe();

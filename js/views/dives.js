@@ -11,6 +11,8 @@ import { consommation, libelleGaz } from '../store.js';
 import { METEO, ETAT_MER, COURANTS, VISIBILITE_ICONES } from '../config.js';
 import { ambianceDe, stylesAmbiance, vignetteLieu, etiquetteAmbiance } from '../ambiance.js';
 import { plongeesARanger } from '../seances.js';
+import { photoCarnetFiche } from './carnet-photo.js';
+import { oublierPhoto } from '../photos.js';
 
 /** Retrouve le pictogramme d'une condition à partir de sa valeur stockée. */
 const picto = (liste, valeur) => {
@@ -297,12 +299,17 @@ export async function diveView({ id }) {
         if (await confirmBox(
           `Supprimer la plongée n°${d.numero ?? ''} du ${fmtDate(d.date)} ?`, 'Supprimer')) {
           await store.deleteDive(d.id);
+          if (d.photoCarnet?.ref) oublierPhoto(d.photoCarnet.ref).catch(() => {});
           toast('Plongée supprimée');
           navigate('dives', true);
         }
       },
     }),
   ));
+
+  // La page du carnet papier, telle qu'elle a été photographiée
+  const pageCarnet = photoCarnetFiche(d);
+  if (pageCarnet) wrap.append(pageCarnet);
 
   // Carte
   if (d.lat != null) {

@@ -15,6 +15,8 @@ import { DIVE_TYPES, DIVE_OPTIONS, DIVE_GOALS, PALANQUEE_MODES,
 import { locationPicker } from '../map.js';
 import { navigate } from '../router.js';
 import { profileSvg } from '../fit.js';
+import { photoCarnetFormulaire } from './carnet-photo.js';
+import { oublierPhoto } from '../photos.js';
 
 // --- petits assembleurs de champs ---------------------------
 
@@ -583,6 +585,14 @@ export async function diveFormView({ id }) {
       '. L’heure d’immersion est facultative — inutile de l’inventer sur une '
     + 'plongée d’avant l’ordinateur.'),
   ));
+
+  // ---------- 0 ter. La page du carnet papier ----------
+  //
+  // Facultative, mais quand elle est là c'est le modèle de toute la
+  // saisie : elle reste visible à côté des champs.
+  const carnetPapier = photoCarnetFormulaire(dive);
+  form.append(section('Page du carnet papier', { icone: '📓', ouvert: !!dive.photoCarnet?.ref || isNew },
+    carnetPapier.bloc));
 
   // ---------- 1. Identité de la plongée ----------
   const numeroInput = input('text', dive.numero, v => set({ numero: num(v) }), { inputmode: 'numeric' });
@@ -1448,7 +1458,9 @@ export async function diveFormView({ id }) {
     if (!dive.numero) dive.numero = await store.nextNumber(diverId);
     saveBtn.disabled = true;
     try {
+      await carnetPapier.avantEnregistrement();
       await store.saveDive(dive);
+      await carnetPapier.apresEnregistrement().catch(() => {});
 
       toast(store.kind === 'local' ? 'Plongée enregistrée sur cet appareil' : 'Plongée enregistrée');
       navigate(`dive/${dive.id}`, true);
@@ -1464,7 +1476,9 @@ export async function diveFormView({ id }) {
       type: 'button', text: 'Supprimer',
       onclick: async () => {
         if (await confirmBox('Supprimer cette plongée ?', 'Supprimer')) {
+          const photo = (await store.getDive(dive.id))?.photoCarnet?.ref;
           await store.deleteDive(dive.id);
+          if (photo) oublierPhoto(photo).catch(() => {});
           toast('Plongée supprimée');
           navigate('dives', true);
         }
@@ -1476,5 +1490,6 @@ export async function diveFormView({ id }) {
   // message doit être visible depuis le bouton qui le déclenche.
   form.prepend(buttons, alerte);
 
-  return { title: isNew ? 'Nouvelle plongée' : `Plongée n°${dive.numero}`, node: form, back: true };
+  return { title: isNew ? 'Nouvelle plongée' : `Plongée n°${dive.numero}`,
+    node: carnetPapier.envelopper(form), back: true };
 }

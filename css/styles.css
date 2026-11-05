@@ -1359,3 +1359,94 @@ a.btn { text-decoration: none; }
 .maj-nouveautes { margin: 8px 0 0; padding-left: 20px; font-size: 13.5px; color: var(--text-dim); }
 .maj-nouveautes:empty { display: none; }
 .maj-nouveautes li { margin: 3px 0; }
+
+/* ---------- Page du carnet papier ---------- */
+.carnet-photo-actions { margin-top: 8px; flex-wrap: wrap; }
+.carnet-photo-actions .btn { flex: 1 1 auto; }
+.carnet-vignette {
+  display: block; width: 100%; padding: 0; border: 1px solid var(--line);
+  border-radius: var(--radius-sm); overflow: hidden; background: #fff; cursor: zoom-in;
+}
+.carnet-vignette img { display: block; width: 100%; max-height: 260px; object-fit: contain; }
+.carnet-fiche { padding: 8px; }
+
+/* Rognage : la page entière tient à l'écran, sans défilement. */
+.crop-scene.page { width: fit-content; max-width: 100%; margin: 8px auto 0; }
+.crop-scene.page .crop-photo { width: auto; max-width: 100%; max-height: 58vh; }
+.crop-rect.poignees { border-style: dashed; }
+.crop-coin {
+  position: absolute; width: 18px; height: 18px; border-radius: 50%;
+  background: var(--accent); border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.5);
+}
+.crop-coin.no { left: -10px; top: -10px; }
+.crop-coin.ne { right: -10px; top: -10px; }
+.crop-coin.so { left: -10px; bottom: -10px; }
+.crop-coin.se { right: -10px; bottom: -10px; }
+.crop-raccourcis { margin-top: 8px; }
+.crop-pied { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 8px; }
+
+/* Visionneuse zoomable */
+.zoom { position: relative; height: 100%; min-height: 160px; background: #10161c; border-radius: var(--radius-sm); overflow: hidden; }
+.zoom-scene { position: absolute; inset: 0; overflow: hidden; touch-action: none; cursor: grab; user-select: none; }
+.zoom-scene:active { cursor: grabbing; }
+.zoom-img { position: absolute; left: 0; top: 0; transform-origin: 0 0; max-width: none; pointer-events: none; background: #fff; }
+.zoom-outils { position: absolute; right: 8px; bottom: 8px; display: flex; gap: 6px; }
+.zoom-btn {
+  width: 34px; height: 34px; border-radius: 10px; border: 1px solid rgba(255,255,255,.18);
+  background: rgba(0,0,0,.62); color: #fff; font-size: 17px; line-height: 1; cursor: pointer; padding: 0;
+}
+.zoom-couche { position: fixed; inset: 0; z-index: 110; background: #000; }
+.zoom-couche .zoom { border-radius: 0; height: 100%; }
+.zoom-fermer {
+  position: absolute; top: calc(var(--safe-t, 0px) + 10px); right: 12px; z-index: 2;
+  width: 42px; height: 42px; border-radius: 50%; border: 0;
+  background: rgba(0,0,0,.65); color: #fff; font-size: 26px; line-height: 1; cursor: pointer;
+}
+
+/* Panneau qui garde la page à côté des champs.
+   Téléphone : en bas de l'écran, au-dessus des onglets. */
+.carnet-dock {
+  position: fixed; z-index: 40; left: 0; right: 0;
+  bottom: calc(var(--tabbar-h) + var(--safe-b));
+  height: 42vh; display: flex; flex-direction: column;
+  background: var(--bg-2); border-top: 1px solid var(--line);
+  box-shadow: 0 -8px 24px rgba(0,0,0,.35);
+}
+.carnet-dock-tete {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 4px 10px; font-size: 12px; font-weight: 700; color: var(--text-mute);
+  text-transform: uppercase; letter-spacing: 1px;
+}
+.carnet-dock-tete .zoom-btn { width: 30px; height: 26px; font-size: 14px; }
+.carnet-dock-corps { flex: 1; min-height: 0; padding: 0 8px 8px; }
+.carnet-dock-pastille {
+  position: fixed; z-index: 40; right: 14px;
+  bottom: calc(var(--tabbar-h) + var(--safe-b) + 14px);
+  border: 1px solid var(--line); border-radius: 999px; padding: 10px 14px;
+  background: var(--bg-2); color: var(--text); font: inherit; font-weight: 650;
+  box-shadow: 0 6px 18px rgba(0,0,0,.35); cursor: pointer;
+}
+.form-carnet.dock-ouvert > form { padding-bottom: 42vh; }
+/* La carte Leaflet (z-index 400 et plus) reste sous le panneau. */
+.form-carnet > form { isolation: isolate; }
+
+/* Tablette portrait : les onglets sont dans le rail, à gauche. */
+@media (min-width: 760px) {
+  .carnet-dock { left: var(--rail-w); bottom: 0; }
+  .carnet-dock-pastille { bottom: 18px; }
+}
+
+/* Grand écran : la page devient une colonne collée à côté du formulaire. */
+@media (min-width: 1000px) {
+  .form-carnet.dock-ouvert {
+    display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, 44%); gap: 18px; align-items: start;
+  }
+  .form-carnet.dock-ouvert > form { padding-bottom: 0; }
+  /* La colonne court sur toute la hauteur du formulaire : le panneau y reste collé. */
+  .form-carnet.dock-ouvert > .carnet-dock-place { align-self: stretch; }
+  .carnet-dock {
+    position: sticky; top: 0; left: auto; right: auto; bottom: auto;
+    height: calc(100vh - 110px); border: 1px solid var(--line); border-radius: var(--radius);
+    box-shadow: none;
+  }
+}

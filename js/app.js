@@ -10,6 +10,7 @@ import { configGitHub, estConfigure } from './github.js';
 import { appliquerTheme } from './theme.js';
 import * as sync from './sync.js';
 import { verifierEnFond, ecarter, telechargerApk } from './maj-apk.js';
+import { envoyerEnAttente as envoyerPhotos } from './photos.js';
 
 import { divesView, diveView }            from './views/dives.js';
 import { diveFormView }                   from './views/dive-form.js';
@@ -204,7 +205,7 @@ async function ensureStore() {
   synchroniser()
     .then(change => { if (change) navigate(currentPath(), true); })
     .catch(() => {})
-    .finally(annoncerConnexion);
+    .finally(() => { annoncerConnexion(); envoyerPhotos().catch(() => {}); });
 }
 
 /**
@@ -326,6 +327,8 @@ async function resynchroniser(force = false) {
   dernierEssai = Date.now();
   const avant = modeActuel();
   const change = await synchroniser().catch(() => false);
+  // Les photos du carnet papier prises hors ligne partent aussi.
+  envoyerPhotos().catch(() => {});
   if (change) {
     toast('Carnet mis à jour depuis GitHub');
     navigate(currentPath(), true);
