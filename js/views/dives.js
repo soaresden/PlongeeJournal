@@ -9,6 +9,7 @@ import { navigate } from '../router.js';
 import { profileSvg } from '../fit.js';
 import { consommation, libelleGaz } from '../store.js';
 import { METEO, ETAT_MER, COURANTS, VISIBILITE_ICONES } from '../config.js';
+import { ambianceDe, stylesAmbiance, vignetteLieu, etiquetteAmbiance } from '../ambiance.js';
 
 /** Retrouve le pictogramme d'une condition à partir de sa valeur stockée. */
 const picto = (liste, valeur) => {
@@ -122,42 +123,87 @@ export async function divesView() {
     return hay.includes(q);
   }
 
+  // Années repliées / dépliées : retenu sur l'appareil. Par défaut,
+  // seule l'année la plus récente est ouverte — fini le défilement infini.
+  const CLE_ANNEES = 'plongee-journal:annees-ouvertes';
+  let ouvertes;
+  try { ouvertes = new Set(JSON.parse(localStorage.getItem(CLE_ANNEES) || 'null')); } catch { ouvertes = null; }
+  if (!ouvertes || !ouvertes.size) ouvertes = new Set([(dives[0]?.date || '').slice(0, 4)]);
+  const garderAnnees = () => {
+    try { localStorage.setItem(CLE_ANNEES, JSON.stringify([...ouvertes])); } catch { /* plein */ }
+  };
+  // Profondeur de référence de la jauge : la plus profonde du carnet (40 m mini).
+  const profRef = Math.max(40, ...dives.map(d => Number(d.profMax) || 0));
+
+  function carte(d) {
+    const a = ambianceDe(d);
+    const prof = Number(d.profMax) || 0;
+    return el('div.card.clickable.dive-card', { style: stylesAmbiance(a), onclick: () => navigate(`dive/${d.id}`) },
+      vignetteLieu(d, { boite: 84, contenu: d.numero ?? '—' }),
+      el('div.dive-main', {},
+        el('div.dive-title', { text: d.lieuNom || d.site || 'Lieu non précisé' }),
+        el('div.dive-sub', {}, fmtDate(d.date), d.heureImmersion ? ` · ${d.heureImmersion}` : ''),
+        el('div.dive-tags', {}, etiquetteAmbiance(d), d.type ? typeBadge(d.type) : null),
+        el('div.dive-metrics', {},
+          el('span', {}, el('b', { text: prof ? `${prof} m` : '—' }), ' prof.'),
+          el('span', {}, el('b', { text: fmtDuration(d.dureeMin) }), ' fond'),
+          d.tempFond != null ? el('span', {}, el('b', { text: `${d.tempFond}°` }), ' eau') : null,
+        ),
+        prof ? el('div.jauge', { title: `${prof} m` },
+          el('span', { style: { width: `${Math.min(100, (prof / profRef) * 100)}%` } })) : null,
+        (d.buddyIds || []).length
+          ? el('div.dive-sub.dive-buddies', { text: '👥 ' + d.buddyIds.map(buddyName).join(', ') })
+          : null,
+      ),
+    );
+  }
+
   function renderList() {
     const q = search.value.trim().toLowerCase();
     const shown = dives.filter(d => matches(d, q));
     list.innerHTML = '';
     if (!shown.length) { list.append(el('div.empty', { text: 'Aucune plongée ne correspond.' })); return; }
 
-    let currentYear = null;
+    const parAnnee = new Map();
     shown.forEach(d => {
-      const y = (d.date || '').slice(0, 4);
-      if (y && y !== currentYear) {
-        currentYear = y;
-        list.append(el('h2.annee', { text: y }));
-      }
-      list.append(el('div.card.clickable', { onclick: () => navigate(`dive/${d.id}`) },
-        el('div.dive-row', {},
-          el('div.dive-num', { text: d.numero ?? '—' }),
-          el('div.dive-main', {},
-            el('div.dive-title', { text: d.lieuNom || d.site || 'Lieu non précisé' }),
-            el('div.dive-sub', {},
-              fmtDate(d.date),
-              d.heureImmersion ? ` · ${d.heureImmersion}` : '',
-              '  ', typeBadge(d.type),
-            ),
-            el('div.dive-metrics', {},
-              el('span', {}, el('b', { text: d.profMax ? `${d.profMax} m` : '—' }), ' prof.'),
-              el('span', {}, el('b', { text: fmtDuration(d.dureeMin) }), ' fond'),
-              d.tempFond != null ? el('span', {}, el('b', { text: `${d.tempFond}°` }), ' eau') : null,
-            ),
-            (d.buddyIds || []).length
-              ? el('div.dive-sub', { style: { marginTop: '6px' },
-                  text: '👥 ' + d.buddyIds.map(buddyName).join(', ') })
-              : null,
-          ),
-        ),
-      ));
+      const y = (d.date || '').slice(0, 4) || 'Sans date';
+      if (!parAnnee.has(y)) parAnnee.set(y, []);
+      parAnnee.get(y).push(d);
     });
+
+    parAnnee.forEach((liste, y) => {
+      const prof = Math.max(0, ...liste.map(d => Number(d.profMax) || 0));
+      const ambiances = [...new Map(liste.map(d => { const a = ambianceDe(d); return [a.id, a]; })).values()];
+      const ouvert = q ? true : ouvertes.has(y);
+
+      const groupe = el('details.annee-groupe', { open: ouvert },
+        el('summary.annee-tete', {},
+          el('span.annee-num', { text: y }),
+          el('span.annee-info', {},
+            `${liste.length} plongée${liste.length > 1 ? 's' : ''}`,
+            prof ? ` · max ${prof} m` : ''),
+          el('span.annee-pastilles', {}, ambiances.map(a =>
+            el('span.amb-point', { style: stylesAmbiance(a), title: a.nom }))),
+          el('span.annee-chevron', { 'aria-hidden': 'true', text: '›' })),
+        el('div.annee-cartes'));
+
+      // Les cartes ne sont construites qu'à l'ouverture : 66 vignettes
+      // satellite d'un coup, c'est lourd pour un téléphone.
+      const remplir = () => {
+        const zone = groupe.querySelector('.annee-cartes');
+        if (!zone.childNodes.length) zone.append(...liste.map(carte));
+      };
+      if (ouvert) remplir();
+      groupe.addEventListener('toggle', () => {
+        if (groupe.open) remplir();
+        if (q) return;                       // une recherche ne change pas les préférences
+        if (groupe.open) ouvertes.add(y); else ouvertes.delete(y);
+        garderAnnees();
+      });
+      list.append(groupe);
+    });
+
+    list.append(el('div.hint.credit-sat', { text: 'Vignettes satellite © Esri, Maxar, Earthstar Geographics' }));
   }
 
   search.addEventListener('input', renderList);
@@ -183,17 +229,18 @@ export async function diveView({ id }) {
     ? null : el('div.kv', {}, el('span.k', { text: k }), el('span.v', {}, v));
 
   // En-tête
-  wrap.append(el('div.card.fiche-tete', {},
-    el('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px' } },
-      el('div', {},
-        el('div', { style: { fontSize: '19px', fontWeight: '680' },
-          text: d.lieuNom || d.site || 'Lieu non précisé' }),
-        el('div', { style: { color: 'var(--text-dim)', fontSize: '13.5px', marginTop: '3px' },
-          text: fmtDateLong(d.date) }),
-        el('div', { style: { marginTop: '8px' } }, typeBadge(d.type)),
-      ),
-      el('div.dive-num', { text: d.numero ?? '—' }),
+  const amb = ambianceDe(d);
+  wrap.append(el('div.card.fiche-tete', { style: stylesAmbiance(amb) },
+    el('div.fiche-tete-texte', {},
+      el('div.fiche-lieu', { text: d.lieuNom || d.site || 'Lieu non précisé' }),
+      el('div.fiche-date', { text: fmtDateLong(d.date) }),
+      el('div.dive-tags', {}, etiquetteAmbiance(d), d.type ? typeBadge(d.type) : null),
+      el('div.fiche-chiffres', {},
+        d.profMax ? el('span', {}, el('b', { text: `${d.profMax} m` }), 'prof. max') : null,
+        d.dureeMin ? el('span', {}, el('b', { text: fmtDuration(d.dureeMin) }), 'au fond') : null,
+        d.tempFond != null ? el('span', {}, el('b', { text: `${d.tempFond}°C` }), 'eau') : null),
     ),
+    vignetteLieu(d, { boite: 112, zoom: 11, contenu: d.numero ?? '—', classe: 'grande' }),
   ));
 
   // Actions en tête : on ouvre une fiche pour la lire ou la corriger.

@@ -15,7 +15,12 @@ export function el(sel, attrs = {}, ...children) {
     if (k === 'class') node.className += (node.className ? ' ' : '') + v;
     else if (k === 'html') node.innerHTML = v;
     else if (k === 'text') node.textContent = v;
-    else if (k === 'style' && typeof v === 'object') Object.assign(node.style, v);
+    else if (k === 'style' && typeof v === 'object') {
+      // Les variables CSS (--x) ne passent que par setProperty.
+      for (const [p, val] of Object.entries(v)) {
+        if (p.startsWith('--')) node.style.setProperty(p, val); else node.style[p] = val;
+      }
+    }
     else if (k.startsWith('on') && typeof v === 'function') node.addEventListener(k.slice(2), v);
     else if (k === 'value') node.value = v;
     else if (v === true) node.setAttribute(k, '');
