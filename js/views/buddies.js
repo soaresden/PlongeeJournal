@@ -1,84 +1,12 @@
 // ============================================================
-//  Plongeurs : compagnons de palanquée, tampons et signatures
+//  Plongeurs : compagnons de palanquée
 // ============================================================
 
-import { el, fullName, nomPlongeur, couleurCategorie, toast, confirmBox, fileToDataURL, uid, openModal } from '../lib.js';
+import { el, fullName, nomPlongeur, couleurCategorie, toast, confirmBox } from '../lib.js';
 import { store, emptyBuddy } from '../store.js';
 import { navigate } from '../router.js';
 import { ouvrirApercu, ligneApercu, apercuPlongee } from '../apercu.js';
 
-// ------------------------------------------------------------
-//  Signature manuscrite
-//
-//  Beaucoup de moniteurs signent le carnet sans tampon. On dessine
-//  donc au doigt, et la signature est rangée comme un tampon —
-//  elle s'applique de la même façon sur une plongée.
-// ------------------------------------------------------------
-
-function signaturePad(onValider) {
-  const canvas = el('canvas', { width: 600, height: 260, class: 'signature-pad' });
-  const ctx = canvas.getContext('2d');
-
-  const fond = () => {
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.strokeStyle = '#0f2b3d';
-    ctx.lineWidth = 3;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-  };
-  fond();
-
-  let dessine = false;
-  let vierge = true;
-
-  const point = e => {
-    const r = canvas.getBoundingClientRect();
-    const src = e.touches?.[0] ?? e;
-    return {
-      x: (src.clientX - r.left) * (canvas.width / r.width),
-      y: (src.clientY - r.top) * (canvas.height / r.height),
-    };
-  };
-
-  const debut = e => {
-    e.preventDefault();
-    dessine = true; vierge = false;
-    const p = point(e);
-    ctx.beginPath(); ctx.moveTo(p.x, p.y);
-  };
-  const trace = e => {
-    if (!dessine) return;
-    e.preventDefault();
-    const p = point(e);
-    ctx.lineTo(p.x, p.y); ctx.stroke();
-  };
-  const fin = () => { dessine = false; };
-
-  canvas.addEventListener('pointerdown', debut);
-  canvas.addEventListener('pointermove', trace);
-  canvas.addEventListener('pointerup', fin);
-  canvas.addEventListener('pointerleave', fin);
-  canvas.addEventListener('touchstart', debut, { passive: false });
-  canvas.addEventListener('touchmove', trace, { passive: false });
-  canvas.addEventListener('touchend', fin);
-
-  return el('div', {},
-    el('h3', { text: '✍ Signature' }),
-    el('div.hint', { style: { marginTop: 0 },
-      text: 'Fais signer directement sur l’écran, au doigt ou au stylet.' }),
-    canvas,
-    el('div.btn-row', {},
-      el('button.btn.ghost', { type: 'button', text: 'Effacer',
-        onclick: () => { fond(); vierge = true; } }),
-      el('button.btn.primary', { type: 'button', text: 'Valider',
-        onclick: () => {
-          if (vierge) return toast('La zone est vide', true);
-          onValider(canvas.toDataURL('image/png'));
-        } }),
-    ),
-  );
-}
 
 function field(label, control, hint) {
   return el('div.field', {},
@@ -131,17 +59,15 @@ export async function buddiesView() {
     el('button.btn.primary.sm', { type: 'button', text: '＋ Ajouter', onclick: () => navigate('buddy/new') })), puces, outilTag, liste);
 
   const n = b => st.buddyCount[b.id] || 0;
-  const empreinte = b => (b.stamps || []).find(x => x.type !== 'signature') || (b.stamps || [])[0];
   const initiales = b => (b.structure ? (b.prenom || '?').slice(0, 2) : (b.prenom?.[0] || '') + (b.nom?.[0] || '')).toUpperCase() || '?';
   const cats = b => (b.categories || []).filter(Boolean);
   const estMoniteur = b => !!(b.moniteur || b.structure);
 
   function carte(b) {
-    const e = empreinte(b);
     const nb = n(b);
     const sous = b.structure ? 'nom pas noté' : (b.licence ? `licence ${b.licence}` : '');
     return el(`button.pcarte${estMoniteur(b) ? '.mon' : ''}`, { type: 'button', onclick: () => apercuPlongeur(b.id, { onClose: recharger }) },
-      el('span.personne-av', {}, e ? el('img', { src: e.dataUrl, alt: '', loading: 'lazy' }) : initiales(b)),
+      el('span.personne-av', {}, initiales(b)),
       el('span.pcarte-txt', {},
         el('b', { text: b.structure ? (b.prenom || 'Centre') : (nomPlongeur(b) || 'Sans nom') }),
         el('span.pcarte-badges', {},
@@ -298,10 +224,9 @@ export async function apercuPlongeur(id, { onClose = null } = {}) {
   };
   rendreCats();
 
-  const e = (b.stamps || []).find(x => x.type !== 'signature') || (b.stamps || [])[0];
   const tete = el('div.apercu-tete-plongee', {},
     el('span.personne-av', { style: { width: '52px', height: '52px', flex: '0 0 52px', fontSize: '17px' } },
-      e ? el('img', { src: e.dataUrl, alt: '' }) : ((b.prenom?.[0] || '') + (b.nom?.[0] || '')).toUpperCase() || '?'),
+      ((b.prenom?.[0] || '') + (b.nom?.[0] || '')).toUpperCase() || '?'),
     el('div', {},
       el('div.apercu-t1', { text: b.structure ? (b.prenom || 'Centre') : (nomPlongeur(b) || 'Sans nom') }),
       el('div.apercu-t2', { text: [ensemble.length ? `${ensemble.length} plongée${ensemble.length > 1 ? 's' : ''} ensemble` : 'pas encore plongé ensemble'].filter(Boolean).join(' · ') })));
@@ -315,14 +240,11 @@ export async function apercuPlongeur(id, { onClose = null } = {}) {
       el('div.apercu-champ.large', {}, coche('moniteur', 'Moniteur')),
       el('div.apercu-champ.large', {}, el('span', { text: 'Tags' }), zoneCats),
       champ('Note', note, true)),
-    (b.stamps || []).length ? el('div.apercu-bloc', {}, el('div.apercu-lbl', { text: 'Tampons et signatures' }),
-      el('div', { style: { display: 'flex', gap: '8px', flexWrap: 'wrap' } },
-        ...b.stamps.map(x => el('img', { src: x.dataUrl, alt: '', style: { height: '64px', background: '#fff', borderRadius: '8px', padding: '4px' } })))) : null,
     ensemble.length ? el('div.apercu-bloc', {}, el('div.apercu-lbl', { text: 'Plongées ensemble' }),
       el('div.apercu-liste', {}, ...ensemble.map(d => ligneApercu(d, () => apercuPlongee(d.id, { retour: rouvrir, onClose }))))) : null);
 
   const pied = el('div.apercu-actions', {}, temoin,
-    el('button.btn.primary.sm', { type: 'button', text: 'Tampons, signature ›', onclick: () => navigate(`buddy/${b.id}`) }));
+    el('button.btn.primary.sm', { type: 'button', text: 'Fiche complète ›', onclick: () => navigate(`buddy/${b.id}`) }));
 
   ouvrirApercu({ tete, corps, pied }, { onClose });
 }
@@ -333,7 +255,6 @@ export async function buddyFormView({ id }) {
   const isNew = !id || id === 'new';
   let b = isNew ? emptyBuddy() : structuredClone(await store.getBuddy(id));
   if (!b) return { title: 'Introuvable', node: el('div.empty', { text: 'Plongeur introuvable.' }), back: true };
-  b.stamps ||= [];
 
   const set = p => Object.assign(b, p);
   const form = el('form', { onsubmit: e => e.preventDefault() });
@@ -386,8 +307,7 @@ export async function buddyFormView({ id }) {
   form.append(buttons);
 
   // Une structure n'est pas une personne : on masque ce qui n'a pas
-  // de sens pour elle (nom de famille, licence) et on propose la
-  // recherche de son logo.
+  // de sens pour elle (nom de famille, licence).
   const blocIdentite = el('div.card');
 
   function rendreIdentite() {
@@ -416,17 +336,6 @@ export async function buddyFormView({ id }) {
         listeClubs,
         field('Site web (optionnel)', input('text', b.siteWeb, v => set({ siteWeb: v }),
           { placeholder: 'buceopandora.com', inputmode: 'url', autocapitalize: 'off' })),
-        el('div.hint', { style: { marginTop: 0 },
-          text: 'Une structure n’a ni nom de famille ni licence : son « tampon » est '
-              + 'son logo, qu’on retrouve en général en deux clics.' }),
-        el('div.btn-row', {},
-          el('button.btn.sm', { type: 'button', text: '🔎 Chercher le logo',
-            onclick: () => chercherLogo() }),
-          b.siteWeb
-            ? el('button.btn.sm.ghost', { type: 'button', text: '⬇ Depuis le site',
-                onclick: () => logoDepuisSite() })
-            : null,
-        ),
       );
       return;
     }
@@ -457,224 +366,12 @@ export async function buddyFormView({ id }) {
     );
   }
 
-  /**
-   * Le logo d'un centre se trouve en deux clics sur le web. On ne peut
-   * pas le télécharger à sa place — les moteurs bloquent les requêtes
-   * automatiques — mais on ouvre la bonne recherche et on rappelle le
-   * geste : enregistrer l'image, puis la déposer comme tampon.
-   */
-  function chercherLogo() {
-    const nom = (b.prenom || '').trim();
-    if (!nom) return toast('Renseigne d’abord le nom de la structure', true);
-    const q = encodeURIComponent(`${nom} ${b.club || ''} logo plongée`.trim());
-    window.open(`https://duckduckgo.com/?q=${q}&iax=images&ia=images`, '_blank', 'noopener');
-    toast('Enregistre le logo, puis ajoute-le en tampon ci-dessous');
-  }
-
-  /** Tentative directe : le logo du site, via son favicon haute résolution. */
-  async function logoDepuisSite() {
-    const domaine = String(b.siteWeb || '').trim()
-      .replace(/^https?:\/\//, '').replace(/\/.*$/, '');
-    if (!domaine) return toast('Renseigne d’abord le site web', true);
-
-    const url = `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domaine)}&sz=256`;
-    try {
-      const dataUrl = await urlVersDataUrl(url);
-      b.stamps.push({ id: uid(), dataUrl, label: 'Logo', type: 'tampon',
-                      addedAt: new Date().toISOString() });
-      renderStamps();
-      toast('Logo récupéré — vérifie qu’il est net');
-    } catch {
-      toast('Logo introuvable depuis le site — passe par la recherche', true);
-    }
-  }
-
-  /** Charge une image distante et la convertit, sans passer par le réseau applicatif. */
-  function urlVersDataUrl(url) {
-    return new Promise((resolve, reject) => {
-      const img = new Image();
-      img.crossOrigin = 'anonymous';
-      img.onerror = () => reject(new Error('Image inaccessible'));
-      img.onload = () => {
-        const cv = document.createElement('canvas');
-        cv.width = img.width || 256; cv.height = img.height || 256;
-        const ctx = cv.getContext('2d');
-        ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, cv.width, cv.height);
-        ctx.drawImage(img, 0, 0);
-        try { resolve(cv.toDataURL('image/png')); }
-        catch { reject(new Error('Image protégée')); }
-      };
-      img.src = url;
-    });
-  }
-
   rendreIdentite();
 
   form.append(el('div.section', {},
     el('h2', { text: 'Identité' }),
     blocIdentite,
   ));
-
-  // ---- Tampons ----
-  const grid = el('div.stamp-grid');
-  const fileIn = el('input', { type: 'file', accept: 'image/*', hidden: true, multiple: true });
-
-  fileIn.onchange = async () => {
-    const files = Array.from(fileIn.files || []);
-    for (const f of files) {
-      try {
-        await ouvrirDetourage(f, dataUrl => {
-          b.stamps.push({ id: uid(), dataUrl, label: '', type: 'tampon',
-                          addedAt: new Date().toISOString() });
-          renderStamps();
-        });
-      } catch (e) { toast(e.message, true); }
-    }
-    fileIn.value = '';
-  };
-
-  /**
-   * Photo du carnet papier → tampon détouré.
-   * Le cadre est proposé automatiquement puis ajustable à la main :
-   * une détection ratée ne doit jamais bloquer.
-   */
-  async function ouvrirDetourage(fichier, onValider) {
-    const { traiterFichier, decouper } = await import('../stamp.js');
-
-    let img, cadre;
-    try {
-      ({ img, cadre } = await traiterFichier(fichier));
-    } catch (e) { return toast(e.message, true); }
-
-    openModal(close => {
-      const scene = el('div.crop-scene');
-      const photo = el('img', { src: img.src, class: 'crop-photo' });
-      const rect = el('div.crop-rect');
-      const apercu = el('img', { class: 'crop-apercu' });
-      const nettoyerCase = el('input', { type: 'checkbox' });
-      nettoyerCase.checked = true;
-
-      const majApercu = () => {
-        apercu.src = decouper(img, cadre, { nettoyer: nettoyerCase.checked });
-      };
-      nettoyerCase.onchange = majApercu;
-
-      const placer = () => {
-        rect.style.left = `${cadre.x * 100}%`;
-        rect.style.top = `${cadre.y * 100}%`;
-        rect.style.width = `${cadre.w * 100}%`;
-        rect.style.height = `${cadre.h * 100}%`;
-      };
-
-      // Tracé libre d'un nouveau cadre au doigt.
-      let depart = null;
-      const position = e => {
-        const r = scene.getBoundingClientRect();
-        const src = e.touches?.[0] ?? e;
-        return {
-          x: Math.min(1, Math.max(0, (src.clientX - r.left) / r.width)),
-          y: Math.min(1, Math.max(0, (src.clientY - r.top) / r.height)),
-        };
-      };
-      scene.addEventListener('pointerdown', e => {
-        e.preventDefault(); depart = position(e);
-      });
-      scene.addEventListener('pointermove', e => {
-        if (!depart) return;
-        e.preventDefault();
-        const p = position(e);
-        cadre = {
-          x: Math.min(depart.x, p.x), y: Math.min(depart.y, p.y),
-          w: Math.abs(p.x - depart.x), h: Math.abs(p.y - depart.y),
-        };
-        placer();
-      });
-      const finTrace = () => {
-        if (!depart) return;
-        depart = null;
-        if (cadre.w > 0.03 && cadre.h > 0.03) majApercu();
-      };
-      scene.addEventListener('pointerup', finTrace);
-      scene.addEventListener('pointerleave', finTrace);
-
-      scene.append(photo, rect);
-      placer(); majApercu();
-
-      return el('div', {},
-        el('h3', { text: '🔍 Détourage du tampon' }),
-        el('div.hint', { style: { marginTop: 0 },
-          text: cadre.confiance > 0.5
-            ? 'Cadre proposé automatiquement. Trace-en un autre au doigt s’il est à côté.'
-            : 'Détection peu sûre : trace le cadre du tampon au doigt sur la photo.' }),
-        scene,
-        el('div.lbl', { style: { marginTop: '14px' }, text: 'Résultat' }),
-        el('div.crop-resultat', {}, apercu),
-        el('label.switch', { style: { marginTop: '10px' } }, nettoyerCase,
-          el('span', { text: 'Nettoyer le fond (papier au blanc, encre renforcée)' })),
-        el('div.btn-row', {},
-          el('button.btn.ghost', { type: 'button', text: 'Annuler', onclick: close }),
-          el('button.btn.primary', { type: 'button', text: 'Ajouter ce tampon',
-            onclick: () => {
-              onValider(decouper(img, cadre, { nettoyer: nettoyerCase.checked }));
-              close();
-              toast('Tampon détouré et ajouté');
-            } }),
-        ),
-      );
-    });
-  }
-
-  function renderStamps() {
-    grid.innerHTML = '';
-    b.stamps.forEach(s => {
-      grid.append(el('div.stamp', {},
-        el('img', { src: s.dataUrl, alt: s.label || 'Tampon' }),
-        s.type === 'signature'
-          ? el('span', { class: 'obs-n', style: { position: 'absolute', bottom: '2px', left: '4px',
-              background: 'rgba(0,0,0,.55)', color: '#fff', borderRadius: '4px', padding: '0 4px' },
-              text: 'signature' })
-          : null,
-        el('button.del', {
-          type: 'button', text: '×',
-          onclick: async e => {
-            e.stopPropagation();
-            if (await confirmBox(`Supprimer ${s.type === 'signature' ? 'cette signature' : 'ce tampon'} ?`,
-                                 'Supprimer')) {
-              b.stamps = b.stamps.filter(x => x.id !== s.id);
-              renderStamps();
-            }
-          },
-        }),
-      ));
-    });
-    grid.append(el('button.stamp-add', { type: 'button', text: '+', title: 'Photographier un tampon',
-      onclick: () => fileIn.click() }));
-  }
-  renderStamps();
-
-  form.append(el('div.section', {},
-    el('h2', { text: 'Tampons & signatures' }),
-    el('div.card', {},
-      grid, fileIn,
-      el('div.btn-row', {},
-        el('button.btn.sm', { type: 'button', text: '📷 Photographier un tampon',
-          onclick: () => fileIn.click() }),
-        el('button.btn.sm', { type: 'button', text: '✍ Faire signer',
-          onclick: () => {
-            const fermer = openModal(() => signaturePad(dataUrl => {
-              b.stamps.push({ id: uid(), dataUrl, label: 'Signature',
-                              type: 'signature', addedAt: new Date().toISOString() });
-              renderStamps();
-              fermer();
-              toast('Signature enregistrée');
-            }));
-          } }),
-      ),
-      el('div.hint', { text: 'Tout le monde n’a pas de tampon : la signature manuscrite fait le même '
-        + 'office et s’applique pareil sur une plongée.' }),
-    ),
-  ));
-
 
   return { title: isNew ? 'Nouveau plongeur' : fullName(b), node: form, back: true };
 }

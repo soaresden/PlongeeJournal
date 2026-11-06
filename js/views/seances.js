@@ -7,12 +7,40 @@
 //  calendrier, et se pointent en deux gestes.
 // ============================================================
 
-import { el, fmtDate, fmtDateLong, fmtDuration, todayISO, num, toast, confirmBox, openModal } from '../lib.js';
+import { el, fmtDate, fmtDateLong, fmtDuration, todayISO, num, toast, confirmBox, openModal, fullName } from '../lib.js';
 import { store, TYPES_SEANCE, typeSeance, emptySeance, statsSeances } from '../store.js';
 import { navigate } from '../router.js';
 import { profileSvg } from '../fit.js';
 import { plongeesARanger } from '../seances.js';
 import { apercuSeance } from '../apercu.js';
+import { editeurPalanquee, propositionsTexte } from '../palanquee.js';
+import { agendaBranche, agendaLisible, chargerAgenda, evenementsDu, texteEvenement } from '../agenda.js';
+import { trouverPlongeurs } from '../noms.js';
+
+/**
+ * « Ce jour-là dans ton agenda » pour une séance : les événements du jour
+ * et les plongeurs dont le nom y est écrit, à ajouter d'un geste.
+ * Rien si l'agenda n'est pas relié (Réglages) ou hors de l'APK.
+ */
+export function agendaAvecQui(seance, buddies, { exclure = [], onAjout = () => {} } = {}) {
+  if (!agendaBranche() || !agendaLisible()) return null;
+  const bloc = el('div.card.agenda-jour', {}, el('div.lbl', { text: '📅 Ce jour-là dans ton agenda' }));
+  const liste = el('div');
+  bloc.append(liste);
+  bloc.recharger = () => {
+    if (!seance.date) { liste.replaceChildren(el('div.hint', { text: 'Indique la date.' })); return; }
+    liste.replaceChildren(el('div.hint', { text: 'Lecture de l’agenda…' }));
+    chargerAgenda().then(ev => {
+      const du = evenementsDu(ev, seance.date);
+      liste.replaceChildren(...(du.length ? du.map(e => el('div.agenda-ev', { style: { display: 'block' } },
+        el('div.agenda-ev-txt', {}, el('b', { text: e.titre || '(sans titre)' }),
+          e.desc ? el('span', { text: e.desc }) : null),
+        propositionsTexte(texteEvenement(e), seance, buddies, { exclure, onAjout }))) : [el('div.hint', { text: 'Rien dans l’agenda ce jour-là.' })]));
+    }).catch(e => liste.replaceChildren(el('div.hint', { text: e.message })));
+  };
+  bloc.recharger();
+  return bloc;
+}
 
 const JOURS = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
 
@@ -80,6 +108,22 @@ export function seancesPanneau({ seances, dives, types = TYPES_SEANCE }) {
         onclick: () => rangerPlongees(aRanger) })));
   }
 
+  // Des plongées qui étaient du snorkeling, une fosse… : on les choisit
+  // à la main dans le carnet.
+  if (dives.length) {
+    wrap.append(el('button.btn.ghost.sm', { type: 'button', style: { marginTop: '10px' },
+      text: '↪ Ranger des plongées du carnet en séances (snorkeling…)',
+      onclick: () => rangerPlongees(dives.map(dive => ({ dive, type: 'snorkeling' })), { cocher: false }) }));
+  }
+
+  // Les fosses sans personne : l'agenda dit souvent avec qui.
+  const sansPersonne = seances.filter(x => !(x.buddyIds || []).length && x.date);
+  if (sansPersonne.length && agendaBranche() && agendaLisible()) {
+    wrap.append(el('button.btn.ghost.sm', { type: 'button', style: { marginTop: '10px', marginLeft: '6px' },
+      text: `📅 Avec qui ? Retrouver dans l’agenda (${sansPersonne.length})`,
+      onclick: () => avecQuiDepuisAgenda(sansPersonne) }));
+  }
+
   let filtre = '';
   const chips = el('div.chips', { style: { margin: '16px 0 8px' } });
   const liste = el('div');
@@ -143,11 +187,113 @@ function carteSeance(s) {
 }
 
 // ------------------------------------------------------------
+//  Avec qui ? Les séances sans personne, d'après l'agenda
+// ------------------------------------------------------------
+
+async function avecQuiDepuisAgenda(seances) {
+  let ev = [];
+  try { ev = await chargerAgenda(); } catch (e) { toast(e.message, true); return; }
+  const buddies = await store.listBuddies();
+  const moi = await store.getDiver(seances[0]?.diverId);
+  const exclure = moi ? [fullName(moi)] : [];
+
+  // Pour chaque séance : les noms trouvés dans les événements du jour.
+  const lignes = [];
+  for (const s of seances) {
+    const textes = evenementsDu(ev, s.date).map(texteEvenement);
+    if (!textes.length) continue;
+    const { connus, nouveaux } = trouverPlongeurs(textes.join(' — '), buddies, { exclure });
+    if (!connus.length && !nouveaux.length) continue;
+    lignes.push({ s, textes, connus: connus.map(c => ({ ...c, coche: c.sur })), nouveaux: nouveaux.map(n => ({ nom: n, coche: true })) });
+  }
+  if (!lignes.length) { toast('Aucun nom trouvé dans l’agenda pour ces séances'); return; }
+
+  openModal(close => {
+    const bouton = el('button.btn.primary', { type: 'button' });
+    const maj = () => {
+      const n = lignes.filter(l => l.connus.some(c => c.coche) || l.nouveaux.some(c => c.coche)).length;
+      bouton.textContent = n ? `Compléter ${pluriel(n, 'séance', 'séances')}` : 'Rien de coché';
+      bouton.disabled = !n;
+    };
+    const puce = (libelle, item, titre = '') => {
+      const c = el('button.chip', { type: 'button', title: titre, text: libelle });
+      c.classList.toggle('on', item.coche);
+      c.onclick = () => { item.coche = !item.coche; c.classList.toggle('on', item.coche); maj(); };
+      return c;
+    };
+    const liste = el('div', { style: { maxHeight: '60vh', overflow: 'auto' } },
+      ...lignes.map(l => el('div.card', { style: { padding: '10px 12px', marginBottom: '8px' } },
+        el('div', { style: { fontWeight: '600' } }, `${typeSeance(l.s.type).icone} ${typeSeance(l.s.type).label} · ${fmtDate(l.s.date)}`),
+        el('div.hint', { style: { margin: '2px 0 6px' }, text: l.textes.join(' · ') }),
+        el('div.chips', {},
+          ...l.connus.map(c => puce(`${fullName(c.buddy)}${c.sur ? '' : ' ?'}`, c, c.sur ? '' : 'Prénom partagé : vérifie')),
+          ...l.nouveaux.map(n => puce(`${n.nom} (nouveau)`, n, 'Sera ajouté à tes plongeurs'))))));
+
+    bouton.onclick = async () => {
+      bouton.disabled = true;
+      try {
+        const crees = new Map();
+        let n = 0;
+        for (const l of lignes) {
+          const ids = l.connus.filter(c => c.coche).map(c => c.buddy.id);
+          for (const x of l.nouveaux.filter(c => c.coche)) {
+            const cle = x.nom.toLowerCase();
+            if (!crees.has(cle)) {
+              const { creerPlongeur } = await import('../palanquee.js');
+              crees.set(cle, await creerPlongeur(x.nom, buddies));
+            }
+            ids.push(crees.get(cle).id);
+          }
+          if (!ids.length) continue;
+          const s = await store.getSeance(l.s.id);
+          s.buddyIds = [...new Set([...(s.buddyIds || []), ...ids])];
+          await store.saveSeance(s);
+          n++;
+        }
+        close();
+        toast(`${pluriel(n, 'séance complétée', 'séances complétées')}${crees.size ? ` · ${pluriel(crees.size, 'plongeur ajouté', 'plongeurs ajoutés')}` : ''}`);
+        navigate('seances', true);
+      } catch (e) { toast(e.message, true); bouton.disabled = false; }
+    };
+    maj();
+    return el('div', {},
+      el('h3', { text: '📅 Avec qui ? D’après ton agenda' }),
+      el('div.hint', { style: { marginTop: 0 },
+        text: 'Les noms écrits dans tes événements du jour. Touche pour cocher / décocher ; « ? » : deux plongeurs ont ce prénom.' }),
+      liste,
+      el('div.btn-row', {}, el('button.btn.ghost', { type: 'button', text: 'Annuler', onclick: close }), bouton));
+  });
+}
+
+// ------------------------------------------------------------
+//  Une plongée qui n'en était pas une : snorkeling, fosse, piscine…
+// ------------------------------------------------------------
+
+export function rangerUnePlongee(dive) {
+  openModal(close => el('div', {},
+    el('h3', { text: 'Ce n’était pas une plongée' }),
+    el('div.hint', { style: { marginTop: 0 },
+      text: `n°${dive.numero ?? '—'} du ${fmtDate(dive.date)} : elle quitte le carnet (les numéros suivants se décalent) `
+        + 'et devient une séance. Profil, heure, position et compagnons sont gardés.' }),
+    el('div.btn-row', { style: { flexDirection: 'column', alignItems: 'stretch' } },
+      ...TYPES_SEANCE.map(t => el('button.btn', { type: 'button', text: `${t.icone} ${t.label} — ${t.detail}`,
+        onclick: async () => {
+          try {
+            await store.plongeeEnSeance(dive.id, t.id);
+            close();
+            toast(`Rangée en ${t.label.toLowerCase()}`);
+            navigate('seances', true);
+          } catch (e) { toast(e.message, true); }
+        } }))),
+    el('div.btn-row', {}, el('button.btn.ghost', { type: 'button', text: 'Annuler', onclick: close }))));
+}
+
+// ------------------------------------------------------------
 //  Ranger des plongées en séances (une piscine importée par erreur)
 // ------------------------------------------------------------
 
-function rangerPlongees(aRanger) {
-  const choix = new Map(aRanger.map(({ dive, type }) => [dive.id, { coche: true, type }]));
+export function rangerPlongees(aRanger, { cocher = true } = {}) {
+  const choix = new Map(aRanger.map(({ dive, type }) => [dive.id, { coche: cocher, type }]));
   openModal(close => {
     const box = el('div');
     const bouton = el('button.btn.primary', { type: 'button' });
@@ -163,6 +309,16 @@ function rangerPlongees(aRanger) {
             + 'le profil, l’heure et la position sont gardés.' }));
 
     const liste = el('div', { style: { maxHeight: '55vh', overflow: 'auto' } });
+    // Beaucoup de plongées : on filtre (lieu, date, numéro).
+    const recherche = aRanger.length > 8
+      ? el('input', { type: 'search', placeholder: 'Filtrer : lieu, date, n°…', style: { marginBottom: '8px' } }) : null;
+    if (recherche) {
+      box.append(recherche);
+      recherche.addEventListener('input', () => {
+        const q = recherche.value.trim().toLowerCase();
+        [...liste.children].forEach(n => { n.hidden = !!q && !n.dataset.cherche.includes(q); });
+      });
+    }
     for (const { dive: d } of aRanger.sort((a, b) => (a.dive.numero || 0) - (b.dive.numero || 0))) {
       const c = choix.get(d.id);
       const coche = el('input', { type: 'checkbox' });
@@ -174,13 +330,15 @@ function rangerPlongees(aRanger) {
       sel.value = c.type;
       sel.onchange = () => { c.type = sel.value; };
       const date = /^\d{4}-\d\d-\d\d$/.test(d.date || '') ? fmtDate(d.date) : 'date à corriger';
-      liste.append(el('div.jour-ligne', { style: { cursor: 'default' } },
+      const ligne = el('div.jour-ligne', { style: { cursor: 'default' } },
         coche,
         el('div', { style: { flex: 1, minWidth: 0 } },
           el('div', { style: { fontWeight: '600', fontSize: '14px' }, text: `n°${d.numero ?? '—'} · ${date}${d.heureImmersion && /^\d\d:\d\d$/.test(d.heureImmersion) ? ` ${d.heureImmersion}` : ''}` }),
           el('div', { style: { color: 'var(--text-dim)', fontSize: '12.5px' },
-            text: [d.dureeMin ? fmtDuration(d.dureeMin) : null, d.profMax ? `${d.profMax} m` : 'sans profondeur'].filter(Boolean).join(' · ') })),
-        sel));
+            text: [d.lieuNom || d.site || null, d.dureeMin ? fmtDuration(d.dureeMin) : null, d.profMax ? `${d.profMax} m` : 'sans profondeur'].filter(Boolean).join(' · ') })),
+        sel);
+      ligne.dataset.cherche = `n°${d.numero} ${d.date || ''} ${fmtDate(d.date)} ${d.lieuNom || ''} ${d.site || ''}`.toLowerCase();
+      liste.append(ligne);
     }
 
     bouton.onclick = async () => {
@@ -254,7 +412,15 @@ export async function seanceFormView({ id } = {}) {
   const distance = el('input', { type: 'text', inputmode: 'numeric', placeholder: 'm' });
   const apnee = el('input', { type: 'text', inputmode: 'numeric', placeholder: 's' });
   const tempEau = el('input', { type: 'text', inputmode: 'decimal', placeholder: '°C' });
-  const notes = el('textarea', { rows: 3, placeholder: 'Exercices, sensations, avec qui…' });
+  const notes = el('textarea', { rows: 3, placeholder: 'Exercices, sensations…' });
+
+  // Avec qui : comme la palanquée d'une plongée, et l'agenda du jour.
+  const buddies = await store.listBuddies();
+  const moi = await store.getDiver(diverId);
+  const exclure = moi ? [fullName(moi)] : [];
+  s.buddyIds ||= [];
+  const avecQui = editeurPalanquee(s, buddies, () => {}, { anonyme: false, placeholder: 'Avec qui : prénom nom…' });
+  const agenda = agendaAvecQui(s, buddies, { exclure, onAjout: () => avecQui.rafraichir() });
 
   function remplirChamps() {
     date.value = s.date || '';
@@ -281,6 +447,7 @@ export async function seanceFormView({ id } = {}) {
     jourSemaine.textContent = date.value ? fmtDateLong(date.value) : '';
   }
   date.addEventListener('change', visibilite);
+  date.addEventListener('change', () => { s.date = date.value; agenda?.recharger(); });
 
   rendreSeg();
   wrap.append(seg,
@@ -288,6 +455,7 @@ export async function seanceFormView({ id } = {}) {
     jourSemaine,
     el('div.row', {}, champ('Durée (min)', duree), champ('Température de l’eau', tempEau)),
     champ('Lieu', lieu), lieux,
+    champ('Avec qui', avecQui), ...(agenda ? [agenda] : []),
     el('div.row', {}, blocProf, blocDistance, blocApnee),
     champ('Notes', notes));
 

@@ -14,14 +14,14 @@ import { DIVE_TYPES } from './config.js';
 import { navigate } from './router.js';
 import { profileSvg } from './fit.js';
 import { ambianceDe, stylesAmbiance, vignetteLieu, etiquetteAmbiance } from './ambiance.js';
-import { agendaBranche, agendaLisible, chargerAgenda, evenementsDu, lieuPropose } from './agenda.js';
-import { editeurPalanquee, champsCentre } from './palanquee.js';
+import { agendaBranche, agendaLisible, chargerAgenda, evenementsDu, lieuPropose, texteEvenement } from './agenda.js';
+import { editeurPalanquee, champCentre, propositionsTexte } from './palanquee.js';
 
 /**
  * « Ce jour-là dans ton agenda » : les événements du jour, chacun avec un
  * bouton pour en faire le lieu. Rien si l'agenda n'est pas relié.
  */
-function blocAgenda(date, champLieu, appliquer) {
+function blocAgenda(date, champLieu, appliquer, avecQui = null) {
   if (!agendaBranche() || !agendaLisible() || !date) return null;
   const bloc = el('div.apercu-bloc.agenda-jour', {}, el('div.apercu-lbl', { text: '📅 Ce jour-là dans ton agenda' }));
   const liste = el('div.agenda-liste', {}, el('div.hint', { text: 'Lecture de l’agenda…' }));
@@ -32,6 +32,8 @@ function blocAgenda(date, champLieu, appliquer) {
       el('div.agenda-ev-txt', {}, el('b', { text: e.titre || '(sans titre)' }),
         e.lieu ? el('span', { text: e.lieu }) : null,
         e.debut !== e.fin ? el('span', { text: `du ${fmtDate(e.debut)} au ${fmtDate(e.fin)}` }) : null),
+      avecQui ? propositionsTexte(texteEvenement(e), avecQui.cible, avecQui.buddies,
+        { exclure: avecQui.exclure, onAjout: avecQui.onAjout }) : null,
       el('button.btn.sm.ghost', { type: 'button', text: 'Comme lieu', onclick: () => {
         const l = lieuPropose(e);
         champLieu.value = l;
@@ -173,7 +175,9 @@ export async function apercuPlongee(id, { retour = null, onClose = null } = {}) 
 
   const date = saisie('date', d.date, v => { maj({ date: v }); majNiveau(); });
   const lieuDive = saisie('text', d.lieuNom, v => maj({ lieuNom: v }));
-  const centre = champsCentre(d, await store.listDives(d.diverId), () => sauvegarde.planifier());
+  const centre = champCentre(d, await store.listDives(d.diverId), () => sauvegarde.planifier());
+  const palanquee = editeurPalanquee(d, buddies, () => sauvegarde.planifier());
+  const moi = await store.getDiver(d.diverId);
 
   const a = ambianceDe(d);
   const tete = el('div.apercu-tete-plongee', {},
@@ -191,7 +195,7 @@ export async function apercuPlongee(id, { retour = null, onClose = null } = {}) 
     el('div.dive-tags', { style: { margin: '2px 0 10px' } }, etiquetteAmbiance(d)),
     courbe(d.samples || d.profil),
     el('div.apercu-grille', {},
-      champ('N°', saisie('text', d.numero, v => maj({ numero: num(v) }), { inputmode: 'numeric' })),
+      champ('N° (auto)', el('input', { type: 'text', readOnly: true, tabIndex: -1, value: d.numero ?? '—', class: 'lecture-seule' })),
       champ('Date', date),
       champ('Lieu', lieuDive, { large: true }),
       champ('Site', saisie('text', d.site, v => maj({ site: v })), { large: true }),
@@ -201,18 +205,25 @@ export async function apercuPlongee(id, { retour = null, onClose = null } = {}) 
       champ('Eau (°C)', saisie('text', d.tempFond, v => maj({ tempFond: num(v) }), { inputmode: 'decimal' })),
       champ('Type', liste([['', '—'], ...DIVE_TYPES.map(t => [t, t])], d.type, v => maj({ type: v }))),
       champ('Niveau', selNiveau)),
-    el('div.apercu-bloc', {}, el('div.apercu-lbl', { text: 'Palanquée' }),
-      editeurPalanquee(d, buddies, () => sauvegarde.planifier())),
+    el('div.apercu-bloc', {}, el('div.apercu-lbl', { text: 'Palanquée' }), palanquee),
     el('div.apercu-grille', {},
-      champ('Centre de plongée', el('div', {}, centre.nom, centre.liste), { large: true }),
-      champ('Adresse du centre', centre.adresse, { large: true }),
+      el('div.apercu-champ.large', {}, el('span', { text: 'Centre de plongée' }), centre),
       champ('Ce que j’ai fait', saisie('textarea', d.fait, v => maj({ fait: v })), { large: true }),
       champ('Ce que j’ai vu', saisie('textarea', d.vu, v => maj({ vu: v })), { large: true }),
       champ('Notes', saisie('textarea', d.observations, v => maj({ observations: v })), { large: true })),
-    blocAgenda(d.date, lieuDive, v => maj({ lieuNom: v })));
+    blocAgenda(d.date, lieuDive, v => maj({ lieuNom: v }), {
+      cible: d, buddies, exclure: moi ? [fullName(moi)] : [],
+      onAjout: () => { palanquee.rafraichir(); sauvegarde.planifier(); } }));
 
   const pied = el('div.apercu-actions', {},
     temoin,
+    el('button.btn.ghost.sm', { type: 'button', text: '↪ Snorkeling…', title: 'Ce n’était pas une plongée : la ranger en séance',
+      onclick: async () => {
+        await sauvegarde.maintenant();
+        const { rangerUnePlongee } = await import('./views/seances.js');
+        fermerApercu({ silencieux: true });
+        rangerUnePlongee(d);
+      } }),
     el('button.btn.ghost.sm', { type: 'button', text: 'Tout modifier',
       onclick: async () => { await sauvegarde.maintenant(); navigate(`dive/${d.id}/edit`); } }),
     el('button.btn.primary.sm', { type: 'button', text: 'Fiche complète ›',
@@ -238,6 +249,10 @@ export async function apercuSeance(id, { retour = null, onClose = null } = {}) {
   const sauvegarde = enregistreur(() => store.saveSeance(s), temoin);
   const maj = p => { Object.assign(s, p); sauvegarde.planifier(); };
   const lieuSeance = saisie('text', s.lieu, v => maj({ lieu: v }));
+  const buddies = await store.listBuddies();
+  const moi = await store.getDiver(s.diverId);
+  s.buddyIds ||= [];
+  const avecQui = editeurPalanquee(s, buddies, () => sauvegarde.planifier(), { anonyme: false, placeholder: 'Avec qui : prénom nom…' });
 
   const tete = el('div.apercu-tete-plongee', {},
     el('span.seance-pastille', { class: `s-${t.id}`, style: { width: '52px', height: '52px', flex: '0 0 52px', fontSize: '26px' }, text: t.icone }),
@@ -260,7 +275,10 @@ export async function apercuSeance(id, { retour = null, onClose = null } = {}) {
       champ('Prof. max (m)', saisie('text', s.profMax, v => maj({ profMax: num(v) }), { inputmode: 'decimal' })),
       champ('Eau (°C)', saisie('text', s.tempEau, v => maj({ tempEau: num(v) }), { inputmode: 'decimal' })),
       champ('Notes', saisie('textarea', s.notes, v => maj({ notes: v })), { large: true })),
-    blocAgenda(s.date, lieuSeance, v => maj({ lieu: v })));
+    el('div.apercu-bloc', {}, el('div.apercu-lbl', { text: 'Avec qui' }), avecQui),
+    blocAgenda(s.date, lieuSeance, v => maj({ lieu: v }), {
+      cible: s, buddies, exclure: moi ? [fullName(moi)] : [],
+      onAjout: () => { avecQui.rafraichir(); sauvegarde.planifier(); } }));
 
   const pied = el('div.apercu-actions', {},
     temoin,

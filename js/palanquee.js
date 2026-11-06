@@ -4,11 +4,12 @@
 //  Pas de fiche à créer avant : on tape un nom, l'appli cherche parmi
 //  les plongeurs connus ; s'il n'y est pas, il est créé tout seul.
 //  Un moniteur dont on n'a pas le nom : un bouton, rien à créer.
-//  Le centre de plongée (nom, adresse) est noté sur la plongée.
+//  Le centre de plongée : centre.js.
 // ============================================================
 
 import { el, fullName, nomPlongeur, toast } from './lib.js';
 import { store, emptyBuddy } from './store.js';
+import { trouverPlongeurs } from './noms.js';
 
 const sansAccent = s => (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
 
@@ -18,11 +19,11 @@ const sansAccent = s => (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLow
  * @param {object[]} buddies     les plongeurs connus (complétée si on en crée un)
  * @param {Function} onChange    appelée après chaque changement
  */
-export function editeurPalanquee(dive, buddies, onChange = () => {}) {
+export function editeurPalanquee(dive, buddies, onChange = () => {}, { anonyme = true, placeholder = 'Ajouter : prénom nom…' } = {}) {
   dive.buddyIds ||= [];
   const boite = el('div.palq');
   const choisis = el('div.palq-choisis');
-  const champ = el('input', { type: 'text', placeholder: 'Ajouter : prénom nom…', autocapitalize: 'words',
+  const champ = el('input', { type: 'text', placeholder, autocapitalize: 'words',
     autocomplete: 'off', enterkeyhint: 'done' });
   const caseMon = el('input', { type: 'checkbox' });
   const propositions = el('div.palq-props');
@@ -78,7 +79,7 @@ export function editeurPalanquee(dive, buddies, onChange = () => {}) {
   function rendrePropositions() {
     const q = sansAccent(champ.value);
     if (!q) {
-      propositions.replaceChildren(dive.moniteurSansNom ? '' : el('button.palq-prop.anonyme', { type: 'button',
+      propositions.replaceChildren(dive.moniteurSansNom || !anonyme ? '' : el('button.palq-prop.anonyme', { type: 'button',
         onclick: () => { dive.moniteurSansNom = true; changer(); } }, '＋ Un moniteur dont je n’ai pas le nom'));
       return;
     }
@@ -105,39 +106,60 @@ export function editeurPalanquee(dive, buddies, onChange = () => {}) {
     propositions);
   rendreChoisis();
   rendrePropositions();
+  // Quelqu'un a été ajouté d'ailleurs (un texte, l'agenda) : on redessine.
+  boite.rafraichir = () => changer();
   return boite;
 }
 
-/** Les centres déjà notés dans le carnet, avec leur dernière adresse. */
-export function centresConnus(dives) {
-  const m = new Map();
-  dives.slice().sort((a, b) => (a.date || '').localeCompare(b.date || '')).forEach(d => {
-    const nom = (d.centreNom || '').trim();
-    if (nom) m.set(nom, (d.centreAdresse || '').trim() || m.get(nom) || '');
-  });
-  return m;
+/** Crée un plongeur à partir d'un nom écrit (« Julie Martin »). */
+export async function creerPlongeur(texte, buddies) {
+  const mots = texte.trim().split(/\s+/);
+  const b = emptyBuddy();
+  b.prenom = mots.shift() || '';
+  b.nom = mots.join(' ');
+  await store.saveBuddy(b);
+  buddies.push(b);
+  return b;
 }
 
 /**
- * Les champs « centre de plongée » : son nom (les centres connus sont
- * proposés, et leur adresse se remplit toute seule) et son adresse.
+ * Les plongeurs trouvés dans un texte, en puces à toucher pour les
+ * ajouter à la palanquée (ou à la séance). Un nom inconnu est créé.
+ * @param {string} texte
+ * @param {object} cible     plongée ou séance (buddyIds modifié en place)
+ * @param {object[]} buddies
+ * @param {{exclure?:string[], onAjout?:Function, vide?:string}} options
  */
-export function champsCentre(dive, dives, onChange = () => {}) {
-  const connus = centresConnus(dives.filter(d => d.id !== dive.id));
-  const id = `centres-${Math.random().toString(36).slice(2, 8)}`;
-  const nom = el('input', { type: 'text', list: id, placeholder: 'Nom du centre ou du club', autocomplete: 'off' });
-  const adresse = el('input', { type: 'text', placeholder: 'Adresse, ville, pays', autocomplete: 'off' });
-  nom.value = dive.centreNom || '';
-  adresse.value = dive.centreAdresse || '';
-  nom.addEventListener('input', () => {
-    dive.centreNom = nom.value;
-    const connue = connus.get(nom.value.trim());
-    if (connue && !adresse.value.trim()) { adresse.value = connue; dive.centreAdresse = connue; }
-    onChange();
-  });
-  adresse.addEventListener('input', () => { dive.centreAdresse = adresse.value; onChange(); });
-  return {
-    nom, adresse,
-    liste: el('datalist', { id }, ...[...connus.keys()].sort((a, b) => a.localeCompare(b, 'fr')).map(c => el('option', { value: c }))),
-  };
+export function propositionsTexte(texte, cible, buddies, { exclure = [], onAjout = () => {}, vide = '' } = {}) {
+  const boite = el('div.chips.noms-trouves');
+  const { connus, nouveaux } = trouverPlongeurs(texte, buddies, { exclure });
+  const libres = connus.filter(c => !(cible.buddyIds || []).includes(c.buddy.id));
+  if (!libres.length && !nouveaux.length) {
+    if (vide) boite.append(el('span.hint', { text: vide }));
+    return boite;
+  }
+  libres.forEach(({ buddy, sur }) => boite.append(el('button.chip', { type: 'button',
+    title: sur ? '' : 'Plusieurs plongeurs portent ce prénom : vérifie',
+    onclick: e => {
+      cible.buddyIds = [...new Set([...(cible.buddyIds || []), buddy.id])];
+      e.currentTarget.remove();
+      onAjout(buddy);
+    } }, `＋ ${fullName(buddy)}${sur ? '' : ' ?'}`)));
+  nouveaux.forEach(nom => boite.append(el('button.chip', { type: 'button', title: 'Pas encore dans tes plongeurs : il sera créé',
+    onclick: async e => {
+      const bt = e.currentTarget;
+      bt.disabled = true;
+      try {
+        const b = await creerPlongeur(nom, buddies);
+        cible.buddyIds = [...new Set([...(cible.buddyIds || []), b.id])];
+        bt.remove();
+        toast(`${fullName(b)} ajouté à tes plongeurs`);
+        onAjout(b);
+      } catch (err) { bt.disabled = false; toast(err.message, true); }
+    } }, `＋ ${nom}`, el('small', { text: ' nouveau' }))));
+  return boite;
 }
+
+
+// Le centre de plongée : voir centre.js (un seul champ, et la carte).
+export { centresConnus, champCentre } from './centre.js';

@@ -14,7 +14,7 @@
 //  retombe sur le nom du lieu, et rien ne bloque la saisie.
 // ============================================================
 
-const OVERPASS = [
+export const OVERPASS = [
   'https://overpass-api.de/api/interpreter',
   'https://overpass.kumi.systems/api/interpreter',
 ];

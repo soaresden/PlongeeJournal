@@ -206,11 +206,21 @@ async function ensureStore() {
 
   // Le carnet de l'appareil est affiché tout de suite ; GitHub est
   // consulté en parallèle et l'écran se met à jour s'il apporte du neuf.
-  if (modeActuel() === 'local') { annoncerConnexion(); return; }
+  if (modeActuel() === 'local') { annoncerConnexion(); entretienDeFond(); return; }
   synchroniser()
     .then(change => { if (change) navigate(currentPath(), true); })
     .catch(() => {})
-    .finally(() => { annoncerConnexion(); envoyerPhotos().catch(() => {}); });
+    .finally(() => { annoncerConnexion(); envoyerPhotos().catch(() => {}); entretienDeFond(); });
+}
+
+/** Numéros dans l'ordre des dates, eau douce / salée d'après le GPS. */
+function entretienDeFond() {
+  import('./entretien.js')
+    .then(m => m.entretenir())
+    .then(r => {
+      if (r.numeros && ['dives', 'stats'].includes(currentPath())) navigate(currentPath(), true);
+    })
+    .catch(() => {});
 }
 
 /**

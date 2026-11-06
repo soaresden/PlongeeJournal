@@ -426,3 +426,18 @@ body.vue-pleine #view > * { max-width: none; }
   .cv-monde { height: 240px; }
 }
 .cv-equipe .cv-mat { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+
+/* ---------- Centre de plongée : un seul champ, et la carte ---------- */
+.centre-ligne { display: flex; gap: 8px; align-items: center; }
+.centre-ligne input { flex: 1; min-width: 0; }
+.centre-ligne .btn { flex: 0 0 auto; white-space: nowrap; }
+.centre-adresse { margin: 6px 0 0; }
+.centre-carte { height: min(55vh, 420px); border-radius: var(--radius-sm); overflow: hidden; margin-top: 10px; border: 1px solid var(--line); }
+.centre-carte + .geo-results { max-height: 30vh; overflow-y: auto; }
+input.lecture-seule { opacity: .75; cursor: default; }
+.eau-auto { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.eau-auto b { font-size: 15px; }
+.agenda-ev { flex-wrap: wrap; }
+.noms-trouves { flex-basis: 100%; margin-top: 6px; gap: 6px; }
+.noms-trouves:empty { display: none; }
+.noms-trouves .chip small { opacity: .7; }

@@ -12,7 +12,7 @@
 //     écrit avant.
 // ============================================================
 
-import { el, toast, fmtDuration, confirmBox } from '../lib.js';
+import { el, toast, fmtDuration } from '../lib.js';
 import { store, TYPES_SEANCE, typeSeance } from '../store.js';
 import { navigate } from '../router.js';
 import { fitToDive, decodeFit, genreFit } from '../fit.js';
@@ -22,7 +22,7 @@ import {
   chargerLiaison, sauverLiaison, estRelie, apiAccessible, ClientSuunto,
 } from '../suunto-cloud.js';
 import {
-  CLE_SUUNTO, aExaminer, genreConnu, genreActivite, trouverDansCarnet, proposer, metaSuunto, numerotationChronologique,
+  CLE_SUUNTO, aExaminer, genreConnu, genreActivite, trouverDansCarnet, proposer, metaSuunto,
   decDepuisListe, NOMS_SUUNTO,
 } from '../suunto-aligner.js';
 
@@ -98,7 +98,6 @@ export async function suuntoCloudView() {
     decodes: new Map(),        // cle → { dec } | { erreur }
     coches: new Map(),
     rangement: new Map(),
-    renumeroter: false,
     completer: false,          // aussi les activités déjà au carnet (champs vides seulement)
     blocs: { importer: true, deja: false },
     groupesOuverts: new Set(),
@@ -339,11 +338,7 @@ export async function suuntoCloudView() {
         ajoutees++;
         log(`+ plongée n°${d.numero} : ${fmtDateHeure(act.debut)}`);
       }
-      let renum = 0;
-      if (etat.renumeroter && ajoutees) {
-        renum = await store.renumeroter(diverId, numerotationChronologique(dives));
-        log(`numéros remis dans l’ordre des dates (${renum} changé(s))`);
-      }
+      // Les numéros suivent les dates tout seuls (store.saveDive).
       toast([ajoutees && `${ajoutees} plongée${ajoutees > 1 ? 's' : ''} ajoutée${ajoutees > 1 ? 's' : ''}`,
              rangees && `${rangees} séance${rangees > 1 ? 's' : ''}`,
              completees && `${completees} complétée${completees > 1 ? 's' : ''}`].filter(Boolean).join(' · ') || 'Rien à faire');
@@ -513,31 +508,14 @@ export async function suuntoCloudView() {
     const libelle = [nPlong && `${nPlong} plongée${nPlong > 1 ? 's' : ''}`, nSeance && `${nSeance} séance${nSeance > 1 ? 's' : ''}`,
       nComp && `${nComp} à compléter`].filter(Boolean).join(' + ');
 
-    // Des plongées plus anciennes que la dernière du carnet ? On propose
-    // de remettre les numéros dans l'ordre des dates.
-    const derniere = dives.reduce((m, d) => (d.date > m ? d.date : m), '');
-    const anciennes = liste2.some(x => x.p.action === 'ajouter' && (etat.rangement.get(x.act.cle) || 'plongee') === 'plongee'
-      && x.dec.start && x.dec.start.toISOString().slice(0, 10) < derniere);
-    const renum = el('input', { type: 'checkbox', disabled: etat.occupe });
-    renum.checked = etat.renumeroter;
-    renum.onchange = () => { etat.renumeroter = renum.checked; };
-
     actions.append(
       el('div.btn-row', {}, el('button.btn.block', {
         type: 'button', disabled: etat.occupe || !aAnalyser,
         text: aAnalyser ? `⬇ Analyser ${aAnalyser} activité(s)` : 'Rien à analyser', onclick: analyser })),
-      anciennes ? el('label.card', { style: { display: 'flex', gap: '10px', alignItems: 'flex-start', cursor: 'pointer' } },
-        renum, el('div', {},
-          el('div', { style: { fontWeight: '600' }, text: 'Renuméroter le carnet dans l’ordre des dates' }),
-          el('div.hint', { text: 'Des plongées plus anciennes que ta dernière vont arriver. Coché : les numéros suivent les dates '
-            + '(en gardant ton premier numéro). Décoché : elles prennent les numéros suivants.' }))) : null,
       el('div.btn-row', {}, el('button.btn.primary.block', {
         type: 'button', disabled: etat.occupe || !liste2.length,
         text: liste2.length ? `✓ Appliquer : ${libelle}` : 'Rien à appliquer pour l’instant',
-        onclick: async () => {
-          if (etat.renumeroter && !(await confirmBox('Les numéros de tout le carnet vont suivre l’ordre des dates. Continuer ?'))) return;
-          appliquer();
-        } })));
+        onclick: () => appliquer() })));
   }
 
   rendre();

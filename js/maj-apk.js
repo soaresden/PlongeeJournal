@@ -100,9 +100,9 @@ function ecrireMemo(m) {
 }
 
 /** Vérifie (en direct). */
-export async function verifier(f = fetch) {
+export async function verifier(f = fetch, maintenant = Date.now()) {
   const [installee, derniere] = await Promise.all([versionInstallee(f), derniereVersion(f)]);
-  ecrireMemo({ ...lireMemo(), verifieLe: Date.now() });
+  ecrireMemo({ ...lireMemo(), verifieLe: maintenant });
   return { installee, derniere, etat: comparer(installee, derniere) };
 }
 
@@ -117,7 +117,7 @@ export async function verifierEnFond(f = fetch, maintenant = Date.now()) {
   const memo = lireMemo();
   if (memo.verifieLe && maintenant - memo.verifieLe < UN_JOUR) return null;
   try {
-    const res = await verifier(f);
+    const res = await verifier(f, maintenant);
     if (res.etat !== 'nouvelle') return null;
     if (memo.ecartee === res.derniere.build) return null;
     return res;

@@ -8,7 +8,7 @@
 // ============================================================
 
 import { TABLES as TABLES_ENTITES } from './fusion.js';
-import { computeStats, sortDives, sortPeople, reconcileTimes, sortSeances, seanceDepuisPlongee, estBapteme } from './model.js';
+import { computeStats, sortDives, sortPeople, reconcileTimes, sortSeances, seanceDepuisPlongee, estBapteme, numerotationAuto } from './model.js';
 
 export const CARNET_VIDE = {
   version: 1,
@@ -18,6 +18,20 @@ export const CARNET_VIDE = {
 };
 
 const maintenant = () => new Date().toISOString();
+
+/** Remet les numéros d'un plongeur dans l'ordre des dates (en mémoire). */
+function numeroter(d, diverId) {
+  if (!diverId) return 0;
+  const nums = numerotationAuto(d.dives.filter(x => x.diverId === diverId));
+  if (!nums.size) return 0;
+  const t = maintenant();
+  for (const dv of d.dives) {
+    if (!nums.has(dv.id)) continue;
+    dv.numero = nums.get(dv.id);
+    dv.updatedAt = t;
+  }
+  return nums.size;
+}
 
 /** Note une suppression, pour qu'une autre copie du carnet ne la ressuscite pas. */
 function enterrer(d, ...ids) {
@@ -185,15 +199,38 @@ export function creerStore(support) {
       reconcileTimes(dive);          // durée ⇄ heure de sortie, toujours cohérentes
       const i = d.dives.findIndex(x => x.id === dive.id);
       if (i >= 0) d.dives[i] = dive; else d.dives.push(dive);
+      numeroter(d, dive.diverId);       // les numéros suivent les dates
       await save({ table: 'dives', id: dive.id, plongee: dive });
       return dive;
     },
 
     async deleteDive(id) {
       const d = db();
+      const diverId = d.dives.find(x => x.id === id)?.diverId;
       enterrer(d, id);
       d.dives = d.dives.filter(x => x.id !== id);
+      numeroter(d, diverId);
       await save({ table: 'dives', id, supprime: true });
+    },
+
+    /** Plusieurs plongées modifiées d'un coup (tâches de fond) : une seule écriture. */
+    async savePlongees(liste) {
+      const d = db();
+      const t = maintenant();
+      for (const dive of liste) {
+        dive.updatedAt = t;
+        const i = d.dives.findIndex(x => x.id === dive.id);
+        if (i >= 0) d.dives[i] = dive; else d.dives.push(dive);
+      }
+      if (liste.length) await save({ table: 'dives' });
+      return liste.length;
+    },
+
+    /** Remet tout le carnet dans l'ordre des dates ; écrit seulement si ça change. */
+    async numeroterAuto(diverId) {
+      const n = numeroter(db(), diverId);
+      if (n) await save({ table: 'dives' });
+      return n;
     },
 
     /** Applique des numéros (Map id → numéro), en une seule écriture. */
@@ -249,6 +286,7 @@ export function creerStore(support) {
       d.seances.push(seance);
       enterrer(d, diveId);
       d.dives = d.dives.filter(x => x.id !== diveId);
+      numeroter(d, dive.diverId);
       await save({ table: 'seances', id: seance.id });
       return seance;
     },
@@ -293,6 +331,7 @@ export function creerStore(support) {
         d.seances ||= [];
         fondre(d.seances, entrant.seances);
       }
+      for (const dv of db().divers) numeroter(db(), dv.id);
       await save({ table: 'tout' });
     },
 

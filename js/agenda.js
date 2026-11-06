@@ -7,7 +7,8 @@
 //  lire : seule l'APK, qui passe par Android, y arrive.
 //
 //  Usage : proposer un lieu pour une plongée ou une séance d'après
-//  l'événement du même jour (« TODI Belgique », « Malte WeRoad »…).
+//  l'événement du même jour (« TODI Belgique », « Malte WeRoad »…),
+//  et les plongeurs dont le nom y est écrit (« Fosse avec Marc »).
 // ============================================================
 
 import { httpParDefaut } from './suunto-cloud.js';
@@ -79,7 +80,10 @@ export function lireIcs(contenu = '') {
     if (l === 'END:VEVENT') {
       if (ev?.debut) {
         const fin = ev.fin && ev.fin >= ev.debut ? ev.fin : ev.debut;
-        out.push({ debut: ev.debut, fin, titre: ev.titre || '', lieu: ev.lieu || '' });
+        const e = { debut: ev.debut, fin, titre: ev.titre || '', lieu: ev.lieu || '' };
+        // La description : c'est souvent là qu'on note avec qui.
+        if (ev.desc) e.desc = ev.desc.slice(0, 300);
+        out.push(e);
       }
       ev = null;
       continue;
@@ -94,6 +98,7 @@ export function lireIcs(contenu = '') {
     else if (nom === 'DTEND') ev.fin = dateIcs(val, { finJournee: journee });
     else if (nom === 'SUMMARY') ev.titre = texte(val);
     else if (nom === 'LOCATION') ev.lieu = texte(val);
+    else if (nom === 'DESCRIPTION') ev.desc = texte(val).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
   }
   return out;
 }
@@ -139,3 +144,6 @@ export function lieuPropose(e) {
   const adresse = (e.lieu || '').split(',')[0].trim();
   return adresse || e.titre;
 }
+
+/** Le texte où chercher des noms : titre, lieu, description. */
+export const texteEvenement = e => [e.titre, e.desc, e.lieu].filter(Boolean).join(' — ');

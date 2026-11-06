@@ -530,16 +530,13 @@ export async function diveView({ id }) {
   }
 
   // Palanquée
-  if ((d.buddyIds || []).length || d.palanqueeMode || d.stampImage || d.stampId || d.moniteurSansNom || d.centreNom) {
+  if ((d.buddyIds || []).length || d.palanqueeMode || d.moniteurSansNom || d.centreNom) {
     const modeLabel = {
       moniteur: 'Encadré par un moniteur', chef: 'Guide de palanquée',
       autonome2: 'Autonome à 2', autonome3: 'Autonome à 3',
       // « solo » n'est plus proposé, mais reste lisible sur les anciennes fiches.
       jeChef: 'J’étais chef de palanquée', solo: 'Solo',
     }[d.palanqueeMode];
-
-    const stampImg = d.stampImage
-      || buddies.flatMap(b => b.stamps || []).find(s => s.id === d.stampId)?.dataUrl;
 
     wrap.append(el('div.section', {},
       el('h2', { text: 'Palanquée' }),
@@ -553,12 +550,6 @@ export async function diveView({ id }) {
                 text: buddyName(bid) + (bid === d.chefBuddyId ? ' ★' : ''),
               })),
               d.moniteurSansNom ? el('span.chip.solid', { text: 'Moniteur (nom inconnu)' }) : null)
-          : null,
-        stampImg
-          ? el('div', { style: { marginTop: '14px' } },
-              el('div.lbl', { text: 'Tampon' }),
-              el('div.stamp', { style: { width: '130px', aspectRatio: '1' } },
-                el('img', { src: stampImg, alt: 'Tampon' })))
           : null,
       ),
     ));

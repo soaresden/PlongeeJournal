@@ -1,0 +1,56 @@
+// ============================================================
+//  Petits travaux de fond, à l'ouverture
+//
+//  - les numéros suivent les dates (une plongée ajoutée sur un autre
+//    appareil, un ancien carnet) ;
+//  - l'eau douce ou salée se déduit du point GPS des plongées qui
+//    n'en ont pas encore (imports de la montre, anciennes fiches).
+//
+//  Rien ne bloque : sans réseau, on réessaiera à la prochaine ouverture.
+// ============================================================
+
+import { store } from './store.js';
+
+const PAR_OUVERTURE = 25;      // les services OSM n'aiment pas être pressés
+const PAUSE_MS = 1200;
+
+const attendre = ms => new Promise(r => setTimeout(r, ms));
+
+/** Les plongées dont l'eau reste à reconnaître d'après le GPS. */
+export function eauxAReconnaitre(dives) {
+  return dives.filter(d => d.lat != null && d.lng != null && !d.eauManuelle && !d.eauAuto
+    && Math.abs(d.lat) > 0.01);   // « au large du Gabon » : un GPS sans signal
+}
+
+export async function entretenir({ analyser = null } = {}) {
+  const diverId = await store.getActiveDiverId();
+  if (!diverId) return { numeros: 0, eaux: 0 };
+  const numeros = await store.numeroterAuto(diverId).catch(() => 0);
+
+  let eaux = 0;
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return { numeros, eaux };
+  const a = analyser || (await import('./geo.js')).analyserPoint;
+  const liste = eauxAReconnaitre(await store.listDives(diverId)).slice(0, PAR_OUVERTURE);
+  const modifiees = [];
+  for (const d0 of liste) {
+    let info = null;
+    try { info = await a(d0.lat, d0.lng); } catch { /* service indisponible */ }
+    if (info?.horsLigne) break;
+    const d = await store.getDive(d0.id);
+    if (!d || d.eauManuelle) continue;
+    if (info?.eau) {
+      Object.assign(d, { eau: info.eau, eauAuto: true });
+      if (info.altitude != null) d.altitude = info.altitude;
+      d.indiceEau = [`${info.eau === 'douce' ? 'Eau douce' : 'Eau salée'} — ${info.indice}`,
+        info.certitude !== 'sûre' ? `(${info.certitude}, vérifie)` : null].filter(Boolean).join(' ');
+      modifiees.push(d);
+    } else if (info) {
+      d.eauAuto = true;          // rien de concluant : on ne redemandera pas
+      modifiees.push(d);
+    }
+    if (!analyser) await attendre(PAUSE_MS);
+  }
+  if (modifiees.length) await store.savePlongees(modifiees);
+  eaux = modifiees.filter(d => d.eau).length;
+  return { numeros, eaux };
+}

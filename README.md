@@ -71,9 +71,10 @@ les spécificités, la bouteille, le matériel, ce qu'on a vu, les comptes-rendu
 Chaque section se replie.
 
 **Le lieu** — recherche par nom avec autocomplétion (le libellé cherché est
-toujours conservé), ou GPS, puis affinage en cliquant dans l'eau. Le type d'eau
-(douce, saumâtre, salée) et l'altitude sont reconnus automatiquement à partir du
-point choisi, via OpenStreetMap.
+toujours conservé), ou GPS, puis affinage en cliquant dans l'eau. Eau douce
+ou salée et altitude sont reconnues automatiquement à partir du point, via
+OpenStreetMap — y compris pour les plongées importées de la montre, en tâche
+de fond à l'ouverture. On ne choisit à la main que pour corriger.
 
 **Ce que j'ai vu** — faune, flore et épaves proposées d'après le lieu de
 plongée, avec photo, depuis iNaturalist et l'OSM. On coche, sans rien connaître
@@ -81,8 +82,24 @@ aux poissons. Les espèces sont filtrées par habitat réel (marin, saumâtre, e
 douce) pour ne pas proposer une mouette au fond d'une carrière.
 
 **La palanquée** — compagnons en chips depuis une table de plongeurs, moniteurs
-en doré, clubs et structures traités comme des entités à part. Tampons
-photographiés et détourés automatiquement, ou signature au doigt.
+en doré (« MON ») : c'est la palanquée qui dit qui est moniteur, pas un second
+menu. Le tampon et la signature, eux, se voient sur la photo de la page du
+carnet papier.
+
+**Le centre de plongée** — un seul champ : on tape son nom ou son adresse,
+les centres déjà notés et ceux d'OpenStreetMap autour du lieu sont proposés,
+choisir remplit le nom et l'adresse. « Sur la carte » : on zoome sur
+l'endroit, on écrit « plongée » ou « dive », les centres de la zone
+s'affichent, on touche le bon.
+
+**Retrouver les plongeurs dans un texte** — un texte en vrac (le carnet
+recopié, un message, tes notes : « plongé avec jullie et Marc, 6 kg,
+froid ») : les plongeurs connus sont retrouvés même mal orthographiés, un
+nouveau nom est repéré après « avec ». Rien n'est ajouté sans qu'on touche.
+
+**Numérotation** — automatique : les numéros suivent les dates (la plus
+ancienne est la n°1), à chaque ajout, suppression ou import. Les baptêmes
+(niveau « Baptême ») restent à part, en -2, -1.
 
 **Le calendrier** — quatre échelles (tout le carnet, une année, un mois, une
 période libre par dates ou par numéros), filtrables par compagnon. La grille
@@ -126,7 +143,11 @@ cocher affichent plongées, fosses, piscines et apnées, chacune de sa couleur ;
 toucher un jour permet d'y pointer une séance oubliée. À l'import depuis la
 montre, chaque activité se range en plongée ou en séance (natation et petit
 bain → piscine, jeudi soir en fosse → fosse) ; une plongée déjà au carnet peut
-être rangée en séance après coup.
+être rangée en séance après coup : bouton « ↪ Snorkeling, fosse… » sur la
+plongée, ou « Ranger des plongées du carnet en séances » pour en choisir
+plusieurs. Une séance a aussi son « Avec qui » ; dans l'APK, les noms écrits
+dans l'agenda Google du jour (« Fosse avec Marc ») sont proposés, et « Avec
+qui ? Retrouver dans l'agenda » complète d'un coup les fosses sans personne.
 
 **Calculs** — consommation d'air (brute et ramenée à la surface), profondeur
 maximale opérationnelle d'un nitrox, niveau courant déduit des cartes de
@@ -238,7 +259,7 @@ node outils/maj-apk-test.mjs     #  29  mise à jour de l'APK : numéro embarqu�
 node outils/suunto-cloud-test.mjs #  69  compte Suunto : OAuth, jetons, liste, .fit, alignement
 node outils/fit-test.mjs         #  27  décodage des fichiers .fit
 node outils/geo-test.mjs         #  22  eau douce / salée, altitude
-node outils/stamp-test.mjs       #  13  détourage des tampons
+node outils/noms-test.mjs        #  24  noms dans un texte, numéros par les dates, centres
 ```
 
 `github-test.mjs` tourne contre un faux GitHub en mémoire : aucun jeton, aucun

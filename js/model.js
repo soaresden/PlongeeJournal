@@ -99,6 +99,7 @@ export function emptyDive(diverId, numero) {
     site: '',             // nom du site précis / point de mise à l'eau
     centreNom: '',        // le centre ou club avec qui on a plongé
     centreAdresse: '',
+    centreLat: null, centreLng: null,   // le centre choisi sur la carte
     moniteurSansNom: false, // un moniteur dans la palanquée, nom pas noté
 
     // L'heure d'immersion peut manquer (plongées d'avant l'ordinateur) :
@@ -432,6 +433,27 @@ export function guessWater(label = '') {
  */
 export const estBapteme = d => (typeof d?.numero === 'number' && d.numero <= 0)
   || String(d?.niveau || '').trim() === 'Baptême';
+
+/**
+ * Les numéros suivent les dates, tout seuls : la plus ancienne plongée est
+ * la n°1. À date égale, l'heure d'immersion, puis l'ordre déjà connu. Les
+ * baptêmes restent à part, numérotés …, -2, -1, dans l'ordre des dates.
+ * @returns {Map<id, numero>} seulement ceux qui changent
+ */
+export function numerotationAuto(dives) {
+  const jour = d => (/^\d{4}-\d\d-\d\d$/.test(d.date || '') ? d.date : '9999-99-99');
+  const heure = d => (/^\d\d:\d\d$/.test(d.heureImmersion || '') ? d.heureImmersion : '99:99');
+  const cle = d => `${jour(d)}T${heure(d)}`;
+  const tri = [...dives].sort((a, b) => (cle(a) < cle(b) ? -1 : cle(a) > cle(b) ? 1 : 0)
+    || (Number(a.numero) || 0) - (Number(b.numero) || 0)
+    || String(a.createdAt || '').localeCompare(String(b.createdAt || '')));
+  const baptemes = tri.filter(estBapteme);
+  const vraies = tri.filter(d => !estBapteme(d));
+  const out = new Map();
+  baptemes.forEach((d, i) => { const n = i - baptemes.length; if (d.numero !== n) out.set(d.id, n); });
+  vraies.forEach((d, i) => { if (d.numero !== i + 1) out.set(d.id, i + 1); });
+  return out;
+}
 
 /** Statistiques d'un carnet — le nombre de plongées n'est jamais saisi. */
 export function computeStats(list, certifications = []) {

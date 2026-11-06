@@ -47,7 +47,7 @@ function ecrireMiroir(data) {
   try { localStorage.setItem(MIROIR, JSON.stringify(data)); }
   catch (e) {
     if (e?.name === 'QuotaExceededError') {
-      etat.setState('error', 'Mémoire de l’appareil pleine — allège les photos de tampons.');
+      etat.setState('error', 'Mémoire de l’appareil pleine — allège les photos.');
     }
     console.warn('Miroir local non tenu à jour', e);
   }

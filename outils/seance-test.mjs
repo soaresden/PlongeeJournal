@@ -62,7 +62,8 @@ const rangee = await store.plongeeEnSeance(d1.id, 'piscine');
 check('plongée rangée en séance : elle quitte le carnet', !(await store.getDive(d1.id)) && (await store.listDives('moi')).length === 1);
 check('… et arrive dans les séances', (await store.getSeance(rangee.id))?.type === 'piscine');
 check('… avec une pierre tombale (pas de résurrection)', !!support.donnees._supprimes[d1.id]);
-check('… et la numérotation reprend après la dernière vraie plongée', (await store.nextNumber('moi')) === 69, String(await store.nextNumber('moi')));
+check('… et les numéros se resserrent : la suivante devient la n°1', (await store.listDives('moi'))[0].numero === 1 && (await store.nextNumber('moi')) === 2,
+  String((await store.listDives('moi'))[0].numero));
 
 await store.deleteSeance(fosse.id);
 check('suppression d’une séance', !(await store.getSeance(fosse.id)) && !!support.donnees._supprimes[fosse.id]);

@@ -121,7 +121,6 @@ Object.assign(dv, {
   type: 'Exploration de jour', options: ['Nitrox'], objectifs: ['Épaves', 'Poissons'],
   palier3: 3, palier6: 0, profMax: 24, lestage: '6 kg', tempFond: 12,
   buddyIds: [b.id], palanqueeMode: 'moniteur', chefBuddyId: b.id,
-  stampBuddyId: b.id, stampId: 'st1',
   fait: 'Remontée assistée', vu: 'Brochet', observations: 'Eau claire',
 });
 await store.saveDive(dv);
@@ -132,7 +131,7 @@ Object.assign(dv2, { date: '2026-06-02', lieuNom: 'Calanque de Sormiou',
   type: 'Exploration de nuit', profMax: 18 });
 await store.saveDive(dv2);
 
-check('numérotation auto', dv.numero === 1 && dv2.numero === 2, `${dv.numero}/${dv2.numero}`);
+check('numérotation auto : elle suit les dates (le 2 juin avant le 14 juillet)', dv2.numero === 1 && dv.numero === 2, `${dv.numero}/${dv2.numero}`);
 check('durée calculée depuis les horaires', dv.dureeMin === 48, String(dv.dureeMin));
 check('heure de sortie calculée (passage minuit)', dv2.heureSortie === '00:25', dv2.heureSortie);
 check('eau douce devinée', dv.eau === 'douce', dv.eau);
@@ -170,6 +169,8 @@ window.dispatchEvent(new window.Event('hashchange'));
 await tick(120);
 check('séances : la fosse a son onglet, avec son compteur', /Fosses\s*1/.test(document.querySelector('#view .seg-discipline')?.textContent || ''),
   document.querySelector('#view .seg-discipline')?.textContent);
+check('séances : ranger des plongées du carnet à la main (snorkeling)',
+  [...document.querySelectorAll('#view button')].some(b => /Ranger des plongées du carnet/.test(b.textContent)), '');
 check('séances : boutons pour pointer (piscine, apnée, snorkeling)', [...document.querySelectorAll('.seances-ajout .btn')].length === 3,
   String([...document.querySelectorAll('.seances-ajout .btn')].length));
 [...document.querySelectorAll('#view .seg-discipline button')].find(b => /Fosses/.test(b.textContent))?.click();
@@ -185,6 +186,8 @@ const formS = document.querySelector('#view form');
 check('nouvelle séance : type et date repris du lien',
   formS?.querySelector('.seg button.on')?.textContent.includes('Piscine') && formS?.querySelector('input[type=date]')?.value === '2026-07-20',
   formS?.querySelector('.seg button.on')?.textContent);
+check('nouvelle séance : « Avec qui » (comme une palanquée)',
+  [...formS.querySelectorAll('.lbl')].some(x => /Avec qui/.test(x.textContent)) && !!formS.querySelector('.palq input'), '');
 formS.querySelector('input[list=seance-lieux]').value = 'Piscine de La Garenne';
 formS.dispatchEvent(new window.Event('submit', { cancelable: true }));
 await tick(150);
@@ -359,9 +362,9 @@ const dv2Avant = structuredClone(await store.getDive(dv2.id));
 const btnAppliquer = bouton(/Appliquer/);
 check('Suunto : proposition 1 plongée + 2 séances + 1 à compléter',
   /1 plongée \+ 2 séances \+ 1 à compléter/.test(btnAppliquer?.textContent || ''), btnAppliquer?.textContent);
-check('Suunto : la plongée du 2 juin sera complétée (bloc, profil)', /↻ n°2 : profil.*pression du bloc/.test(view()),
+check('Suunto : la plongée du 2 juin sera complétée (bloc, profil)', /↻ n°1 : profil.*pression du bloc/.test(view()),
   view().slice(view().indexOf('↻'), view().indexOf('↻') + 200));
-check('Suunto : renumérotation proposée (plongée de 2023)', /Renuméroter le carnet/.test(view()), '');
+check('Suunto : plus de case « renuméroter » (c’est automatique)', !/Renuméroter le carnet/.test(view()), '');
 btnAppliquer.click();
 await tick(500);
 const apresSuunto = await store.listDives(d.id);
@@ -374,7 +377,9 @@ check('Suunto : natation rangée en séance piscine', (await store.listSeances(d
 check('Suunto : .fit vide → séance faite depuis la liste (snorkeling, date, durée)',
   (await store.listSeances(d.id)).some(x => x.type === 'snorkeling' && x.date === '2025-08-12' && x.heure === '10:00' && x.dureeMin === 45),
   JSON.stringify((await store.listSeances(d.id)).filter(x => x.source === 'suunto-cloud').map(x => [x.type, x.date, x.heure, x.dureeMin])));
-check('Suunto : numéros inchangés sans la case cochée', apresSuunto.find(x => x.date === '2023-05-10').numero === 3, '');
+check('Suunto : les numéros suivent les dates (2023 devient la n°1)', apresSuunto.find(x => x.date === '2023-05-10').numero === 1
+  && [...apresSuunto].sort((a, b) => a.numero - b.numero).every((x, i, t) => !i || t[i - 1].date <= x.date),
+  apresSuunto.map(x => `${x.numero}:${x.date}`).join(' '));
 // On remet le carnet comme avant pour la suite des vérifications.
 for (const x of apresSuunto.filter(x => x.suunto?.source === 'suunto-cloud')) await store.deleteDive(x.id);
 for (const x of (await store.listSeances(d.id)).filter(x => x.source === 'suunto-cloud')) await store.deleteSeance(x.id);
@@ -410,7 +415,7 @@ check('fiche : paliers', detail.includes('3 min à 3 m'), '');
 check('fiche : coordonnées', detail.includes('49.14210'), '');
 check('fiche : chef de palanquée marqué', detail.includes('Jean Moniteur ★'), '');
 check('fiche : comptes-rendus', detail.includes('Remontée assistée') && detail.includes('Brochet'), '');
-check('fiche : tampon affiché', !!document.querySelector('#view .stamp img'), '');
+check('fiche : plus de tampon (la page du carnet suffit)', !document.querySelector('#view .stamp'), '');
 
 // Les actions se lisent en haut de fiche, pas au bout d'un long défilement.
 const racine = document.querySelector('#view').firstElementChild;
@@ -698,6 +703,30 @@ check('formulaire : moniteur sans nom proposé',
   !!document.querySelector('#view .palq-prop.anonyme'), '');
 check('formulaire : centre de plongée',
   [...document.querySelectorAll('#view label, #view .lbl')].some(x => /Centre de plongée/.test(x.textContent)), '');
+check('formulaire : le centre, un seul champ (plus d’« Adresse du centre »)',
+  document.querySelectorAll('#view .centre-champ input').length === 1
+  && ![...document.querySelectorAll('#view label, #view .lbl')].some(x => /Adresse du centre/.test(x.textContent)), '');
+check('formulaire : le centre se cherche aussi sur la carte',
+  [...document.querySelectorAll('#view .centre-champ button')].some(b => /Sur la carte/.test(b.textContent)), '');
+check('formulaire : plus de menu « Moniteur » en double sous la palanquée',
+  ![...document.querySelectorAll('#view .lbl')].some(x => /^(Moniteur|Guide de palanquée)$/.test(x.textContent.trim())), '');
+check('formulaire : plus de tampon', !document.querySelector('#view .stamp-grid'), '');
+check('formulaire : « Snorkeling, fosse… » pour ranger une plongée en séance',
+  [...document.querySelectorAll('#view .actions-fiche button')].some(b => /Snorkeling/.test(b.textContent)), '');
+check('formulaire : numéro automatique, non saisi', !!document.querySelector('#view input.lecture-seule'), '');
+{
+  const lireTxt = [...document.querySelectorAll('#view button')].find(b => /Retrouver les plongeurs/.test(b.textContent));
+  check('formulaire : retrouver les plongeurs dans un texte', !!lireTxt, '');
+  lireTxt?.click();
+  await tick(60);
+  const zone = document.querySelector('#modalRoot textarea');
+  if (zone) { zone.value = 'plongé avec jean et Paul Martin, froid'; zone.dispatchEvent(new window.Event('input')); }
+  await tick(400);
+  const puces = [...document.querySelectorAll('#modalRoot .noms-trouves .chip')].map(c => c.textContent);
+  check('… un nouveau nom proposé après « avec », pas celui déjà dans la palanquée',
+    puces.some(t => /Paul Martin/.test(t)) && !puces.some(t => /Jean/.test(t)), puces.join(' | '));
+  document.querySelector('#modalRoot').innerHTML = '';
+}
 check('formulaire : section Bouteille',
   [...document.querySelectorAll('#view .sec-titre')].some(x => /Bouteille/.test(x.textContent)),
   '');

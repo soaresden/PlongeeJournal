@@ -4,7 +4,7 @@
 
 import { el, toast, num, fullName, openModal, fileToDataURL, confirmBox, todayISO,
          minToTime, timeToMin, scrollTo } from '../lib.js';
-import { editeurPalanquee, champsCentre } from '../palanquee.js';
+import { editeurPalanquee, champCentre, propositionsTexte } from '../palanquee.js';
 import { store, emptyDive, emptyBuddy, reconcileTimes, validerPlongee,
          appliquerOptionsAuto, niveauCourant, niveauALaDate, libelleGaz, pmuNitrox,
          libelleMateriel, consommation } from '../store.js';
@@ -19,6 +19,7 @@ import { navigate } from '../router.js';
 import { profileSvg } from '../fit.js';
 import { photoCarnetFormulaire } from './carnet-photo.js';
 import { oublierPhoto } from '../photos.js';
+
 
 // --- petits assembleurs de champs ---------------------------
 
@@ -602,7 +603,9 @@ export async function diveFormView({ id }) {
     carnetPapier.bloc));
 
   // ---------- 1. Identité de la plongée ----------
-  const numeroInput = input('text', dive.numero, v => set({ numero: num(v) }), { inputmode: 'numeric' });
+  // Le numéro n'est plus saisi : il suit les dates (la plus ancienne est la n°1).
+  const numeroInput = el('input', { type: 'text', readOnly: true, tabIndex: -1,
+    value: isNew ? 'auto' : (dive.numero ?? 'auto'), class: 'lecture-seule' });
   const dateInput   = input('date', dive.date, v => set({ date: v }));
 
   const champDate = field('Date', dateInput, null, true);
@@ -630,7 +633,7 @@ export async function diveFormView({ id }) {
 
   form.append(section('La plongée', { icone: '🤿', ouvert: true },
     el('div.row', {},
-      field('N° de plongée', numeroInput, 'Proposé automatiquement'),
+      field('N° de plongée', numeroInput, 'Automatique : suit l’ordre des dates'),
       champDate,
     ),
     field('Type de plongée',
@@ -645,11 +648,27 @@ export async function diveFormView({ id }) {
   const waterSeg = el('div');
   const waterInfo = el('div.hint');
 
+  // La nature de l'eau se déduit du point GPS : on ne la choisit à la
+  // main que pour corriger, ou quand il n'y a pas de point.
+  let corriger = false;
   function renderWater() {
     waterSeg.innerHTML = '';
+    if (dive.lat != null && dive.eau && !dive.eauManuelle && !corriger) {
+      waterSeg.append(el('div.eau-auto', {},
+        el('b', { text: dive.eau === 'douce' ? '💧 Eau douce' : '🌊 Eau salée' }),
+        el('span.badge', { text: '✨ d’après le point GPS' }),
+        el('button.btn.sm.ghost', { type: 'button', text: 'Corriger',
+          onclick: () => { corriger = true; renderWater(); } })));
+      return;
+    }
     waterSeg.append(segmented(
       [{ id: 'douce', label: 'Eau douce' }, { id: 'salee', label: 'Eau salée' }],
       dive.eau, v => { set({ eau: v }); dive.eauManuelle = true; majOptionsAuto(); }));
+    if (dive.eauManuelle && dive.lat != null) {
+      waterSeg.append(el('button.btn.sm.ghost', { type: 'button', style: { marginTop: '6px' },
+        text: '✨ Revenir à la détection automatique',
+        onclick: () => { dive.eauManuelle = false; corriger = false; dernierPoint = ''; reconnaitreLePoint(); } }));
+    }
   }
   renderWater();
 
@@ -675,10 +694,8 @@ export async function diveFormView({ id }) {
 
       set({ altitude: info.altitude, indiceEau: '' });
 
-      if (info.eau && !dive.eauManuelle) {
-        set({ eau: info.eau });
-        renderWater();
-      }
+      if (info.eau && !dive.eauManuelle) set({ eau: info.eau, eauAuto: true });
+      renderWater();
 
       const bouts = [];
       if (info.eau) {
@@ -702,6 +719,7 @@ export async function diveFormView({ id }) {
     // Le nom du lieu reste un indice de secours, jamais prioritaire.
     if (patch.eau && !avait && !dive.eauManuelle) renderWater();
     if (patch.lat != null) reconnaitreLePoint();
+    else if ('lat' in patch) renderWater();
     majOptionsAuto();
   });
 
@@ -800,33 +818,18 @@ export async function diveFormView({ id }) {
   ));
 
   // ---------- 8. Palanquée ----------
-  const chefWrap   = el('div');
-  const stampWrap  = el('div');
+  // Le moniteur, c'est celui de la palanquée marqué « MON » : pas de
+  // second menu pour reposer la question.
+  const majChef = () => {
+    const mon = dive.buddyIds.map(id => buddies.find(b => b.id === id))
+      .find(b => b && (b.moniteur || b.structure));
+    if (!dive.buddyIds.includes(dive.chefBuddyId)) dive.chefBuddyId = '';
+    if (['moniteur', 'chef'].includes(dive.palanqueeMode) && mon && !dive.chefBuddyId) dive.chefBuddyId = mon.id;
+  };
 
   // Taper un nom : connu, il est proposé ; inconnu, il est créé tout seul.
-  const editeur = editeurPalanquee(dive, buddies, () => { renderChef(); renderStamp(); });
-  const centre = champsCentre(dive, toutesDives);
-
-  function renderChef() {
-    chefWrap.innerHTML = '';
-    const needsChef = ['moniteur', 'chef'].includes(dive.palanqueeMode);
-    if (!needsChef) return;
-    const selected = dive.buddyIds.map(id => buddies.find(b => b.id === id)).filter(Boolean);
-    const sel = el('select');
-    sel.append(el('option', { value: '', text: '— choisir —' }));
-    // Les moniteurs sont proposés en tête : c'est presque toujours l'un d'eux.
-    [...selected].sort((a, b) => (b.moniteur ? 1 : 0) - (a.moniteur ? 1 : 0))
-      .forEach(b => sel.append(el('option', {
-        value: b.id, text: fullName(b) + (b.moniteur ? ' — moniteur' : ''),
-      })));
-    sel.value = dive.chefBuddyId || '';
-    sel.onchange = () => { dive.chefBuddyId = sel.value; renderStamp(); };
-    chefWrap.append(field(
-      dive.palanqueeMode === 'moniteur' ? 'Moniteur' : 'Guide de palanquée',
-      sel,
-      selected.length ? null : 'Sélectionne d’abord un compagnon ci-dessus.',
-    ));
-  }
+  const editeur = editeurPalanquee(dive, buddies, majChef);
+  const centre = champCentre(dive, toutesDives);
 
   const modeWrap = el('div');
   function renderMode() {
@@ -835,65 +838,11 @@ export async function diveFormView({ id }) {
     sel.append(el('option', { value: '', text: '— non précisé —' }));
     PALANQUEE_MODES.forEach(m => sel.append(el('option', { value: m.id, text: m.label })));
     sel.value = dive.palanqueeMode || '';
-    sel.onchange = () => { dive.palanqueeMode = sel.value; renderChef(); renderStamp(); };
+    sel.onchange = () => { dive.palanqueeMode = sel.value; majChef(); };
     modeWrap.append(field('Organisation de la palanquée', sel));
   }
 
-  function renderStamp() {
-    stampWrap.innerHTML = '';
-    const chef = buddies.find(b => b.id === dive.chefBuddyId);
-    const pool = [];
-    if (chef) (chef.stamps || []).forEach(s => pool.push({ buddyId: chef.id, ...s }));
-    dive.buddyIds.filter(id => id !== dive.chefBuddyId).forEach(id => {
-      const b = buddies.find(x => x.id === id);
-      (b?.stamps || []).forEach(s => pool.push({ buddyId: b.id, ...s }));
-    });
-
-    const grid = el('div.stamp-grid');
-
-    // Tampon déjà attaché directement à la plongée
-    if (dive.stampImage) {
-      grid.append(el('div.stamp.on', {},
-        el('img', { src: dive.stampImage, alt: 'Tampon' }),
-        el('button.del', { type: 'button', text: '×',
-          onclick: () => { dive.stampImage = ''; renderStamp(); } }),
-      ));
-    }
-
-    pool.forEach(s => {
-      const cell = el('div.stamp', {},
-        el('img', { src: s.dataUrl, alt: s.label || 'Tampon' }));
-      if (dive.stampId === s.id) cell.classList.add('on');
-      cell.onclick = () => {
-        const on = dive.stampId !== s.id;
-        dive.stampId = on ? s.id : '';
-        dive.stampBuddyId = on ? s.buddyId : '';
-        dive.stampImage = '';
-        renderStamp();
-      };
-      grid.append(cell);
-    });
-
-    const up = el('input', { type: 'file', accept: 'image/*', hidden: true });
-    up.onchange = async () => {
-      const f = up.files?.[0]; if (!f) return;
-      try {
-        dive.stampImage = await fileToDataURL(f, 700);
-        dive.stampId = ''; dive.stampBuddyId = '';
-        renderStamp();
-        toast('Tampon ajouté à cette plongée');
-      } catch (e) { toast(e.message, true); }
-    };
-    grid.append(el('button.stamp-add', { type: 'button', text: '+',
-      onclick: () => up.click() }), up);
-
-    stampWrap.append(field('Tampon', grid,
-      pool.length
-        ? 'Choisis un tampon enregistré, ou ajoute-en un depuis la galerie / l’appareil photo.'
-        : 'Photographie le tampon du carnet. Enregistre-le sur la fiche d’un compagnon pour le réutiliser.'));
-  }
-
-  renderMode(); renderChef(); renderStamp();
+  renderMode(); majChef();
 
   form.append(section('Plongeurs', { icone: '👥', ouvert: true },
     modeWrap,
@@ -901,13 +850,42 @@ export async function diveFormView({ id }) {
       text: 'Plonger avec un moniteur ne fait pas une plongée d’enseignement : '
           + 'on peut très bien sortir en exploration avec lui. Le type de plongée '
           + 'se choisit plus haut, indépendamment de qui t’accompagne.' }),
-    el('div.row-2', {},
-      field('Centre de plongée', el('div', {}, centre.nom, centre.liste)),
-      field('Adresse du centre', centre.adresse)),
+    field('Centre de plongée', centre,
+      'Tape son nom ou son adresse, ou « plongée » pour voir les centres autour du lieu. '
+    + '« Sur la carte » : zoome sur l’endroit et choisis.'),
     field('Palanquée', editeur),
-    chefWrap,
-    stampWrap,
+    el('button.btn.sm.ghost', { type: 'button', text: '📝 Retrouver les plongeurs dans un texte',
+      onclick: () => lireUnTexte() }),
   ));
+
+  /**
+   * Un texte en vrac (le carnet recopié, un message, tes notes) : on y
+   * cherche les plongeurs, même mal écrits, et on propose de les ajouter.
+   */
+  function lireUnTexte() {
+    openModal(close => {
+      const zone = el('textarea', { rows: 6,
+        placeholder: 'Colle ou écris ce que dit le carnet : « plongé avec Marc et Julie, 6 kg, froid… »' });
+      zone.value = [dive.fait, dive.observations].filter(Boolean).join('\n');
+      const sortie = el('div', { style: { marginTop: '10px' } });
+      const chercher = () => {
+        sortie.replaceChildren(propositionsTexte(zone.value, dive, buddies, {
+          exclure: profil ? [fullName(profil)] : [],
+          vide: 'Personne de reconnu. Un nouveau nom se repère après « avec » (« avec Paul Martin »).',
+          onAjout: b => { editeur.rafraichir(); majChef(); toast(`${fullName(b)} dans la palanquée`); },
+        }));
+      };
+      zone.addEventListener('input', debounceLocal(chercher, 300));
+      requestAnimationFrame(chercher);
+      return el('div', {},
+        el('h3', { text: '📝 Les plongeurs dans un texte' }),
+        el('div.hint', { style: { marginTop: 0 },
+          text: 'Les plongeurs connus sont retrouvés même mal orthographiés ; un « ? » quand deux portent le même prénom. '
+            + 'Touche un nom pour l’ajouter.' }),
+        zone, sortie,
+        el('div.btn-row', {}, el('button.btn.primary', { type: 'button', text: 'Terminé', onclick: close })));
+    });
+  }
 
   // ---------- 5. Options & objectifs ----------
   const optionsZone = el('div');
@@ -1293,6 +1271,13 @@ export async function diveFormView({ id }) {
 
   const buttons = el('div.btn-row.actions-fiche', {}, saveBtn);
   if (!isNew) {
+    buttons.append(el('button.btn.ghost', {
+      type: 'button', text: '↪ Snorkeling, fosse…', title: 'Ce n’était pas une plongée : la ranger en séance',
+      onclick: async () => {
+        const { rangerUnePlongee } = await import('./seances.js');
+        rangerUnePlongee(await store.getDive(dive.id) || dive);
+      },
+    }));
     buttons.append(el('button.btn.danger', {
       type: 'button', text: 'Supprimer',
       onclick: async () => {
