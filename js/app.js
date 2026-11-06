@@ -109,10 +109,13 @@ const settingsBtn = el('button.icon-btn.btn-reglages', { title: 'Réglages', 'ar
   onclick: () => navigate('reglages') }, svg('i-gear'));
 
 // Le thème : un bouton, et un volet qui change les couleurs en direct.
-const themeBtn = el('button.icon-btn.btn-theme', { title: 'Thème', 'aria-label': 'Thème',
-  onclick: async () => (await import('./volet-theme.js')).basculerVoletTheme() }, svg('i-palette'));
+// Même allure que le bouton profil, et juste à côté de lui.
+const themeBtn = el('button.btn-theme', { type: 'button', title: 'Thème', 'aria-label': 'Thème',
+  onclick: async () => (await import('./volet-theme.js')).basculerVoletTheme() },
+  el('span.ident-ico', {}, svg('i-palette')));
+identEl.after(themeBtn);
 
-actions.append(syncBtn, themeBtn, settingsBtn);
+actions.append(syncBtn, settingsBtn);
 
 // ------------------------------------------------------------
 //  Bandeau d'ouverture : « connecté à GitHub » ou « mode local »

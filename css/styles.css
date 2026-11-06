@@ -1541,3 +1541,10 @@ select.imp-select {
 /* La page du carnet, lisible sur place (fiche, aperçu, saisie) */
 .carnet-lisible { position: relative; border-radius: var(--radius-sm); overflow: hidden; background: #10161c; margin: 6px 0 8px; }
 .carnet-lisible .zoom { height: 100%; }
+
+/* Le bouton thème : comme le bouton profil, à côté de lui */
+.btn-theme {
+  display: flex; align-items: center; padding: 4px 4px; margin-right: 4px;
+  background: none; border: 0; border-radius: 10px; color: inherit; cursor: pointer; flex: 0 0 auto;
+}
+.btn-theme:active { background: rgba(var(--accent-rgb), .12); }

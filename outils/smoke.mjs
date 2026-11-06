@@ -267,8 +267,10 @@ check('réglages : l’état du stockage est expliqué',
   /Mode local/.test(view()), view().slice(0, 120));
 {
   check('thème : un bouton dans Réglages (plus de grille)', !!document.querySelector('#view .theme-bouton') && !document.querySelector('#view .themes'), '');
-  check('thème : un bouton 🎨 dans la barre du haut', !!document.querySelector('#topActions .btn-theme'), '');
-  document.querySelector('#topActions .btn-theme').click();
+  const btnTheme = document.querySelector('#topbar .btn-theme');
+  check('thème : un bouton 🎨 juste à côté du bouton profil, même allure',
+    btnTheme?.previousElementSibling?.id === 'topIdent' && !!btnTheme.querySelector('.ident-ico'), btnTheme?.previousElementSibling?.id);
+  btnTheme.click();
   await tick(80);
   const v = document.querySelector('.volet-theme');
   check('thème : le volet s’ouvre, tous les thèmes dedans', v?.classList.contains('ouvert') && v.querySelectorAll('.theme-choix').length >= 10, String(v?.querySelectorAll('.theme-choix').length));
