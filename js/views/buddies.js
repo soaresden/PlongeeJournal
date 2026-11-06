@@ -2,7 +2,8 @@
 //  Plongeurs : compagnons de palanquée
 // ============================================================
 
-import { el, fullName, nomPlongeur, couleurCategorie, toast, confirmBox } from '../lib.js';
+import { el, fullName, nomPlongeur, couleurCategorie, toast, confirmBox, openModal } from '../lib.js';
+import { verifierTags } from '../tags.js';
 import { store, emptyBuddy } from '../store.js';
 import { navigate } from '../router.js';
 import { ouvrirApercu, ligneApercu, apercuPlongee } from '../apercu.js';
@@ -110,6 +111,12 @@ export async function buddiesView() {
 
     // Un tag choisi : on peut le renommer pour tout le monde.
     outilTag.replaceChildren();
+    if (categories.length) {
+      outilTag.append(el('div.tag-actions', {},
+        el('button.btn.sm.ghost', { type: 'button', text: '🔎 Vérifier les tags avec mes plongées',
+          onclick: () => ouvrirVerification() }),
+        filtre.startsWith('cat:') ? null : el('span.hint', { style: { margin: 0 }, text: 'Pour renommer un tag : touche-le ci-dessus.' })));
+    }
     if (filtre.startsWith('cat:')) {
       const tag = filtre.slice(4);
       const champ = el('input', { type: 'text', value: tag, enterkeyhint: 'done' });
@@ -127,8 +134,10 @@ export async function buddiesView() {
         recharger();
       };
       champ.addEventListener('keydown', ev => { if (ev.key === 'Enter') { ev.preventDefault(); renommer(); } });
-      outilTag.append(el('span', { text: 'Renommer ce tag pour tout le monde :' }), champ,
-        el('button.btn.sm', { type: 'button', text: 'Renommer', onclick: renommer }));
+      outilTag.append(el('div.tag-renommer', {}, el('span', { text: `✎ Renommer « ${tag} » pour tout le monde :` }), champ,
+        el('button.btn.sm', { type: 'button', text: 'Renommer', onclick: renommer }),
+        el('span.hint', { style: { margin: 0, flexBasis: '100%' },
+          text: 'Un nom déjà utilisé fusionne les deux tags.' })));
     }
 
     const q = recherche.value.trim().toLowerCase();
@@ -151,6 +160,89 @@ export async function buddiesView() {
   async function recharger() {
     buddies.splice(0, buddies.length, ...await store.listBuddies());
     rendre();
+  }
+
+  /**
+   * Les tags comparés aux plongées : qui manque à un tag, qui n'a jamais
+   * plongé, qui n'a pas de tag, et où plongent les gens de chaque tag.
+   * On coche ce qu'on veut corriger, rien ne change sans « Appliquer ».
+   */
+  async function ouvrirVerification() {
+    const dives = diverId ? await store.listDives(diverId) : [];
+    const { tags, sansTag } = verifierTags(buddies, dives);
+    const ajouts = [];         // { buddy, tag, coche }
+    const nom = b => nomPlongeur(b) || 'Sans nom';
+
+    openModal(close => {
+      const bouton = el('button.btn.primary', { type: 'button' });
+      const maj = () => {
+        const k = ajouts.filter(a => a.coche).length;
+        bouton.textContent = k ? `Ajouter ${k} tag${k > 1 ? 's' : ''}` : 'Rien de coché';
+        bouton.disabled = !k;
+      };
+      const ligne = (a, texte) => {
+        const c = el('input', { type: 'checkbox' });
+        c.checked = a.coche;
+        c.onchange = () => { a.coche = c.checked; maj(); };
+        return el('label.verif-ligne', {}, c, el('span', {}, el('b', { text: nom(a.buddy) }), ' ', texte));
+      };
+      const pastille = t => el('span.cat', { style: { '--cat': couleurCategorie(t) }, text: t });
+
+      const blocs = tags.map(t => {
+        const lignes = t.aAjouter.map(x => {
+          const a = { buddy: x.buddy, tag: t.tag, coche: x.ensemble / x.total >= 0.75 && x.ensemble >= 2 };
+          ajouts.push(a);
+          return ligne(a, el('small', { text: `${x.ensemble} plongée${x.ensemble > 1 ? 's' : ''} sur ${x.total} avec des « ${t.tag} »` }));
+        });
+        return el('div.verif-tag', {},
+          el('div.verif-tete', {}, pastille(t.tag), el('small', { text: `${t.membres.length} plongeur${t.membres.length > 1 ? 's' : ''}` })),
+          t.lieux.length ? el('div.hint', { style: { margin: '4px 0' },
+            text: `Plongent surtout à : ${t.lieux.map(l => `${l.lieu} (${l.n})`).join(', ')}` }) : null,
+          lignes.length ? el('div', {}, el('div.verif-lbl', { text: `Sans le tag, mais souvent avec des « ${t.tag} » :` }), ...lignes) : null,
+          t.sansPlongee.length ? el('div.hint', { style: { margin: '4px 0 0' },
+            text: `Aucune plongée au carnet : ${t.sansPlongee.map(nom).join(', ')}` }) : null,
+          !lignes.length && !t.sansPlongee.length ? el('div.hint', { style: { margin: '4px 0 0' }, text: '✓ Rien à signaler.' }) : null);
+      });
+
+      // Déjà proposés dans un tag plus haut : pas une seconde fois.
+      const dejaProposes = new Set(ajouts.map(a => a.buddy.id));
+      const restants = sansTag.filter(x => !dejaProposes.has(x.buddy.id));
+      const sans = restants.length ? el('div.verif-tag', {},
+        el('div.verif-tete', {}, el('b', { text: 'Sans aucun tag' }), el('small', { text: `${restants.length} plongeur${restants.length > 1 ? 's' : ''} de tes plongées` })),
+        ...restants.map(x => {
+          if (!x.tag) return el('div.verif-ligne', {}, el('span', {}, el('b', { text: nom(x.buddy) }), ' ',
+            el('small', { text: `${x.total} plongée${x.total > 1 ? 's' : ''}, aucun compagnon tagué` })));
+          const a = { buddy: x.buddy, tag: x.tag, coche: false };
+          ajouts.push(a);
+          return ligne(a, el('span', {}, el('small', { text: '→ ' }), pastille(x.tag),
+            el('small', { text: ` ${x.ensemble} plongée${x.ensemble > 1 ? 's' : ''} sur ${x.total}` })));
+        })) : null;
+
+      bouton.onclick = async () => {
+        bouton.disabled = true;
+        try {
+          const parPersonne = new Map();
+          ajouts.filter(a => a.coche).forEach(a => parPersonne.set(a.buddy.id, [...(parPersonne.get(a.buddy.id) || []), a.tag]));
+          for (const [id, nouveaux] of parPersonne) {
+            const b = await store.getBuddy(id);
+            if (!b) continue;
+            b.categories = [...new Set([...(b.categories || []), ...nouveaux])];
+            await store.saveBuddy(b);
+          }
+          close();
+          toast(`Tags ajoutés à ${parPersonne.size} plongeur${parPersonne.size > 1 ? 's' : ''}`);
+          recharger();
+        } catch (e) { toast(e.message, true); bouton.disabled = false; }
+      };
+      maj();
+      return el('div', {},
+        el('h3', { text: '🔎 Les tags, comparés à tes plongées' }),
+        el('div.hint', { style: { marginTop: 0 },
+          text: 'D’après qui était dans tes palanquées. Coche ce qui est juste ; rien ne change sans « Ajouter ». '
+            + 'Pour retirer un tag à quelqu’un : sa fiche. Pour renommer : touche le tag dans les filtres.' }),
+        el('div.verif-liste', {}, ...blocs, sans),
+        el('div.btn-row', {}, el('button.btn.ghost', { type: 'button', text: 'Fermer', onclick: close }), bouton));
+    });
   }
 
   recherche.addEventListener('input', rendre);

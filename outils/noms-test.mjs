@@ -91,6 +91,31 @@ check('distance d’édition', N.distance('jullie', 'julie') === 1 && N.distance
     && L.nomAffiche(null) === '' && L.nomAffiche({ prenom: 'Ana' }) === 'Ana');
 }
 
+// ---------- Tags comparés aux plongées ----------
+{
+  const T = await imp('js/tags.js');
+  const gens = [
+    { id: 'a', prenom: 'Ana', categories: ['OGN'] }, { id: 'b', prenom: 'Bob', categories: ['OGN'] },
+    { id: 'c', prenom: 'Cid', categories: [] }, { id: 'e', prenom: 'Eva', categories: ['OGN'] },
+    { id: 'f', prenom: 'Fred', categories: ['Malte'] }, { id: 'g', prenom: 'Gus', categories: [] },
+    { id: 'z', prenom: 'Club', structure: true, categories: ['OGN'] },
+  ];
+  const dives = [
+    { lieuNom: 'Fosse', buddyIds: ['a', 'c'] }, { lieuNom: 'Fosse', buddyIds: ['a', 'b', 'c'] },
+    { lieuNom: 'Cherbourg', buddyIds: ['b', 'c'] }, { lieuNom: 'Malte', buddyIds: ['f', 'g'] }, { lieuNom: 'Malte', buddyIds: ['f', 'c'] },
+  ];
+  const r = T.verifierTags(gens, dives);
+  const ogn = r.tags.find(t => t.tag === 'OGN');
+  check('tags : Cid, souvent avec des OGN, proposé', ogn.aAjouter.map(x => `${x.buddy.id}:${x.ensemble}/${x.total}`).join() === 'c:3/4', JSON.stringify(ogn.aAjouter.map(x => [x.buddy.id, x.ensemble, x.total])));
+  check('tags : Eva, OGN sans plongée, signalée', ogn.sansPlongee.map(b => b.id).join() === 'e');
+  check('tags : où plongent les OGN', ogn.lieux[0].lieu === 'Fosse' && ogn.lieux[0].n === 2, JSON.stringify(ogn.lieux));
+  check('tags : un centre n’est pas compté', ogn.membres.length === 3);
+  const gus = r.sansTag.find(x => x.buddy.id === 'g');
+  check('sans tag : Gus → Malte (1/1)', gus?.tag === 'Malte' && gus.ensemble === 1 && gus.total === 1, JSON.stringify(gus));
+  check('sans tag : Cid → OGN (3 plongées, comptées une fois chacune)', r.sansTag.find(x => x.buddy.id === 'c')?.tag === 'OGN'
+    && r.sansTag.find(x => x.buddy.id === 'c').ensemble === 3, JSON.stringify(r.sansTag.find(x => x.buddy.id === 'c')));
+}
+
 // ---------- Centres de plongée ----------
 check('« plongée », « dive », « club » : on cherche des centres', C.chercheCentres('plongée') && C.chercheCentres('Dive') && C.chercheCentres('club de plongée Cherbourg') && !C.chercheCentres('Cherbourg'));
 check('adresse OSM lisible', C.adresseOsm({ 'addr:housenumber': '12', 'addr:street': 'Quai Alexandre III', 'addr:postcode': '50100', 'addr:city': 'Cherbourg' }) === '12 Quai Alexandre III, 50100 Cherbourg');
