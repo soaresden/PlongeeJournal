@@ -108,7 +108,11 @@ syncBtn.onclick = async () => {
 const settingsBtn = el('button.icon-btn.btn-reglages', { title: 'Réglages', 'aria-label': 'Réglages',
   onclick: () => navigate('reglages') }, svg('i-gear'));
 
-actions.append(syncBtn, settingsBtn);
+// Le thème : un bouton, et un volet qui change les couleurs en direct.
+const themeBtn = el('button.icon-btn.btn-theme', { title: 'Thème', 'aria-label': 'Thème',
+  onclick: async () => (await import('./volet-theme.js')).basculerVoletTheme() }, svg('i-palette'));
+
+actions.append(syncBtn, themeBtn, settingsBtn);
 
 // ------------------------------------------------------------
 //  Bandeau d'ouverture : « connecté à GitHub » ou « mode local »

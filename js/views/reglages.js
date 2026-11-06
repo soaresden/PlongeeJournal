@@ -17,7 +17,8 @@ import {
   testerConnexion, lienCreationJeton,
 } from '../github.js';
 import { modeActuel, rebrancher, synchroniser, derniereSynchro, erreurGitHub } from '../store-github.js';
-import { THEMES, themeChoisi, choisirTheme } from '../theme.js';
+import { THEMES, themeChoisi } from '../theme.js';
+import { pastilleTheme } from '../volet-theme.js';
 import {
   chargerLiaison, sauverLiaison, estRelie, clesCompletes, lienAutorisation, nouvelEtat, RETOUR_DEFAUT,
 } from '../suunto-cloud.js';
@@ -217,27 +218,19 @@ function carteGitHub() {
 }
 
 function sectionApparence() {
-  const actuel = themeChoisi();
-  const grille = el('div.themes');
-  THEMES.forEach(t => {
-    const [fond, surface, accent] = t.apercu;
-    const b = el('button.theme-choix', { type: 'button', 'aria-pressed': String(t.id === actuel),
-      onclick: () => {
-        choisirTheme(t.id);
-        grille.querySelectorAll('.theme-choix').forEach(x => x.setAttribute('aria-pressed', 'false'));
-        b.setAttribute('aria-pressed', 'true');
-      } },
-      el('span.theme-apercu', { style: { background: fond } },
-        t.barre ? el('span.theme-barre', { style: { background: t.barre } }) : null,
-        el('span.theme-carte', { style: { background: surface } },
-          el('span.theme-trait', { style: { background: accent } }),
-          el('span.theme-trait.court', { style: { background: accent, opacity: '.45' } })),
-        el('span.theme-rond', { style: { background: accent } })),
-      el('span.theme-nom', { text: t.nom }),
-      el('span.theme-sous', { text: t.sous }));
-    grille.append(b);
-  });
-  return el('div.section', {}, el('h2', { text: 'Apparence' }), grille);
+  const bouton = el('button.card.theme-bouton', { type: 'button',
+    onclick: async () => (await import('../volet-theme.js')).ouvrirVoletTheme() });
+  const rendre = () => {
+    const t = THEMES.find(x => x.id === themeChoisi()) || THEMES[0];
+    bouton.replaceChildren(pastilleTheme(t),
+      el('span', {}, el('b', { text: `🎨 Thème : ${t.nom}` }),
+        el('span.hint', { style: { display: 'block', margin: '2px 0 0' },
+          text: 'Toucher pour changer : les couleurs changent en direct. Aussi par le bouton 🎨 en haut.' })));
+  };
+  rendre();
+  const suivre = () => { if (!bouton.isConnected) document.removeEventListener('theme-change', suivre); else rendre(); };
+  document.addEventListener('theme-change', suivre);
+  return el('div.section', {}, el('h2', { text: 'Apparence' }), bouton);
 }
 
 function sectionDonnees() {

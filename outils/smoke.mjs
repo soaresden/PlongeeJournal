@@ -246,10 +246,30 @@ window.dispatchEvent(new window.Event('hashchange'));
 await tick(150);
 check('réglages : l’état du stockage est expliqué',
   /Mode local/.test(view()), view().slice(0, 120));
+{
+  check('thème : un bouton dans Réglages (plus de grille)', !!document.querySelector('#view .theme-bouton') && !document.querySelector('#view .themes'), '');
+  check('thème : un bouton 🎨 dans la barre du haut', !!document.querySelector('#topActions .btn-theme'), '');
+  document.querySelector('#topActions .btn-theme').click();
+  await tick(80);
+  const v = document.querySelector('.volet-theme');
+  check('thème : le volet s’ouvre, tous les thèmes dedans', v?.classList.contains('ouvert') && v.querySelectorAll('.theme-choix').length >= 10, String(v?.querySelectorAll('.theme-choix').length));
+  check('thème : sans voile sombre (la page reste visible)', !document.querySelector('.apercu-fond.ouvert'), '');
+  const avant = document.documentElement.dataset.theme;
+  const autre = [...v.querySelectorAll('.theme-choix')].find(b => !['auto', avant].includes(b.dataset.id));
+  autre.click();
+  check('thème : appliqué tout de suite, volet toujours ouvert', document.documentElement.dataset.theme === autre.dataset.id && v.classList.contains('ouvert')
+    && autre.getAttribute('aria-pressed') === 'true', document.documentElement.dataset.theme);
+  check('thème : retenu sur l’appareil', localStorage.getItem('plongee-journal:theme') === autre.dataset.id, '');
+  document.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape' }));
+  check('thème : Échap ferme le volet', !v.classList.contains('ouvert'), '');
+  v.querySelector(`[data-id="${avant}"]`)?.click();
+  const { choisirTheme } = await import(__p2u(path.join(ROOT, 'js/theme.js')).href);
+  choisirTheme(avant);
+}
 check('réglages : le branchement GitHub est proposé',
   /Dépôt GitHub privé/.test(view()) && /Jeton d’accès/.test(view()), '');
-check('réglages : les thèmes sont proposés',
-  /Cousteau/.test(view()) && /Abysse/.test(view()) && /Eau turquoise/.test(view()), '');
+check('réglages : le thème en cours est affiché sur le bouton',
+  /Thème : /.test(view()), '');
 check('réglages : sauvegarde manuelle proposée',
   /Exporter le carnet/.test(view()), '');
 check('réglages (site web) : pas de carte de mise à jour de l’APK',

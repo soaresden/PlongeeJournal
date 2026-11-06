@@ -441,3 +441,38 @@ input.lecture-seule { opacity: .75; cursor: default; }
 .noms-trouves { flex-basis: 100%; margin-top: 6px; gap: 6px; }
 .noms-trouves:empty { display: none; }
 .noms-trouves .chip small { opacity: .7; }
+
+/* ---------- Le volet des thèmes : la page reste visible, sans voile ---------- */
+.volet-theme {
+  position: fixed; z-index: 95; left: 0; right: 0; bottom: 0;
+  background: var(--bg-2); color: var(--text);
+  border-top: 1px solid var(--line); border-radius: 18px 18px 0 0;
+  box-shadow: 0 -10px 30px rgba(0,0,0,.28);
+  padding: 10px 12px calc(12px + var(--safe-b, 0px));
+  transform: translateY(105%); transition: transform .22s ease, background .2s ease;
+}
+.volet-theme.ouvert { transform: none; }
+.volet-theme-tete { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.volet-theme-tete b { font-size: 15px; }
+.volet-theme-nom { flex: 1; color: var(--text-mute); font-size: 13px; }
+/* Téléphone : une rangée qui défile, pour garder l'écran visible. */
+.volet-theme-liste { display: flex; gap: 8px; overflow-x: auto; scroll-snap-type: x proximity; padding-bottom: 4px; }
+.volet-theme-liste .theme-choix { flex: 0 0 112px; scroll-snap-align: center; padding: 6px 6px 8px; }
+.volet-theme-liste .theme-apercu { height: 52px; margin-bottom: 4px; }
+.volet-theme-liste .theme-nom { font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.volet-theme-pied { font-size: 11.5px; color: var(--text-mute); margin-top: 6px; }
+/* Tablette, PC : un volet sur le côté droit. */
+@media (min-width: 760px) {
+  .volet-theme {
+    left: auto; top: 0; width: 300px; border-radius: 18px 0 0 18px;
+    border-top: 0; border-left: 1px solid var(--line);
+    box-shadow: -10px 0 30px rgba(0,0,0,.25);
+    transform: translateX(105%); overflow-y: auto;
+    padding: calc(14px + var(--safe-t, 0px)) 14px 14px;
+  }
+  .volet-theme-liste { display: grid; grid-template-columns: 1fr 1fr; overflow: visible; }
+  .volet-theme-liste .theme-choix { flex: none; }
+}
+.btn-theme.on { color: var(--accent); }
+.theme-bouton { display: flex; align-items: center; gap: 14px; width: 100%; text-align: left; cursor: pointer; color: var(--text); font: inherit; }
+.theme-bouton .theme-apercu { flex: 0 0 96px; height: 56px; margin: 0; }
