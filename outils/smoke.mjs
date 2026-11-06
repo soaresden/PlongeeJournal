@@ -106,7 +106,7 @@ await store.setActiveDiver(d.id);
 
 // --- Compagnon avec tampon ---------------------------------
 const b = emptyBuddy();
-Object.assign(b, { prenom: 'Jean', nom: 'Moniteur', niveau: 'MF1',
+Object.assign(b, { prenom: 'Jean', nom: 'Moniteur', niveau: 'MF1', moniteur: true,
   stamps: [{ id: 'st1', dataUrl: 'data:image/jpeg;base64,AAAA', label: 'Club' }] });
 await store.saveBuddy(b);
 
@@ -239,6 +239,25 @@ await tick(90);
 check('la liste affiche les deux lieux',
   view().includes('Lac de Beaumont-sur-Oise') && view().includes('Calanque de Sormiou'), view().slice(0, 150));
 check('la liste affiche le compagnon', view().includes('Jean Moniteur'), '');
+{
+  // Un plongeur créé dans l'aperçu : son nom sur la carte, pas « ? ».
+  document.querySelector('#view .dive-card')?.click();
+  await tick(200);
+  const champ = document.querySelector('.apercu .palq-saisie input[type=text]');
+  champ.value = 'Nina Nouvelle';
+  champ.dispatchEvent(new window.Event('input'));
+  champ.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter' }));
+  await tick(700);
+  document.querySelector('.apercu .apercu-btn[aria-label=Fermer]')?.click();
+  await tick(200);
+  const noms = [...document.querySelectorAll('#view .dive-buddies')].map(x => x.textContent).join(' | ');
+  check('liste : un plongeur ajouté dans l’aperçu a son nom (pas « ? »)', /Nina Nouvelle/.test(noms) && !/\?/.test(noms), noms);
+  const nina = (await store.listBuddies()).find(b => b.prenom === 'Nina');
+  if (nina) await store.deleteBuddy(nina.id);
+  window.location.hash = '#/dives';
+  window.dispatchEvent(new window.Event('hashchange'));
+  await tick(90);
+}
 
 // --- Réglages : l'état du carnet, en clair ---
 window.location.hash = '#/reglages';
@@ -718,6 +737,26 @@ check('formulaire : le plongeur de la palanquée est en puce',
     [...document.querySelectorAll('#view .palq-prop.nouveau')].some(b => b.textContent.includes('zzz')), '');
   champ.value = '';
   champ.dispatchEvent(new window.Event('input'));
+}
+{
+  // Deux moniteurs : le premier est « avec qui j'étais » ; en toucher un autre le passe en tête.
+  const champ = document.querySelector('#view .palq-saisie input[type=text]');
+  const caseMon = document.querySelector('#view .palq-case input');
+  caseMon.checked = true; caseMon.dispatchEvent(new window.Event('change'));
+  champ.value = 'Zoé Second';
+  champ.dispatchEvent(new window.Event('input'));
+  champ.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter' }));
+  await tick(80);
+  const etoile = [...document.querySelectorAll('#view .palq-puce.avec')].map(x => x.textContent);
+  check('palanquée : plusieurs moniteurs, le premier est ★ (avec lui)', etoile.length === 1 && /Jean/.test(etoile[0]), etoile.join('|'));
+  [...document.querySelectorAll('#view .palq-puce.mon')].find(x => /Zoé/.test(x.textContent))?.click();
+  await tick(40);
+  const apres = [...document.querySelectorAll('#view .palq-puce.avec')].map(x => x.textContent);
+  check('palanquée : toucher un autre moniteur le met en tête', apres.length === 1 && /Zoé/.test(apres[0]), apres.join('|'));
+  [...document.querySelectorAll('#view .palq-puce')].find(x => /Zoé/.test(x.textContent))?.querySelector('button')?.click();
+  await tick(40);
+  const zoe = (await store.listBuddies()).find(b => b.prenom === 'Zoé');
+  if (zoe) await store.deleteBuddy(zoe.id);
 }
 check('formulaire : moniteur sans nom proposé',
   !!document.querySelector('#view .palq-prop.anonyme'), '');

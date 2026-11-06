@@ -818,17 +818,9 @@ export async function diveFormView({ id }) {
   ));
 
   // ---------- 8. Palanquée ----------
-  // Le moniteur, c'est celui de la palanquée marqué « MON » : pas de
-  // second menu pour reposer la question.
-  const majChef = () => {
-    const mon = dive.buddyIds.map(id => buddies.find(b => b.id === id))
-      .find(b => b && (b.moniteur || b.structure));
-    if (!dive.buddyIds.includes(dive.chefBuddyId)) dive.chefBuddyId = '';
-    if (['moniteur', 'chef'].includes(dive.palanqueeMode) && mon && !dive.chefBuddyId) dive.chefBuddyId = mon.id;
-  };
-
   // Taper un nom : connu, il est proposé ; inconnu, il est créé tout seul.
-  const editeur = editeurPalanquee(dive, buddies, majChef);
+  // Le moniteur avec qui j'étais : le premier « MON » de la liste (palanquee.js).
+  const editeur = editeurPalanquee(dive, buddies, () => renderMode());
   const centre = champCentre(dive, toutesDives);
 
   const modeWrap = el('div');
@@ -838,11 +830,11 @@ export async function diveFormView({ id }) {
     sel.append(el('option', { value: '', text: '— non précisé —' }));
     PALANQUEE_MODES.forEach(m => sel.append(el('option', { value: m.id, text: m.label })));
     sel.value = dive.palanqueeMode || '';
-    sel.onchange = () => { dive.palanqueeMode = sel.value; majChef(); };
+    sel.onchange = () => { dive.palanqueeMode = sel.value; };
     modeWrap.append(field('Organisation de la palanquée', sel));
   }
 
-  renderMode(); majChef();
+  renderMode();
 
   form.append(section('Plongeurs', { icone: '👥', ouvert: true },
     modeWrap,
@@ -872,7 +864,7 @@ export async function diveFormView({ id }) {
         sortie.replaceChildren(propositionsTexte(zone.value, dive, buddies, {
           exclure: profil ? [fullName(profil)] : [],
           vide: 'Personne de reconnu. Un nouveau nom se repère après « avec » (« avec Paul Martin »).',
-          onAjout: b => { editeur.rafraichir(); majChef(); toast(`${fullName(b)} dans la palanquée`); },
+          onAjout: b => { editeur.rafraichir(); toast(`${fullName(b)} dans la palanquée`); },
         }));
       };
       zone.addEventListener('input', debounceLocal(chercher, 300));

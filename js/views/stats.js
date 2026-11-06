@@ -6,7 +6,7 @@
 //  en question — un filtre, en somme.
 // ============================================================
 
-import { el, fmtDuration, fmtDate, fullName } from '../lib.js';
+import { el, fmtDuration, fmtDate, fullName, nomAffiche } from '../lib.js';
 import { store, TYPES_SEANCE, statsSeances, sortDives } from '../store.js';
 import { navigate } from '../router.js';
 import { apercuListe, apercuSeance } from '../apercu.js';
@@ -114,7 +114,8 @@ export async function statsView() {
 
   // Compagnons
   const top = Object.entries(st.buddyCount).sort((a, b) => b[1] - a[1]).slice(0, 10)
-    .map(([id, n]) => [fullName(buddies.find(b => b.id === id)) || '?', n, d => (d.buddyIds || []).includes(id)]);
+    .filter(([id]) => buddies.some(b => b.id === id))
+    .map(([id, n]) => [nomAffiche(buddies.find(b => b.id === id)), n, d => (d.buddyIds || []).includes(id)]);
 
   // Types
   const types = Object.entries(st.byType).sort((a, b) => b[1] - a[1])

@@ -159,7 +159,6 @@ export async function apercuPlongee(id, { retour = null, onClose = null } = {}) 
   if (!d) return toast('Plongée introuvable', true);
   const certifs = await store.listCertifications(d.diverId);
   const buddies = await store.listBuddies();
-  const nom = bid => nomPlongeur(buddies.find(b => b.id === bid)) || '?';
 
   const temoin = el('span.apercu-temoin');
   const sauvegarde = enregistreur(() => store.saveDive(d), temoin);
@@ -256,7 +255,7 @@ export async function apercuSeance(id, { retour = null, onClose = null } = {}) {
   const buddies = await store.listBuddies();
   const moi = await store.getDiver(s.diverId);
   s.buddyIds ||= [];
-  const avecQui = editeurPalanquee(s, buddies, () => sauvegarde.planifier(), { anonyme: false, placeholder: 'Avec qui : prénom nom…' });
+  const avecQui = editeurPalanquee(s, buddies, () => sauvegarde.planifier(), { anonyme: false, chef: false, placeholder: 'Avec qui : prénom nom…' });
 
   const tete = el('div.apercu-tete-plongee', {},
     el('span.seance-pastille', { class: `s-${t.id}`, style: { width: '52px', height: '52px', flex: '0 0 52px', fontSize: '26px' }, text: t.icone }),

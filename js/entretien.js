@@ -9,7 +9,7 @@
 //  Rien ne bloque : sans réseau, on réessaiera à la prochaine ouverture.
 // ============================================================
 
-import { store } from './store.js';
+import { store, premierMoniteur } from './store.js';
 
 const PAR_OUVERTURE = 25;      // les services OSM n'aiment pas être pressés
 const PAUSE_MS = 1200;
@@ -24,11 +24,20 @@ export function eauxAReconnaitre(dives) {
 
 export async function entretenir({ analyser = null } = {}) {
   const diverId = await store.getActiveDiverId();
-  if (!diverId) return { numeros: 0, eaux: 0 };
+  if (!diverId) return { numeros: 0, eaux: 0, chefs: 0 };
   const numeros = await store.numeroterAuto(diverId).catch(() => 0);
 
+  // Le moniteur avec qui j'étais : le premier de la palanquée.
+  const buddies = await store.listBuddies();
+  const chefs = [];
+  for (const d of await store.listDives(diverId)) {
+    const chef = premierMoniteur(d, buddies);
+    if ((d.chefBuddyId || '') !== chef) { d.chefBuddyId = chef; chefs.push(d); }
+  }
+  if (chefs.length) await store.savePlongees(chefs).catch(() => {});
+
   let eaux = 0;
-  if (typeof navigator !== 'undefined' && navigator.onLine === false) return { numeros, eaux };
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return { numeros, eaux, chefs: chefs.length };
   const a = analyser || (await import('./geo.js')).analyserPoint;
   const liste = eauxAReconnaitre(await store.listDives(diverId)).slice(0, PAR_OUVERTURE);
   const modifiees = [];
@@ -52,5 +61,5 @@ export async function entretenir({ analyser = null } = {}) {
   }
   if (modifiees.length) await store.savePlongees(modifiees);
   eaux = modifiees.filter(d => d.eau).length;
-  return { numeros, eaux };
+  return { numeros, eaux, chefs: chefs.length };
 }

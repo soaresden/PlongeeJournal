@@ -79,6 +79,18 @@ check('distance d’édition', N.distance('jullie', 'julie') === 1 && N.distance
     E.eauxAReconnaitre([{ lat: 45, lng: 5 }, { lat: 45, lng: 5, eauManuelle: true }, { lat: 45, lng: 5, eauAuto: true }, { lat: null }, { lat: 0.001, lng: 9 }]).length === 1);
 }
 
+// ---------- Le moniteur avec qui j'étais : le premier ----------
+{
+  const gens = [{ id: 'a', prenom: 'Ana' }, { id: 'm1', prenom: 'Paul', moniteur: true }, { id: 'm2', prenom: 'Léo', moniteur: true }, { id: 'c', prenom: 'Club', structure: true }];
+  check('plusieurs moniteurs : le premier de la liste', M.premierMoniteur({ buddyIds: ['a', 'm2', 'm1'] }, gens) === 'm2');
+  check('un centre compte comme moniteur', M.premierMoniteur({ buddyIds: ['a', 'c', 'm1'] }, gens) === 'c');
+  check('sans moniteur : le chef noté reste s’il est là', M.premierMoniteur({ buddyIds: ['a'], chefBuddyId: 'a' }, gens) === 'a'
+    && M.premierMoniteur({ buddyIds: ['a'], chefBuddyId: 'x' }, gens) === '');
+  const L = await imp('js/lib.js');
+  check('nom affiché : jamais « ? »', L.nomAffiche({ prenom: '', nom: '' }) === 'Sans nom' && L.nomAffiche({ licence: 'A-1' }) === 'Licence A-1'
+    && L.nomAffiche(null) === '' && L.nomAffiche({ prenom: 'Ana' }) === 'Ana');
+}
+
 // ---------- Centres de plongée ----------
 check('« plongée », « dive », « club » : on cherche des centres', C.chercheCentres('plongée') && C.chercheCentres('Dive') && C.chercheCentres('club de plongée Cherbourg') && !C.chercheCentres('Cherbourg'));
 check('adresse OSM lisible', C.adresseOsm({ 'addr:housenumber': '12', 'addr:street': 'Quai Alexandre III', 'addr:postcode': '50100', 'addr:city': 'Cherbourg' }) === '12 Quai Alexandre III, 50100 Cherbourg');

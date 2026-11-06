@@ -7,8 +7,8 @@
 //  Le centre de plongée : centre.js.
 // ============================================================
 
-import { el, fullName, nomPlongeur, toast } from './lib.js';
-import { store, emptyBuddy } from './store.js';
+import { el, fullName, nomAffiche, toast } from './lib.js';
+import { store, emptyBuddy, premierMoniteur } from './store.js';
 import { trouverPlongeurs } from './noms.js';
 
 const sansAccent = s => (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
@@ -19,7 +19,7 @@ const sansAccent = s => (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLow
  * @param {object[]} buddies     les plongeurs connus (complétée si on en crée un)
  * @param {Function} onChange    appelée après chaque changement
  */
-export function editeurPalanquee(dive, buddies, onChange = () => {}, { anonyme = true, placeholder = 'Ajouter : prénom nom…' } = {}) {
+export function editeurPalanquee(dive, buddies, onChange = () => {}, { anonyme = true, chef = true, placeholder = 'Ajouter : prénom nom…' } = {}) {
   dive.buddyIds ||= [];
   const boite = el('div.palq');
   const choisis = el('div.palq-choisis');
@@ -28,7 +28,13 @@ export function editeurPalanquee(dive, buddies, onChange = () => {}, { anonyme =
   const caseMon = el('input', { type: 'checkbox' });
   const propositions = el('div.palq-props');
 
-  const changer = () => { rendreChoisis(); rendrePropositions(); onChange(); };
+  // Le moniteur avec qui j'étais : le premier de la liste (voir premierMoniteur).
+  const majChef = () => {
+    if (!chef) return;
+    dive.chefBuddyId = premierMoniteur(dive, buddies);
+    if (dive.chefBuddyId && !dive.palanqueeMode) dive.palanqueeMode = 'moniteur';
+  };
+  const changer = () => { majChef(); rendreChoisis(); rendrePropositions(); onChange(); };
   const connus = () => buddies.filter(b => !b.structure);
 
   function ajouter(b) {
@@ -60,20 +66,33 @@ export function editeurPalanquee(dive, buddies, onChange = () => {}, { anonyme =
   }
 
   function rendreChoisis() {
-    const puces = dive.buddyIds.map(id => buddies.find(b => b.id === id)).filter(Boolean).map(b =>
-      el(`span.palq-puce${b.moniteur || b.structure ? '.mon' : ''}`, {},
-        b.moniteur || b.structure ? el('small', { text: 'MON' }) : null,
-        el('span', { text: nomPlongeur(b) || '?' }),
-        el('button', { type: 'button', 'aria-label': 'Retirer', text: '×', onclick: () => {
+    const presents = dive.buddyIds.map(id => buddies.find(b => b.id === id)).filter(Boolean);
+    const puces = presents.map(b => {
+      const mon = b.moniteur || b.structure;
+      const avecLui = chef && b.id === dive.chefBuddyId;
+      return el(`span.palq-puce${mon ? '.mon' : ''}${avecLui ? '.avec' : ''}`, {
+        title: mon && chef ? (avecLui ? 'Le moniteur avec qui j’étais' : 'Toucher : c’est avec lui que j’étais') : '',
+        onclick: mon && chef && !avecLui ? () => {
+          // Le moniteur touché passe en tête : c'est lui, « mon » moniteur.
+          dive.buddyIds = [b.id, ...dive.buddyIds.filter(x => x !== b.id)];
+          changer();
+        } : null },
+        mon ? el('small', { text: avecLui ? '★ MON' : 'MON' }) : null,
+        el('span', { text: nomAffiche(b) }),
+        el('button', { type: 'button', 'aria-label': 'Retirer', text: '×', onclick: e => {
+          e.stopPropagation();
           dive.buddyIds = dive.buddyIds.filter(x => x !== b.id);
           if (dive.chefBuddyId === b.id) dive.chefBuddyId = '';
           changer();
-        } })));
+        } }));
+    });
     if (dive.moniteurSansNom) {
       puces.push(el('span.palq-puce.mon', {}, el('small', { text: 'MON' }), el('span', { text: 'Moniteur (nom inconnu)' }),
         el('button', { type: 'button', 'aria-label': 'Retirer', text: '×', onclick: () => { dive.moniteurSansNom = false; changer(); } })));
     }
-    choisis.replaceChildren(...(puces.length ? puces : [el('span.palq-vide', { text: 'Personne pour l’instant.' })]));
+    const plusieurs = chef && presents.filter(b => b.moniteur || b.structure).length > 1;
+    choisis.replaceChildren(...(puces.length ? puces : [el('span.palq-vide', { text: 'Personne pour l’instant.' })]),
+      ...(plusieurs ? [el('span.palq-aide', { text: '★ : le moniteur avec qui tu étais (le premier). Touche un autre moniteur pour le changer.' })] : []));
   }
 
   function rendrePropositions() {
@@ -104,6 +123,7 @@ export function editeurPalanquee(dive, buddies, onChange = () => {}, { anonyme =
   boite.append(choisis,
     el('div.palq-saisie', {}, champ, el('label.palq-case', {}, caseMon, el('span', { text: 'moniteur' }))),
     propositions);
+  majChef();
   rendreChoisis();
   rendrePropositions();
   // Quelqu'un a été ajouté d'ailleurs (un texte, l'agenda) : on redessine.

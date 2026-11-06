@@ -2,7 +2,7 @@
 //  Liste des plongées + fiche détaillée
 // ============================================================
 
-import { el, fmtDate, fmtDateLong, fmtDuration, fullName, nomPlongeur, toast, confirmBox, openModal, debounce } from '../lib.js';
+import { el, fmtDate, fmtDateLong, fmtDuration, fullName, nomPlongeur, nomAffiche, toast, confirmBox, openModal, debounce } from '../lib.js';
 import { apercuPlongee, apercuSeance } from '../apercu.js';
 import { store, TYPES_SEANCE } from '../store.js';
 import { staticMap } from '../map.js';
@@ -94,7 +94,7 @@ export async function divesView() {
   const dives = await store.listDives(diverId);
   const seances = await store.listSeances(diverId);
   const buddies = await store.listBuddies();
-  const buddyName = id => nomPlongeur(buddies.find(b => b.id === id)) || '?';
+  const buddyName = id => nomAffiche(buddies.find(b => b.id === id));
 
   const wrap = el('div');
 
@@ -205,6 +205,9 @@ export async function divesView() {
   async function rafraichir() {
     const frais = await store.listDives(diverId);
     dives.splice(0, dives.length, ...frais);
+    // Des plongeurs ont pu être ajoutés dans l'aperçu : sans eux, leurs
+    // noms manqueraient sur les cartes.
+    buddies.splice(0, buddies.length, ...(await store.listBuddies()));
     const fs = (await store.listSeances(diverId)).filter(s => s.type === 'fosse');
     fosses.splice(0, fosses.length, ...fs);
     afficher({ garderScroll: true });
@@ -374,7 +377,7 @@ export async function diveView({ id }) {
   if (!d) return { title: 'Introuvable', node: el('div.empty', { text: 'Plongée introuvable.' }), back: true };
 
   const buddies = await store.listBuddies();
-  const buddyName = bid => nomPlongeur(buddies.find(b => b.id === bid)) || '?';
+  const buddyName = bid => nomAffiche(buddies.find(b => b.id === bid));
   const wrap = el('div.fiche');
 
   const kv = (k, v) => (v === null || v === undefined || v === '' || v === '—')
@@ -545,7 +548,7 @@ export async function diveView({ id }) {
         d.centreNom ? el('div', { style: { marginBottom: '10px' } }, el('b', { text: d.centreNom }),
           d.centreAdresse ? el('span', { style: { color: 'var(--text-dim)' }, text: ` · ${d.centreAdresse}` }) : null) : null,
         (d.buddyIds || []).length || d.moniteurSansNom
-          ? el('div.chips', {}, ...(d.buddyIds || []).map(bid =>
+          ? el('div.chips', {}, ...(d.buddyIds || []).filter(bid => buddyName(bid)).map(bid =>
               el('span.chip.solid', {
                 text: buddyName(bid) + (bid === d.chefBuddyId ? ' ★' : ''),
               })),

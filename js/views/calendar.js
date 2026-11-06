@@ -20,7 +20,7 @@
 //   • Période  — de telle date (ou tel numéro) à telle autre.
 // ============================================================
 
-import { el, fmtDate, fmtDuration, fmtDateLong, fullName, scrollTo } from '../lib.js';
+import { el, fmtDate, fmtDuration, fmtDateLong, fullName, nomAffiche, scrollTo } from '../lib.js';
 import { navigate } from '../router.js';
 import { apercuPlongee, apercuSeance } from '../apercu.js';
 import { TYPES_SEANCE, typeSeance } from '../model.js';
@@ -92,7 +92,7 @@ export function calendrier(dives, { buddies = [], seances = [], couches: couches
     return wrap;
   }
 
-  const nomCompagnon = id => fullName(buddies.find(b => b.id === id)) || '?';
+  const nomCompagnon = id => nomAffiche(buddies.find(b => b.id === id));
   // Couches imposées (l'agenda des fosses) : ni choix, ni mémoire.
   const couches = couchesFixes ? new Set(couchesFixes) : lireCouches();
   const voitPlongees = () => couches.has('plongees');
@@ -194,7 +194,7 @@ export function calendrier(dives, { buddies = [], seances = [], couches: couches
           el('div', { style: { color: 'var(--text-dim)', fontSize: '12.5px' },
             text: [d.heureImmersion, d.profMax ? `${d.profMax} m` : null,
                    d.dureeMin ? fmtDuration(d.dureeMin) : null,
-                   (d.buddyIds || []).length ? d.buddyIds.map(nomCompagnon).join(', ') : null]
+                   (d.buddyIds || []).length ? d.buddyIds.map(nomCompagnon).filter(Boolean).join(', ') : null]
               .filter(Boolean).join(' · ') })),
         el('span', { style: { color: 'var(--text-mute)' }, text: '›' }),
       )),
@@ -615,7 +615,7 @@ export function calendrier(dives, { buddies = [], seances = [], couches: couches
     if (!compte.size) return;
 
     const chips = el('div.chips', { hidden: !compagnonsFiltre.size });
-    [...compte.entries()].sort((a, b) => b[1] - a[1]).forEach(([id, n]) => {
+    [...compte.entries()].filter(([id]) => nomCompagnon(id)).sort((a, b) => b[1] - a[1]).forEach(([id, n]) => {
       const c = el('button.chip', { type: 'button', text: `${nomCompagnon(id)} · ${n}` });
       if (compagnonsFiltre.has(id)) c.classList.add('on');
       c.onclick = () => {
@@ -635,7 +635,7 @@ export function calendrier(dives, { buddies = [], seances = [], couches: couches
         el('span', { text: '👥' }),
         el('span', { style: { flex: 1, textAlign: 'left' },
           text: compagnonsFiltre.size
-            ? `Avec ${[...compagnonsFiltre].map(nomCompagnon).join(', ')}`
+            ? `Avec ${[...compagnonsFiltre].map(nomCompagnon).filter(Boolean).join(', ')}`
             : 'Filtrer par compagnon' }),
         compagnonsFiltre.size
           ? el('span.chip.sm', { text: 'tout voir',

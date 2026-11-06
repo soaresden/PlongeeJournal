@@ -9,7 +9,7 @@
 //  plongé avec Untel ? » est une question qu'on se pose.
 // ============================================================
 
-import { el, fmtDate, fmtDuration, fullName } from '../lib.js';
+import { el, fmtDate, fmtDuration, fullName, nomAffiche } from '../lib.js';
 import { zoomPourLargeurKm } from '../map.js';
 import { navigate } from '../router.js';
 import { apercuPlongee } from '../apercu.js';
@@ -53,7 +53,7 @@ export function cumulerALEcran(groupes, projeter, rayonPx = 46) {
 
 export function carteDesPlongees(dives, { buddies = [] } = {}) {
   const wrap = el('div');
-  const nomCompagnon = id => fullName(buddies.find(b => b.id === id)) || '?';
+  const nomCompagnon = id => nomAffiche(buddies.find(b => b.id === id));
 
   const filtre = el('div');
   const boite = el('div.carte-plein');
@@ -159,7 +159,7 @@ export function carteDesPlongees(dives, { buddies = [] } = {}) {
           el('div', { style: { color: 'var(--text-dim)', fontSize: '12.5px' },
             text: [d.profMax ? `${d.profMax} m` : null,
                    d.dureeMin ? fmtDuration(d.dureeMin) : null,
-                   (d.buddyIds || []).length ? d.buddyIds.map(nomCompagnon).join(', ') : null]
+                   (d.buddyIds || []).length ? d.buddyIds.map(nomCompagnon).filter(Boolean).join(', ') : null]
               .filter(Boolean).join(' · ') })),
         el('span', { style: { color: 'var(--text-mute)' }, text: '›' }),
       )),
@@ -178,7 +178,7 @@ export function carteDesPlongees(dives, { buddies = [] } = {}) {
     if (!compte.size) return;
 
     const chips = el('div.chips', { hidden: !compagnonsFiltre.size });
-    [...compte.entries()].sort((a, b) => b[1] - a[1]).forEach(([id, n]) => {
+    [...compte.entries()].filter(([id]) => nomCompagnon(id)).sort((a, b) => b[1] - a[1]).forEach(([id, n]) => {
       const c = el('button.chip', { type: 'button', text: `${nomCompagnon(id)} · ${n}` });
       if (compagnonsFiltre.has(id)) c.classList.add('on');
       c.onclick = () => {
@@ -198,7 +198,7 @@ export function carteDesPlongees(dives, { buddies = [] } = {}) {
         el('span', { text: '👥' }),
         el('span', { style: { flex: 1, textAlign: 'left' },
           text: compagnonsFiltre.size
-            ? `Avec ${[...compagnonsFiltre].map(nomCompagnon).join(', ')}`
+            ? `Avec ${[...compagnonsFiltre].map(nomCompagnon).filter(Boolean).join(', ')}`
             : 'Filtrer par compagnon' }),
         compagnonsFiltre.size
           ? el('span.chip.sm', { text: 'tout voir',

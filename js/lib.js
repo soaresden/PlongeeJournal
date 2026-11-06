@@ -157,6 +157,15 @@ export function nomPlongeur(p) {
   return p.moniteur && p.club ? `Moniteur · ${p.club}` : '';
 }
 
+/**
+ * Le nom à afficher, jamais « ? » : sans prénom ni nom, la licence ou
+ * « Sans nom ». Un plongeur introuvable (supprimé) : chaîne vide, à écarter.
+ */
+export function nomAffiche(p) {
+  if (!p) return '';
+  return nomPlongeur(p) || (p.licence ? `Licence ${p.licence}` : '') || 'Sans nom';
+}
+
 const COULEURS_CATEGORIES = ['#f0427a', '#7c4dff', '#1c9cf0', '#12b886', '#f59f00', '#e8590c', '#be4bdb', '#0b9f8f', '#4c6ef5', '#d6336c', '#74b816', '#fd7e14'];
 /** Une couleur stable par catégorie (« OGN » a toujours la même). */
 export function couleurCategorie(nom = '') {

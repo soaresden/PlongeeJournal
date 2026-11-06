@@ -419,7 +419,7 @@ export async function seanceFormView({ id } = {}) {
   const moi = await store.getDiver(diverId);
   const exclure = moi ? [fullName(moi)] : [];
   s.buddyIds ||= [];
-  const avecQui = editeurPalanquee(s, buddies, () => {}, { anonyme: false, placeholder: 'Avec qui : prénom nom…' });
+  const avecQui = editeurPalanquee(s, buddies, () => {}, { anonyme: false, chef: false, placeholder: 'Avec qui : prénom nom…' });
   const agenda = agendaAvecQui(s, buddies, { exclure, onAjout: () => avecQui.rafraichir() });
 
   function remplirChamps() {

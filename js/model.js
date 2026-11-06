@@ -588,6 +588,18 @@ export function seanceDepuisPlongee(dive, type) {
   return s;
 }
 
+/**
+ * Le moniteur avec qui j'étais : le premier moniteur de la palanquée.
+ * Plusieurs moniteurs présents : c'est le premier de la liste.
+ * Aucun moniteur : le chef déjà noté, s'il est toujours dans la palanquée.
+ */
+export function premierMoniteur(dive, buddies = []) {
+  const ids = dive?.buddyIds || [];
+  const mon = ids.map(id => buddies.find(b => b.id === id)).find(b => b && (b.moniteur || b.structure));
+  if (mon) return mon.id;
+  return ids.includes(dive?.chefBuddyId) ? dive.chefBuddyId : '';
+}
+
 /** Regroupe les compagnons par club, les sans-club en dernier. */
 export function parClub(buddies) {
   const groupes = new Map();
