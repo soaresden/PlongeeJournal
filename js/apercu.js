@@ -16,6 +16,7 @@ import { profileSvg } from './fit.js';
 import { ambianceDe, stylesAmbiance, vignetteLieu, etiquetteAmbiance } from './ambiance.js';
 import { agendaBranche, agendaLisible, chargerAgenda, evenementsDu, lieuPropose, texteEvenement } from './agenda.js';
 import { editeurPalanquee, champCentre, propositionsTexte } from './palanquee.js';
+import { pageLisible } from './views/carnet-photo.js';
 
 /**
  * « Ce jour-là dans ton agenda » : les événements du jour, chacun avec un
@@ -193,6 +194,9 @@ export async function apercuPlongee(id, { retour = null, onClose = null } = {}) 
       chiffre(d.tempFond != null ? `${d.tempFond}°` : '—', 'eau'),
       chiffre(niveauDeLaPlongee(d, certifs) || '—', 'niveau')),
     el('div.dive-tags', { style: { margin: '2px 0 10px' } }, etiquetteAmbiance(d)),
+    // La page du carnet papier, pour relire et corriger en la regardant.
+    d.photoCarnet?.ref ? el('div.apercu-bloc', {}, el('div.apercu-lbl', { text: '📓 Page du carnet' }),
+      pageLisible(d.photoCarnet.ref, { hauteur: 'min(48vh, 420px)' })) : null,
     courbe(d.samples || d.profil),
     el('div.apercu-grille', {},
       champ('N° (auto)', el('input', { type: 'text', readOnly: true, tabIndex: -1, value: d.numero ?? '—', class: 'lecture-seule' })),

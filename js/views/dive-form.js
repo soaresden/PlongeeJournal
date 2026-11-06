@@ -17,7 +17,7 @@ import { DIVE_TYPES, DIVE_OPTIONS, DIVE_GOALS, PALANQUEE_MODES,
 import { locationPicker } from '../map.js';
 import { navigate } from '../router.js';
 import { profileSvg } from '../fit.js';
-import { photoCarnetFormulaire } from './carnet-photo.js';
+import { photoCarnetFormulaire, pageLisible } from './carnet-photo.js';
 import { oublierPhoto } from '../photos.js';
 
 
@@ -865,7 +865,7 @@ export async function diveFormView({ id }) {
   function lireUnTexte() {
     openModal(close => {
       const zone = el('textarea', { rows: 6,
-        placeholder: 'Colle ou écris ce que dit le carnet : « plongé avec Marc et Julie, 6 kg, froid… »' });
+        placeholder: 'Recopie ou colle ce que dit le carnet : « plongé avec Marc et Julie, 6 kg, froid… »' });
       zone.value = [dive.fait, dive.observations].filter(Boolean).join('\n');
       const sortie = el('div', { style: { marginTop: '10px' } });
       const chercher = () => {
@@ -879,6 +879,8 @@ export async function diveFormView({ id }) {
       requestAnimationFrame(chercher);
       return el('div', {},
         el('h3', { text: '📝 Les plongeurs dans un texte' }),
+        // La page du carnet, pour lire en tapant.
+        carnetPapier.image() ? pageLisible(null, { src: carnetPapier.image(), hauteur: 'min(38vh, 320px)' }) : null,
         el('div.hint', { style: { marginTop: 0 },
           text: 'Les plongeurs connus sont retrouvés même mal orthographiés ; un « ? » quand deux portent le même prénom. '
             + 'Touche un nom pour l’ajouter.' }),

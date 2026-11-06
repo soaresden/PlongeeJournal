@@ -770,9 +770,17 @@ check('carnet papier : pas de panneau tant qu’il n’y a pas de photo',
   window.location.hash = `#/dive/${dv.id}`;
   window.dispatchEvent(new window.Event('hashchange'));
   await tick(160);
-  check('fiche : la page du carnet est affichée',
-    document.querySelector('#view .carnet-fiche img')?.getAttribute('src') === img,
-    document.querySelector('#view .carnet-fiche')?.outerHTML?.slice(0, 160) || 'absente');
+  check('fiche : la page du carnet est affichée en grand, zoomable',
+    document.querySelector('#view .carnet-lisible .zoom img')?.getAttribute('src') === img,
+    document.querySelector('#view .carnet-lisible')?.outerHTML?.slice(0, 160) || 'absente');
+
+  const { apercuPlongee } = await import(__p2u(path.join(ROOT, 'js/apercu.js')).href);
+  await apercuPlongee(dv.id);
+  await tick(160);
+  check('aperçu : la page du carnet est là pour relire',
+    document.querySelector('.apercu .carnet-lisible .zoom img')?.getAttribute('src') === img,
+    document.querySelector('.apercu')?.textContent?.slice(0, 160) || 'absente');
+  document.querySelector('.apercu .apercu-btn[aria-label=Fermer]')?.click();
 
   window.location.hash = `#/dive/${dv.id}/edit`;
   window.dispatchEvent(new window.Event('hashchange'));

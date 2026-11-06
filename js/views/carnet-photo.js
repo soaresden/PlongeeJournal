@@ -425,6 +425,8 @@ export function photoCarnetFormulaire(dive) {
 
   return {
     bloc: corps,
+    /** L'image affichée (même pas encore enregistrée), ou null. */
+    image: () => image,
     envelopper(form) {
       enveloppe.replaceChildren(form, el('div.carnet-dock-place', {}, dock, ouvrirDockBtn));
       return enveloppe;
@@ -448,17 +450,33 @@ export function photoCarnetFormulaire(dive) {
 //  Sur la fiche de la plongée
 // ------------------------------------------------------------
 
-/** Vignette de la page du carnet ; un toucher l'ouvre en plein écran. */
+/**
+ * La page du carnet, lisible sur place : zoom au doigt (pincer, double
+ * toucher), boutons + / − et plein écran (ceux de la visionneuse).
+ * @param {string|null} ref     référence de la photo (dive.photoCarnet.ref)
+ * @param {{hauteur?:string, src?:string}} options  src : image déjà en main
+ */
+export function pageLisible(ref, { hauteur = 'min(62vh, 520px)', src = null } = {}) {
+  const cadre = el('div.carnet-lisible', { style: { height: hauteur } },
+    el('div.hint', { style: { margin: '10px' }, text: 'Chargement de la photo…' }));
+  const afficher = image => {
+    if (!image) {
+      cadre.style.height = 'auto';
+      cadre.replaceChildren(el('div.hint', { style: { margin: '10px' }, text: 'Photo pas encore envoyée par l’appareil qui l’a prise.' }));
+      return;
+    }
+    cadre.replaceChildren(visionneuse(image));
+  };
+  if (src) afficher(src);
+  else photos.lirePhoto(ref).then(afficher)
+    .catch(e => { cadre.style.height = 'auto'; cadre.replaceChildren(el('div.hint', { style: { margin: '10px' }, text: `Photo injoignable : ${e.message}` })); });
+  return cadre;
+}
+
+/** Sur la fiche : la page du carnet en grand, zoomable sur place. */
 export function photoCarnetFiche(dive) {
   if (!dive.photoCarnet?.ref) return null;
-  const corps = el('div.card.carnet-fiche', {}, el('div.hint', { style: { margin: 0 }, text: 'Chargement…' }));
-  photos.lirePhoto(dive.photoCarnet.ref)
-    .then(src => {
-      corps.replaceChildren(src
-        ? el('button.carnet-vignette', { type: 'button', title: 'Agrandir', onclick: () => pleinEcran(src) },
-            el('img', { src, alt: 'Page du carnet papier' }))
-        : el('div.hint', { style: { margin: 0 }, text: 'Photo pas encore envoyée par l’appareil qui l’a prise.' }));
-    })
-    .catch(e => corps.replaceChildren(el('div.hint', { style: { margin: 0 }, text: `Photo injoignable : ${e.message}` })));
-  return el('div.section', {}, el('h2', { text: '📓 Page du carnet papier' }), corps);
+  return el('div.section', {}, el('h2', { text: '📓 Page du carnet papier' }),
+    pageLisible(dive.photoCarnet.ref),
+    el('div.hint', { text: 'Pince ou double-touche pour zoomer ; ⛶ pour la voir sur tout l’écran.' }));
 }
