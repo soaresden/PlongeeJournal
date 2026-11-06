@@ -487,3 +487,5 @@ input.lecture-seule { opacity: .75; cursor: default; }
 }
 .popup-structure { font-size: 13px; line-height: 1.4; min-width: 160px; }
 .popup-structure b { display: block; font-size: 14px; }
+.lien-texte { display: inline; padding: 0; margin: 0; border: 0; background: none; color: var(--accent); font: inherit; text-decoration: underline; cursor: pointer; }
+.lieu-alerte { margin: 6px 0 0; }

@@ -97,7 +97,7 @@ export function pistesDeRecherche(saisie) {
  * Cherche en élargissant tant que rien ne sort.
  * @returns {{resultats:Array, piste:string, approx:boolean}}
  */
-async function chercherEnElargissant(saisie) {
+export async function chercherEnElargissant(saisie) {
   const pistes = pistesDeRecherche(saisie);
 
   for (let i = 0; i < pistes.length; i++) {
@@ -145,7 +145,7 @@ async function searchGoogle(query) {
 }
 
 /** Complète lat/lng d'un résultat Google (les prédictions n'ont pas les coordonnées). */
-async function resolveResult(r) {
+export async function resolveResult(r) {
   if (r.lat != null && r.lng != null) return r;
   if (r._place) {
     await r._place.fetchFields({ fields: ['location', 'displayName', 'formattedAddress'] });

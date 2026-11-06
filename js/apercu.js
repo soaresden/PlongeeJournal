@@ -8,9 +8,10 @@
 //  saisie. La fiche complète reste à un geste.
 // ============================================================
 
-import { el, fmtDate, fmtDateLong, fmtDuration, fullName, nomPlongeur, num, toast } from './lib.js';
+import { el, fmtDate, fmtDateLong, fmtDuration, fullName, nomPlongeur, num, toast, debounce } from './lib.js';
 import { store, TYPES_SEANCE, typeSeance, niveauALaDate, NIVEAUX } from './store.js';
 import { DIVE_TYPES } from './config.js';
+import { chercherEnElargissant, resolveResult } from './map.js';
 import { navigate } from './router.js';
 import { profileSvg } from './fit.js';
 import { ambianceDe, stylesAmbiance, vignetteLieu, etiquetteAmbiance } from './ambiance.js';
@@ -174,17 +175,84 @@ export async function apercuPlongee(id, { retour = null, onClose = null } = {}) 
   selNiveau.onchange = () => maj({ niveau: selNiveau.value });
 
   const date = saisie('date', d.date, v => { maj({ date: v }); majNiveau(); });
-  const lieuDive = saisie('text', d.lieuNom, v => maj({ lieuNom: v }));
+  // Le lieu : le taper cherche l'endroit ; choisir une proposition déplace
+  // le point GPS, et l'ambiance (Mer Rouge, Manche…) suit en direct.
+  const lieuDive = saisie('search', d.lieuNom, v => { maj({ lieuNom: v }); texteSeul = true; majTete(); chercherLieu(); },
+    { autocomplete: 'off', enterkeyhint: 'search' });
+  const lieuResultats = el('div.geo-results', { hidden: true });
+  const lieuAlerte = el('div.hint.lieu-alerte', { hidden: true });
+  let texteSeul = false;
+  const chercherLieu = debounce(async () => {
+    const q = lieuDive.value.trim();
+    if (q.length < 3) { lieuResultats.hidden = true; return; }
+    lieuResultats.hidden = false;
+    lieuResultats.replaceChildren(el('button', { type: 'button', disabled: true, text: 'Recherche du lieu…' }));
+    try {
+      const { resultats } = await chercherEnElargissant(q);
+      lieuResultats.replaceChildren(...(resultats.length ? resultats.map(r => el('button', { type: 'button',
+        onclick: async () => {
+          try { await resolveResult(r); } catch { return toast('Impossible de récupérer ce lieu', true); }
+          lieuResultats.hidden = true;
+          await placerPoint(r.lat, r.lng, r.detail || r.label);
+        } }, r.label, r.detail && r.detail !== r.label ? el('small', { text: r.detail }) : null))
+        : [el('button', { type: 'button', disabled: true, text: 'Aucun lieu trouvé : corrige le point dans « Tout modifier ».' })]));
+    } catch {
+      lieuResultats.replaceChildren(el('button', { type: 'button', disabled: true, text: 'Recherche indisponible (hors ligne ?)' }));
+    }
+  }, 600);
+
+  /** Nouveau point : eau douce / salée reconnue de nouveau, ambiance à jour. */
+  async function placerPoint(lat, lng, detail = '') {
+    texteSeul = false;
+    maj({ lat, lng, lieuDetail: detail, ...(d.eauManuelle ? {} : { eau: '', eauAuto: false, indiceEau: '' }) });
+    majTete();
+    toast('Point déplacé — l’ambiance suit');
+    if (d.eauManuelle) return;
+    try {
+      const { analyserPoint } = await import('./geo.js');
+      const info = await analyserPoint(lat, lng);
+      if (info?.eau && d.lat === lat) { maj({ eau: info.eau, eauAuto: true, altitude: info.altitude ?? d.altitude }); majTete(); }
+    } catch { /* hors ligne : on reconnaîtra plus tard */ }
+  }
   const centre = champCentre(d, await store.listDives(d.diverId), () => sauvegarde.planifier());
   const palanquee = editeurPalanquee(d, buddies, () => sauvegarde.planifier());
   const moi = await store.getDiver(d.diverId);
 
   const a = ambianceDe(d);
+  const vignette = el('span.apercu-vignette', {}, vignetteLieu(d, { boite: 52, contenu: d.numero ?? '—' }));
+  const titre = el('div.apercu-t1', { text: d.lieuNom || d.site || 'Lieu non précisé' });
+  const tags = el('div.dive-tags', { style: { margin: '2px 0 10px' } }, etiquetteAmbiance(d));
   const tete = el('div.apercu-tete-plongee', {},
-    vignetteLieu(d, { boite: 52, contenu: d.numero ?? '—' }),
-    el('div', {},
-      el('div.apercu-t1', { text: d.lieuNom || d.site || 'Lieu non précisé' }),
+    vignette,
+    el('div', {}, titre,
       el('div.apercu-t2', { text: `${fmtDateLong(d.date)}${d.heureImmersion ? ` · ${d.heureImmersion}` : ''}` })));
+
+  /** L'en-tête, l'étiquette et les couleurs suivent le lieu en direct. */
+  let derniereVignette = `${d.lat},${d.lng}`;
+  function majTete() {
+    const amb = ambianceDe(d);
+    titre.textContent = d.lieuNom || d.site || 'Lieu non précisé';
+    tags.replaceChildren(etiquetteAmbiance(d));
+    const cle = `${d.lat},${d.lng}`;
+    if (cle !== derniereVignette) {
+      derniereVignette = cle;
+      vignette.replaceChildren(vignetteLieu(d, { boite: 52, contenu: d.numero ?? '—' }));
+    } else {
+      const v = vignette.firstElementChild;
+      if (v) for (const [k, val] of Object.entries(stylesAmbiance(amb))) v.style.setProperty(k, val);
+    }
+    const aside = document.querySelector('aside.apercu');
+    if (aside) for (const [k, val] of Object.entries(stylesAmbiance(amb))) aside.style.setProperty(k, val);
+    // Le texte a changé mais le point est resté ailleurs : on le dit.
+    lieuAlerte.hidden = !(texteSeul && d.lat != null);
+    if (!lieuAlerte.hidden) {
+      lieuAlerte.replaceChildren(
+        `⚠ Le point GPS est toujours l’ancien (${amb.nom}). Choisis le lieu dans la liste pour le déplacer, ou `,
+        el('button.lien-texte', { type: 'button', text: 'efface l’ancien point', onclick: () => {
+          texteSeul = false; maj({ lat: null, lng: null, lieuDetail: '' }); majTete(); toast('Ancien point effacé');
+        } }), '.');
+    }
+  }
 
   const corps = el('div', {},
     el('div.apercu-chiffres', {},
@@ -192,7 +260,7 @@ export async function apercuPlongee(id, { retour = null, onClose = null } = {}) 
       chiffre(d.dureeMin ? fmtDuration(d.dureeMin) : '—', 'au fond'),
       chiffre(d.tempFond != null ? `${d.tempFond}°` : '—', 'eau'),
       chiffre(niveauDeLaPlongee(d, certifs) || '—', 'niveau')),
-    el('div.dive-tags', { style: { margin: '2px 0 10px' } }, etiquetteAmbiance(d)),
+    tags,
     // La page du carnet papier, pour relire et corriger en la regardant.
     d.photoCarnet?.ref ? el('div.apercu-bloc', {}, el('div.apercu-lbl', { text: '📓 Page du carnet' }),
       pageLisible(d.photoCarnet.ref, { hauteur: 'min(48vh, 420px)' })) : null,
@@ -200,13 +268,13 @@ export async function apercuPlongee(id, { retour = null, onClose = null } = {}) 
     el('div.apercu-grille', {},
       champ('N° (auto)', el('input', { type: 'text', readOnly: true, tabIndex: -1, value: d.numero ?? '—', class: 'lecture-seule' })),
       champ('Date', date),
-      champ('Lieu', lieuDive, { large: true }),
-      champ('Site', saisie('text', d.site, v => maj({ site: v })), { large: true }),
+      el('div.apercu-champ.large', {}, el('span', { text: 'Lieu' }), lieuDive, lieuResultats, lieuAlerte),
+      champ('Site', saisie('text', d.site, v => { maj({ site: v }); majTete(); }), { large: true }),
       champ('Immersion', saisie('time', d.heureImmersion, v => maj({ heureImmersion: v }))),
       champ('Durée (min)', saisie('text', d.dureeMin, v => maj({ dureeMin: num(v) }), { inputmode: 'numeric' })),
       champ('Prof. max (m)', saisie('text', d.profMax, v => maj({ profMax: num(v) }), { inputmode: 'decimal' })),
       champ('Eau (°C)', saisie('text', d.tempFond, v => maj({ tempFond: num(v) }), { inputmode: 'decimal' })),
-      champ('Type', liste([['', '—'], ...DIVE_TYPES.map(t => [t, t])], d.type, v => maj({ type: v }))),
+      champ('Type', liste([['', '—'], ...DIVE_TYPES.map(t => [t, t])], d.type, v => { maj({ type: v }); majTete(); })),
       champ('Niveau', selNiveau)),
     el('div.apercu-bloc', {}, el('div.apercu-lbl', { text: 'Palanquée' }), palanquee),
     el('div.apercu-grille', {},
@@ -214,7 +282,7 @@ export async function apercuPlongee(id, { retour = null, onClose = null } = {}) 
       champ('Ce que j’ai fait', saisie('textarea', d.fait, v => maj({ fait: v })), { large: true }),
       champ('Ce que j’ai vu', saisie('textarea', d.vu, v => maj({ vu: v })), { large: true }),
       champ('Notes', saisie('textarea', d.observations, v => maj({ observations: v })), { large: true })),
-    blocAgenda(d.date, lieuDive, v => maj({ lieuNom: v }), {
+    blocAgenda(d.date, lieuDive, v => { maj({ lieuNom: v }); texteSeul = true; majTete(); chercherLieu(); }, {
       cible: d, buddies, exclure: moi ? [fullName(moi)] : [],
       onAjout: () => { palanquee.rafraichir(); sauvegarde.planifier(); } }));
 
