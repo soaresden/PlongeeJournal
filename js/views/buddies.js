@@ -56,30 +56,32 @@ export async function buddiesView() {
   const outilTag = el('div.tag-outil');
   const liste = el('div');
   wrap.append(el('div.annuaire-barre', {}, recherche, seg,
-    el('button.btn.primary.sm', { type: 'button', text: '＋ Ajouter', onclick: () => navigate('buddy/new') })), puces, outilTag, liste);
+    el('button.btn.primary.sm.annuaire-ajout', { type: 'button', title: 'Ajouter un plongeur', 'aria-label': 'Ajouter un plongeur',
+      onclick: () => navigate('buddy/new') }, '＋', el('span', { text: ' Ajouter' }))), puces, outilTag, liste);
 
   const n = b => st.buddyCount[b.id] || 0;
   const initiales = b => (b.structure ? (b.prenom || '?').slice(0, 2) : (b.prenom?.[0] || '') + (b.nom?.[0] || '')).toUpperCase() || '?';
   const cats = b => (b.categories || []).filter(Boolean);
   const estMoniteur = b => !!(b.moniteur || b.structure);
 
+  // Une ligne serrée par personne : nom, MON, tags, nombre de plongées
+  // ensemble. La licence reste dans la fiche (et la recherche la trouve).
   function carte(b) {
     const nb = n(b);
-    const sous = b.structure ? 'nom pas noté' : (b.licence ? `licence ${b.licence}` : '');
-    return el(`button.pcarte${estMoniteur(b) ? '.mon' : ''}`, { type: 'button', onclick: () => apercuPlongeur(b.id, { onClose: recharger }) },
+    return el(`button.pcarte${estMoniteur(b) ? '.mon' : ''}`, { type: 'button', onclick: () => apercuPlongeur(b.id, { onClose: recharger }),
+      title: [b.licence ? `Licence ${b.licence}` : '', b.structure ? 'Moniteur du centre (nom pas noté)' : ''].filter(Boolean).join(' · ') },
       el('span.personne-av', {}, initiales(b)),
       el('span.pcarte-txt', {},
         el('b', { text: b.structure ? (b.prenom || 'Centre') : (nomPlongeur(b) || 'Sans nom') }),
-        el('span.pcarte-badges', {},
-          estMoniteur(b) ? el('span.badge-mon', { text: b.structure ? 'Moniteur du centre' : 'Moniteur' }) : null,
-          ...cats(b).map(c => el('span.cat', { style: { '--cat': couleurCategorie(c) }, text: c }))),
-        sous ? el('span.pcarte-sous', { text: sous }) : null),
+        estMoniteur(b) ? el('span.badge-mon', { text: 'MON' }) : null,
+        ...cats(b).map(c => el('span.cat', { style: { '--cat': couleurCategorie(c) }, text: c }))),
       nb ? el('span.personne-n', { title: `${nb} plongée${nb > 1 ? 's' : ''} ensemble`, text: String(nb) }) : null);
   }
 
   function rendre() {
     seg.innerHTML = '';
     [['frequents', 'Fréquents'], ['az', 'A–Z']].forEach(([id, label]) => {
+      // (« Fréq. » sur téléphone : voir .annuaire-barre en CSS)
       const bt = el('button', { type: 'button', text: label });
       if (id === tri) bt.classList.add('on');
       bt.onclick = () => { tri = id; try { localStorage.setItem(CLE_TRI, id); } catch { /* privé */ } rendre(); };
