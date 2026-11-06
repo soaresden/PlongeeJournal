@@ -479,3 +479,11 @@ input.lecture-seule { opacity: .75; cursor: default; }
 .palq-puce.avec { box-shadow: 0 0 0 2px var(--accent); }
 .palq-puce.mon:not(.avec) { cursor: pointer; }
 .palq-aide { flex-basis: 100%; font-size: 12px; color: var(--text-mute); }
+
+/* Structures de plongée sur la carte du lieu */
+.repere-structure span {
+  display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%;
+  background: #fff; border: 2px solid #1aa3c4; font-size: 16px; box-shadow: 0 2px 6px rgba(0,0,0,.35);
+}
+.popup-structure { font-size: 13px; line-height: 1.4; min-width: 160px; }
+.popup-structure b { display: block; font-size: 14px; }

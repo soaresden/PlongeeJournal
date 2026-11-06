@@ -16,6 +16,7 @@
 import { CONFIG } from './config.js';
 import { el, debounce, toast } from './lib.js';
 import { guessWater } from './store.js';
+import { centresOsm } from './centre.js';
 
 // ------------------------------------------------------------
 //  Chargement paresseux de l'API Google Maps
@@ -181,6 +182,7 @@ export function locationPicker(value, onChange) {
   const results = el('div.geo-results', { hidden: true });
   const mapBox  = el('div.map-box');
   const coordsLine = el('div.hint');
+  const infoStructures = el('div.hint', { style: { marginTop: '4px' } });
   const searchWrap = el('div');
 
   const gpsBtn = el('button.btn.sm', { type: 'button', title: 'Utiliser ma position actuelle' }, '📍 Ma position');
@@ -232,13 +234,19 @@ export function locationPicker(value, onChange) {
       maxZoom: 19, attribution: '© Esri',
     });
     plan.addTo(map);
-    L.control.layers({ 'Plan': plan, 'Satellite': sat }, {}, { position: 'topright' }).addTo(map);
+    // Les structures de plongée (centres, clubs, sites nommés) de la zone
+    // visible, affichées d'office : un toucher dessus y met le point.
+    structures = L.layerGroup().addTo(map);
+    L.control.layers({ 'Plan': plan, 'Satellite': sat }, { '🤿 Structures de plongée': structures },
+      { position: 'topright' }).addTo(map);
     L.control.scale({ imperial: false, position: 'bottomleft' }).addTo(map);
 
     if (state.lat != null) setMarker(state.lat, state.lng);
 
     map.on('click', e => setMarker(e.latlng.lat, e.latlng.lng, true));
-    setTimeout(() => map.invalidateSize(), 60);
+    map.on('moveend', () => chargerStructures());
+    map.on('overlayadd', e => { if (e.layer === structures) chargerStructures(true); });
+    setTimeout(() => { map.invalidateSize(); chargerStructures(); }, 80);
   }
 
   async function initGoogleMap(start) {
@@ -255,6 +263,56 @@ export function locationPicker(value, onChange) {
     });
     if (state.lat != null) setMarker(state.lat, state.lng);
     map.addListener('click', e => setMarker(e.latLng.lat(), e.latLng.lng(), true));
+  }
+
+  // ---- structures de plongée autour (Leaflet seulement) ----
+  let structures = null, deja = null, tour = 0, attente = null;
+  const vues = new Map();          // une structure déjà posée ne l'est pas deux fois
+
+  function chargerStructures(forcer = false) {
+    if (!map || engine === 'google' || !structures || !map.hasLayer(structures)) return;
+    clearTimeout(attente);
+    attente = setTimeout(async () => {
+      if (map.getZoom() < 10) { infoStructures.textContent = '🤿 Zoome pour voir les centres et sites de plongée.'; return; }
+      const b = map.getBounds();
+      // Déjà chargée : on ne redemande pas pour un petit déplacement.
+      if (!forcer && deja && deja.contains(b)) return;
+      const large = b.pad(0.3);
+      const moi = ++tour;
+      infoStructures.textContent = '🤿 Recherche des structures de plongée…';
+      try {
+        const liste = await centresOsm([large.getSouth(), large.getWest(), large.getNorth(), large.getEast()]);
+        if (moi !== tour) return;
+        deja = large;
+        liste.forEach(poserStructure);
+        infoStructures.textContent = liste.length
+          ? `🤿 ${liste.length} structure${liste.length > 1 ? 's' : ''} de plongée ici : touche-en une pour y mettre ton point, ou touche la carte.`
+          : '🤿 Pas de structure de plongée connue ici : touche la carte à l’endroit exact.';
+      } catch {
+        if (moi === tour) infoStructures.textContent = '';
+      }
+    }, 700);
+  }
+
+  function poserStructure(c) {
+    const cle = `${c.nom}|${c.lat.toFixed(4)}|${c.lng.toFixed(4)}`;
+    if (vues.has(cle)) return;
+    const m = L.marker([c.lat, c.lng], { title: c.nom,
+      icon: L.divIcon({ className: 'repere-structure', html: '<span>🤿</span>', iconSize: [30, 30], iconAnchor: [15, 15] }) });
+    m.bindPopup(() => el('div.popup-structure', {},
+      el('b', { text: c.nom }),
+      c.adresse ? el('div', { text: c.adresse }) : null,
+      el('button.btn.sm.primary', { type: 'button', text: '📍 Mon point ici', style: { marginTop: '8px' },
+        onclick: () => {
+          map.closePopup();
+          const patch = { lieuDetail: [c.nom, c.adresse].filter(Boolean).join(' — ') };
+          if (!input.value.trim()) { input.value = c.nom; patch.lieuNom = c.nom; }
+          emit(patch);
+          setMarker(c.lat, c.lng);
+          toast(`Point posé sur ${c.nom} — affine en touchant la carte si besoin`);
+        } })));
+    m.addTo(structures);
+    vues.set(cle, m);
   }
 
   function setMarker(lat, lng, fromUser = false) {
@@ -381,6 +439,7 @@ export function locationPicker(value, onChange) {
     results,
     el('div.inline', { style: { marginTop: '8px' } }, gpsBtn, clearBtn),
     el('div', { style: { marginTop: '10px' } }, mapBox),
+    infoStructures,
     coordsLine,
   );
 

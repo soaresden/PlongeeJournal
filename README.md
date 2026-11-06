@@ -71,7 +71,9 @@ les spécificités, la bouteille, le matériel, ce qu'on a vu, les comptes-rendu
 Chaque section se replie.
 
 **Le lieu** — recherche par nom avec autocomplétion (le libellé cherché est
-toujours conservé), ou GPS, puis affinage en cliquant dans l'eau. Eau douce
+toujours conservé), ou GPS, puis affinage en cliquant dans l'eau. Les structures de plongée
+de la zone (centres, clubs, sites nommés d'OpenStreetMap) s'affichent d'office
+sur la carte (🤿) : en toucher une y met le point. Eau douce
 ou salée et altitude sont reconnues automatiquement à partir du point, via
 OpenStreetMap — y compris pour les plongées importées de la montre, en tâche
 de fond à l'ouverture. On ne choisit à la main que pour corriger.
