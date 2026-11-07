@@ -434,6 +434,9 @@ window.location.hash = '#/buddies';
 window.dispatchEvent(new window.Event('hashchange'));
 await tick(120);
 check('Plongeurs : titre', title().includes('Plongeurs'), title());
+// Le Plongeurverse s'ouvre d'abord ; la liste est à un toucher.
+document.querySelector('#view .vue-switch button[data-vue="liste"]')?.click();
+await tick(60);
 check('Plongeurs : une carte par plongeur, tous mélangés',
   document.querySelectorAll('#view .pgrille .pcarte').length === 1,
   String(document.querySelectorAll('#view .pgrille .pcarte').length));
@@ -441,13 +444,19 @@ check('Plongeurs : plus de lignes pleine largeur',
   document.querySelectorAll('#view .card.clickable').length === 0,
   String(document.querySelectorAll('#view .card.clickable').length));
 {
-  // Le Plongeurverse s'ouvre (le dessin, lui, n'existe pas dans ce faux navigateur).
-  const bascule = document.querySelector('#view .annuaire-vue');
-  check('Plongeurs : bouton Plongeurverse', !!bascule, '');
-  bascule?.click();
+  // Le Plongeurverse est l'affichage par défaut (le dessin, lui, n'existe pas dans ce faux navigateur).
+  // On rouvre l'écran : c'est à chaque ouverture qu'il vient en premier.
+  window.location.hash = '#/stats'; window.dispatchEvent(new window.Event('hashchange')); await tick(80);
+  window.location.hash = '#/buddies'; window.dispatchEvent(new window.Event('hashchange')); await tick(120);
+  check('Plongeurverse : affiché par défaut, avec la légende bleu / rose', !!document.querySelector('#view .pverse') && /en rose/.test(view()), view().slice(0, 200));
+  const versListe = document.querySelector('#view .vue-switch button[data-vue="liste"]');
+  check('Plongeurs : un interrupteur Plongeurverse / Liste', !!versListe && !!document.querySelector('#view .vue-switch button[data-vue="verse"].on'), '');
+  versListe?.click();
   await tick(60);
-  check('Plongeurverse : la scène et la légende bleu / rose', !!document.querySelector('#view .pverse') && /en rose/.test(view()), view().slice(0, 200));
-  document.querySelector('#view .annuaire-vue')?.click();
+  check('Plongeurs : l’interrupteur passe en liste (et le tri apparaît)', !!document.querySelector('#view .pgrille') && !document.querySelector('#view .annuaire-tri').hidden, '');
+  document.querySelector('#view .vue-switch button[data-vue="verse"]')?.click();
+  await tick(40);
+  document.querySelector('#view .vue-switch button[data-vue="liste"]')?.click();
   await tick(40);
 }
 check('Plongeurs : filtres par catégorie (Tous, Moniteurs…)',

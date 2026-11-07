@@ -53,29 +53,27 @@ export async function buddiesView() {
   let tri = lireCle(CLE_TRI, 'frequents');
   if (!['frequents', 'az'].includes(tri)) tri = 'frequents';
   let filtre = lireCle(CLE_FILTRE, '');
-  const CLE_VUE = 'plongee-journal:plongeurs-vue';
-  let vue = lireCle(CLE_VUE, 'liste');
+  // Le Plongeurverse d'abord, à chaque ouverture ; un interrupteur pour la liste.
+  let vue = 'verse';
 
   const recherche = el('input', { type: 'search', placeholder: 'Nom, tag, licence…', autocapitalize: 'off' });
-  const seg = el('div.seg');
+  const seg = el('div.seg.annuaire-tri');
   const puces = el('div.cat-filtres');
   const outilTag = el('div.tag-outil');
   const liste = el('div');
-  // La liste, ou le Plongeurverse : tout le monde en cartoon au fond de l'eau.
-  const basculeVue = el('button.btn.sm.annuaire-vue', { type: 'button' });
-  const majBascule = () => {
-    basculeVue.textContent = vue === 'verse' ? '📋' : '🤿';
-    basculeVue.title = vue === 'verse' ? 'Revenir à la liste' : 'Plongeurverse : tout le monde en cartoon';
-    basculeVue.setAttribute('aria-label', basculeVue.title);
-    basculeVue.classList.toggle('on', vue === 'verse');
+  const interrupteur = el('div.seg.vue-switch', { role: 'tablist', 'aria-label': 'Affichage des plongeurs' });
+  const majInterrupteur = () => {
+    interrupteur.replaceChildren(...[['verse', '🤿 Plongeurverse'], ['liste', '📋 Liste']].map(([id, label]) => {
+      const bt = el('button', { type: 'button', role: 'tab', text: label, 'aria-selected': String(vue === id) });
+      bt.dataset.vue = id;
+      if (vue === id) bt.classList.add('on');
+      bt.onclick = () => { if (vue === id) return; vue = id; majInterrupteur(); rendre(); };
+      return bt;
+    }));
+    seg.hidden = vue === 'verse';            // le tri ne sert qu'à la liste
   };
-  basculeVue.onclick = () => {
-    vue = vue === 'verse' ? 'liste' : 'verse';
-    try { localStorage.setItem(CLE_VUE, vue); } catch { /* privé */ }
-    majBascule(); rendre();
-  };
-  majBascule();
-  wrap.append(el('div.annuaire-barre', {}, recherche, basculeVue, seg,
+  majInterrupteur();
+  wrap.append(interrupteur, el('div.annuaire-barre', {}, recherche, seg,
     el('button.btn.primary.sm.annuaire-ajout', { type: 'button', title: 'Ajouter un plongeur', 'aria-label': 'Ajouter un plongeur',
       onclick: () => navigate('buddy/new') }, '＋', el('span', { text: ' Ajouter' }))), puces, outilTag, liste);
 

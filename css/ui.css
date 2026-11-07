@@ -532,8 +532,9 @@ input.lecture-seule { opacity: .75; cursor: default; }
 .genre-seg button.devine { outline: 1.5px dashed currentColor; outline-offset: -4px; }
 
 /* Le Plongeurverse */
-.annuaire-vue { flex: 0 0 auto; font-size: 17px; padding: 6px 10px; }
-.annuaire-vue.on { border-color: var(--accent); }
+/* L'interrupteur Plongeurverse / Liste, en tête de l'écran Plongeurs */
+.vue-switch { margin-bottom: 10px; }
+.vue-switch button { font-weight: 650; }
 .pverse { position: relative; width: 100%; border-radius: 16px; overflow: hidden; border: 1px solid var(--line); background: #0b3b63; }
 .pverse-canvas { display: block; width: 100%; touch-action: none; user-select: none; -webkit-user-select: none; cursor: grab; }
 .pverse-canvas:active { cursor: grabbing; }
