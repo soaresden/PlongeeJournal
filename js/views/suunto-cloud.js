@@ -255,7 +255,9 @@ export async function suuntoCloudView() {
       if (d?.dec && genreActivite(a, d.dec) === 'sport') return false;
       const t = trouverDansCarnet(a, connues());
       if (!t) return true;
-      return etat.completer && !t.liee;
+      // Déjà liée mais sans courbe (importée sans son .fit) : on la reprend.
+      const sansCourbe = !t.entree.seance && !(t.entree.samples?.length || t.entree.profil?.length);
+      return etat.completer && (!t.liee || sansCourbe);
     });
   }
 
@@ -427,13 +429,16 @@ export async function suuntoCloudView() {
       if (etat.completer) for (const a of candidats()) if (!etat.coches.has(a.cle)) etat.coches.set(a.cle, true);
       rendre();
     };
+    // Les plongées liées à Suunto mais arrivées sans leur courbe.
+    const sansCourbe = connues().filter(d => !d.seance && (d.suuntoKeys || []).some(k => k.startsWith('suunto:'))
+      && !(d.samples?.length || d.profil?.length)).length;
     resume.append(...[el('div.card.imp-resume', {},
       el('div', { style: { fontWeight: '600' }, text: `${etat.activites.length} activités sur ton compte` }),
       el('div.hint', { style: { marginTop: '2px' }, text: [`${cands.length} à importer`, `${deja.length} déjà au carnet`,
         autres ? `${autres} autre${autres > 1 ? 's' : ''} sport${autres > 1 ? 's' : ''} ignoré${autres > 1 ? 's' : ''}` : null].filter(Boolean).join(' · ') }),
       el('label.imp-option', {}, completer,
         el('span', {}, 'Compléter aussi celles déjà au carnet ',
-          el('span.imp-sous', { text: '(champs vides seulement, rien n’est remplacé)' })))),
+          el('span.imp-sous', { text: `(champs vides seulement, rien n’est remplacé${sansCourbe ? ` · ${sansCourbe} plongée${sansCourbe > 1 ? 's' : ''} sans courbe` : ''})` })))),
       etat.sansFit ? el('div.card.imp-alerte', {},
         el('b', { text: 'Fichiers .fit refusés par Suunto. ' }),
         'Les fiches sont créées depuis la liste : date, heure, durée, profondeur, lieu ; sans profil ni bloc.') : null]
