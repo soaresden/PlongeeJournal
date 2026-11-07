@@ -4,6 +4,8 @@
 
 import { el, fullName, nomPlongeur, couleurCategorie, toast, confirmBox, openModal } from '../lib.js';
 import { verifierTags } from '../tags.js';
+import { devinerGenre, genreDe, COULEUR_GENRE } from '../genre.js';
+import { plongeurverse } from './plongeurverse.js';
 import { store, emptyBuddy } from '../store.js';
 import { navigate } from '../router.js';
 import { ouvrirApercu, fermerApercu, ligneApercu, apercuPlongee } from '../apercu.js';
@@ -50,13 +52,29 @@ export async function buddiesView() {
   let tri = lireCle(CLE_TRI, 'frequents');
   if (!['frequents', 'az'].includes(tri)) tri = 'frequents';
   let filtre = lireCle(CLE_FILTRE, '');
+  const CLE_VUE = 'plongee-journal:plongeurs-vue';
+  let vue = lireCle(CLE_VUE, 'liste');
 
   const recherche = el('input', { type: 'search', placeholder: 'Nom, tag, licence…', autocapitalize: 'off' });
   const seg = el('div.seg');
   const puces = el('div.cat-filtres');
   const outilTag = el('div.tag-outil');
   const liste = el('div');
-  wrap.append(el('div.annuaire-barre', {}, recherche, seg,
+  // La liste, ou le Plongeurverse : tout le monde en cartoon au fond de l'eau.
+  const basculeVue = el('button.btn.sm.annuaire-vue', { type: 'button' });
+  const majBascule = () => {
+    basculeVue.textContent = vue === 'verse' ? '📋' : '🤿';
+    basculeVue.title = vue === 'verse' ? 'Revenir à la liste' : 'Plongeurverse : tout le monde en cartoon';
+    basculeVue.setAttribute('aria-label', basculeVue.title);
+    basculeVue.classList.toggle('on', vue === 'verse');
+  };
+  basculeVue.onclick = () => {
+    vue = vue === 'verse' ? 'liste' : 'verse';
+    try { localStorage.setItem(CLE_VUE, vue); } catch { /* privé */ }
+    majBascule(); rendre();
+  };
+  majBascule();
+  wrap.append(el('div.annuaire-barre', {}, recherche, basculeVue, seg,
     el('button.btn.primary.sm.annuaire-ajout', { type: 'button', title: 'Ajouter un plongeur', 'aria-label': 'Ajouter un plongeur',
       onclick: () => navigate('buddy/new') }, '＋', el('span', { text: ' Ajouter' }))), puces, outilTag, liste);
 
@@ -152,6 +170,26 @@ export async function buddiesView() {
       ? filtres.sort((x, y) => nomPlongeur(x).localeCompare(nomPlongeur(y), 'fr'))
       : filtres.sort((x, y) => n(y) - n(x) || nomPlongeur(x).localeCompare(nomPlongeur(y), 'fr'));
 
+    if (vue === 'verse') {
+      // Les genres pas encore notés : on peut enregistrer ce que le prénom suggère.
+      const aDeviner = buddies.filter(b => !b.structure && !b.genre && devinerGenre(b.prenom));
+      liste.replaceChildren(
+        plongeurverse({ buddies: filtres, compte: n, onTap: b => apercuPlongeur(b.id, { onClose: recharger }) }),
+        el('div.pverse-pied', {},
+          el('span', {}, el('b', { style: { color: COULEUR_GENRE.h }, text: 'garçons' }), ' en bleu, ',
+            el('b', { style: { color: COULEUR_GENRE.f }, text: 'filles' }), ' en rose, ',
+            el('b', { style: { color: COULEUR_GENRE[''] }, text: 'inconnu' }), ' en gris.'),
+          aDeviner.length ? el('button.btn.sm.ghost', { type: 'button', text: `♂♀ Enregistrer les genres devinés (${aDeviner.length})`,
+            onclick: async () => {
+              for (const b of aDeviner) {
+                const frais = await store.getBuddy(b.id);
+                if (frais && !frais.genre) { frais.genre = devinerGenre(frais.prenom); await store.saveBuddy(frais); }
+              }
+              toast(`Genre noté pour ${aDeviner.length} plongeur${aDeviner.length > 1 ? 's' : ''} — corrige dans leur fiche si besoin`);
+              recharger();
+            } }) : null));
+      return;
+    }
     liste.replaceChildren(filtres.length
       ? el('div.pgrille', {}, ...filtres.map(carte))
       : el('div.empty', { text: 'Aucun plongeur ne correspond.' }));
@@ -253,6 +291,27 @@ export async function buddiesView() {
   return { title: 'Plongeurs', node: wrap };
 }
 
+/**
+ * Homme / Femme : trois boutons. Sans choix, le prénom fait deviner
+ * (affiché en pointillé).
+ */
+export function choixGenre(b, onChange) {
+  const boite = el('div.seg.genre-seg');
+  const rendre = () => {
+    const devine = !b.genre ? devinerGenre(b.prenom) : '';
+    boite.replaceChildren(...[['h', '♂ Homme'], ['f', '♀ Femme'], ['', '—']].map(([v, label]) => {
+      const bt = el('button', { type: 'button', text: label, class: `g-${v || 'x'}` });
+      if ((b.genre || '') === v) bt.classList.add('on');
+      if (!b.genre && devine === v && v) { bt.classList.add('devine'); bt.title = 'Deviné d’après le prénom'; }
+      bt.onclick = () => { onChange(v); rendre(); };
+      return bt;
+    }));
+  };
+  rendre();
+  boite.rafraichir = rendre;
+  return boite;
+}
+
 // ------------------------------------------------------------
 //  Fusionner deux fiches de la même personne
 // ------------------------------------------------------------
@@ -349,6 +408,7 @@ export async function apercuPlongeur(id, { onClose = null } = {}) {
     i.addEventListener('input', () => maj({ [cle]: i.value }));
     return i;
   };
+  const genreSeg = choixGenre(b, v => maj({ genre: v }));
   const coche = (cle, label) => {
     const c = el('input', { type: 'checkbox' });
     c.checked = !!b[cle];
@@ -399,6 +459,7 @@ export async function apercuPlongeur(id, { onClose = null } = {}) {
       champ(b.structure ? 'Centre de plongée' : 'Prénom', saisie('prenom')),
       b.structure ? null : champ('Nom', saisie('nom')),
       b.structure ? null : champ('Licence', saisie('licence')),
+      el('div.apercu-champ.large', {}, el('span', { text: 'Genre' }), genreSeg),
       el('div.apercu-champ.large', {}, coche('moniteur', 'Moniteur')),
       el('div.apercu-champ.large', {}, el('span', { text: 'Tags' }), zoneCats),
       champ('Note', note, true)),
@@ -525,6 +586,8 @@ export async function buddyFormView({ id }) {
         { placeholder: 'La Garenne, Corfou Plongée…', list: 'clubs-connus' }),
         'Sert à regrouper la liste.'),
       listeClubs,
+      field('Genre', choixGenre(b, v => set({ genre: v })),
+        'Sans choix, il est deviné d’après le prénom (bouton en pointillé).'),
       field('Qualification',
         el('label.switch', {}, caseMoniteur, el('span', { text: 'C’est un moniteur' })),
         'Un niveau (N1, N3…) change avec le temps : le figer ici serait faux pour '

@@ -99,6 +99,12 @@ recopié, un message, tes notes : « plongé avec jullie et Marc, 6 kg,
 froid ») : les plongeurs connus sont retrouvés même mal orthographiés, un
 nouveau nom est repéré après « avec ». Rien n'est ajouté sans qu'on touche.
 
+**Plongeurverse** — bouton 🤿 de l'écran Plongeurs : tes compagnons en
+cartoon au fond de l'eau. Ils marchent, font des bulles, sautent, nagent,
+dansent, trébuchent, se tapent dans la main ; on les attrape au doigt et on
+les lance, un toucher ouvre leur fiche. Nom en bleu pour les garçons, en rose
+pour les filles (genre noté sur la fiche, sinon deviné d'après le prénom).
+
 **Plongeurs en double** — « ⇄ Fusionner… » sur la fiche d'un plongeur : on
 choisit l'autre fiche (les doublons probables sont en tête), ses plongées,
 séances et tags passent à la première, puis elle disparaît.

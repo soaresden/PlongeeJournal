@@ -79,6 +79,7 @@ export function emptyBuddy() {
     // serait faux pour toutes les plongées passées. Seule qualité durable :
     // est-ce, ou non, un moniteur.
     moniteur: false,
+    genre: '',              // 'h' | 'f' | '' (pas précisé : deviné d'après le prénom)
     note: '',
     stamps: [],             // tampons ET signatures : { id, dataUrl, type }
     createdAt: new Date().toISOString(),

@@ -439,6 +439,16 @@ check('Plongeurs : une carte par plongeur, tous mélangés',
 check('Plongeurs : plus de lignes pleine largeur',
   document.querySelectorAll('#view .card.clickable').length === 0,
   String(document.querySelectorAll('#view .card.clickable').length));
+{
+  // Le Plongeurverse s'ouvre (le dessin, lui, n'existe pas dans ce faux navigateur).
+  const bascule = document.querySelector('#view .annuaire-vue');
+  check('Plongeurs : bouton Plongeurverse', !!bascule, '');
+  bascule?.click();
+  await tick(60);
+  check('Plongeurverse : la scène et la légende bleu / rose', !!document.querySelector('#view .pverse') && /en rose/.test(view()), view().slice(0, 200));
+  document.querySelector('#view .annuaire-vue')?.click();
+  await tick(40);
+}
 check('Plongeurs : filtres par catégorie (Tous, Moniteurs…)',
   document.querySelectorAll('#view .cat-filtres .cat-filtre').length >= 1, '');
 check('Plongeurs : filtre présent', !!document.querySelector('#view input[type=search]'), '');

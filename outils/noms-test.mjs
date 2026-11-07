@@ -137,6 +137,16 @@ check('distance d’édition', N.distance('jullie', 'julie') === 1 && N.distance
     && r.sansTag.find(x => x.buddy.id === 'c').ensemble === 3, JSON.stringify(r.sansTag.find(x => x.buddy.id === 'c')));
 }
 
+// ---------- Genre d'après le prénom ----------
+{
+  const Gn = await imp('js/genre.js');
+  check('genre : Julie, Bérénice, Maud → f ; Guillaume, Raphaël, Ibraima → h',
+    ['Julie', 'Bérénice', 'Maud'].every(p => Gn.devinerGenre(p) === 'f') && ['Guillaume', 'Raphaël', 'Ibraima'].every(p => Gn.devinerGenre(p) === 'h'));
+  check('genre : mixte ou surnom → rien', ['Camil', 'Padawan', 'Dominique', ''].every(p => Gn.devinerGenre(p) === ''));
+  check('genre : la fiche prime sur la devinette', Gn.genreDe({ prenom: 'Julie', genre: 'h' }) === 'h' && Gn.genreDe({ prenom: 'Julie' }) === 'f'
+    && Gn.genreDe({ prenom: 'Julie', structure: true }) === '');
+}
+
 // ---------- Centres de plongée ----------
 check('« plongée », « dive », « club » : on cherche des centres', C.chercheCentres('plongée') && C.chercheCentres('Dive') && C.chercheCentres('club de plongée Cherbourg') && !C.chercheCentres('Cherbourg'));
 check('adresse OSM lisible', C.adresseOsm({ 'addr:housenumber': '12', 'addr:street': 'Quai Alexandre III', 'addr:postcode': '50100', 'addr:city': 'Cherbourg' }) === '12 Quai Alexandre III, 50100 Cherbourg');
