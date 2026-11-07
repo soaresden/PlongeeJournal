@@ -61,9 +61,9 @@ export async function buddiesView() {
   const puces = el('div.cat-filtres');
   const outilTag = el('div.tag-outil');
   const liste = el('div');
-  const interrupteur = el('div.seg.vue-switch', { role: 'tablist', 'aria-label': 'Affichage des plongeurs' });
+  const interrupteur = el('div.seg.vue-switch', { role: 'tablist', 'aria-label': 'Affichage des plongeurs : Miis ou liste' });
   const majInterrupteur = () => {
-    interrupteur.replaceChildren(...[['verse', '🤿 Plongeurverse'], ['liste', '📋 Liste']].map(([id, label]) => {
+    interrupteur.replaceChildren(...[['verse', 'Miis'], ['liste', 'Liste']].map(([id, label]) => {
       const bt = el('button', { type: 'button', role: 'tab', text: label, 'aria-selected': String(vue === id) });
       bt.dataset.vue = id;
       if (vue === id) bt.classList.add('on');
