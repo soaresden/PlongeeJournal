@@ -30,7 +30,8 @@ export const THEMES = [
 const SOMBRES = new Set(['plongee', 'abysse', 'corail', 'epave', 'kelp', 'nudibranche']);
 
 export function themeChoisi() {
-  try { return localStorage.getItem(CLE) || 'plongee'; } catch { return 'plongee'; }
+  // Sans choix sur cet appareil (et pour qui ouvre un lien de partage) : Nudibranche.
+  try { return localStorage.getItem(CLE) || 'nudibranche'; } catch { return 'nudibranche'; }
 }
 
 const systemeSombre = () => window.matchMedia?.('(prefers-color-scheme: dark)').matches;
@@ -38,7 +39,7 @@ const systemeSombre = () => window.matchMedia?.('(prefers-color-scheme: dark)').
 /** Thème réellement appliqué (« auto » résolu). */
 export function themeEffectif(id = themeChoisi()) {
   if (id === 'auto') return systemeSombre() ? 'plongee' : 'clair';
-  return THEMES.some(t => t.id === id) ? id : 'plongee';
+  return THEMES.some(t => t.id === id) ? id : 'nudibranche';
 }
 
 export function appliquerTheme(id = themeChoisi()) {

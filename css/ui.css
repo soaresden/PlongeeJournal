@@ -598,13 +598,14 @@ html.partage .actions-fiche, html.partage .annuaire-ajout, html.partage .tag-act
 html.partage .apercu-actions .btn.ghost, html.partage .palq-saisie, html.partage .palq-props, html.partage .palq-puce button,
 html.partage .centre-ligne .btn, html.partage .seances-ajout, html.partage .pverse-pied .btn,
 html.partage .dives-actions, html.partage .btn.danger, html.partage .lien-texte { display: none !important; }
-/* Les champs se lisent, ne s'écrivent pas (la recherche, elle, marche). */
-html.partage #view :is(input:not([type="search"]), select, textarea, .seg button, .chip, .pastille),
-html.partage .apercu :is(input:not([type="search"]), select, textarea, .seg button) { pointer-events: none; }
+/* Les champs d'une fiche se lisent, ne s'écrivent pas. La navigation, elle,
+   marche : onglets Plongées / Fosses / Séances, Liste / Agenda / Carte,
+   filtres, recherche (les écrans de saisie sont fermés en partage). */
+html.partage .apercu :is(input:not([type="search"]), select, textarea, .seg button, .palq-puce) { pointer-events: none; }
 html.partage .apercu input, html.partage .apercu textarea, html.partage .apercu select { background: transparent; border-color: transparent; }
 .bandeau.partage { border-color: var(--accent); }
 .bandeau.partage > .ico { color: var(--accent); }
-html.partage input::placeholder, html.partage textarea::placeholder { color: transparent; }
+html.partage .apercu input:not([type="search"])::placeholder, html.partage .apercu textarea::placeholder { color: transparent; }
 /* Plongeurverse isométrique : zoom et vue */
 .pverse-outils { position: absolute; right: 8px; top: 8px; display: flex; flex-direction: column; gap: 6px; }
 .pverse-btn { width: 38px; height: 38px; border-radius: 12px; border: 1px solid rgba(255,255,255,.35); background: rgba(8,47,73,.6);

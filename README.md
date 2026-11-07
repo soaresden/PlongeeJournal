@@ -191,7 +191,7 @@ certification, statistiques du carnet.
 **Fiche d'urgence** — groupe sanguin, contact d'alarme, numéros de secours,
 lisible sans rien déverrouiller ni aucun réseau.
 
-**Thèmes** — un bouton 🎨 dans la barre du haut ouvre un volet : touche un thème, l'écran change de couleurs en direct, la page reste visible derrière (Plongée, Abysse, Clair, Cousteau, Plage, Eau turquoise, Récif corallien, Épave, Forêt de kelp, Dauphin, Tortue, Holi, Poisson-clown, Nudibranche, ou Automatique). Choix propre à chaque appareil.
+**Thèmes** — « Thème » dans la barre du bas ouvre un volet (Nudibranche par défaut) : touche un thème, l'écran change de couleurs en direct, la page reste visible derrière (Plongée, Abysse, Clair, Cousteau, Plage, Eau turquoise, Récif corallien, Épave, Forêt de kelp, Dauphin, Tortue, Holi, Poisson-clown, Nudibranche, ou Automatique). Choix propre à chaque appareil.
 
 **Téléphone, tablette, PC** — onglets en bas sur téléphone, rail latéral sur tablette, liste et fiches en colonnes en paysage.
 
