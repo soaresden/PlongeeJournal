@@ -169,7 +169,8 @@ export async function buddiesView() {
    */
   async function ouvrirVerification() {
     const dives = diverId ? await store.listDives(diverId) : [];
-    const { tags, sansTag } = verifierTags(buddies, dives);
+    const seances = diverId ? await store.listSeances(diverId) : [];
+    const { tags, sansTag } = verifierTags(buddies, dives, seances);
     const ajouts = [];         // { buddy, tag, coche }
     const nom = b => nomPlongeur(b) || 'Sans nom';
 
@@ -192,7 +193,7 @@ export async function buddiesView() {
         const lignes = t.aAjouter.map(x => {
           const a = { buddy: x.buddy, tag: t.tag, coche: x.ensemble / x.total >= 0.75 && x.ensemble >= 2 };
           ajouts.push(a);
-          return ligne(a, el('small', { text: `${x.ensemble} plongée${x.ensemble > 1 ? 's' : ''} sur ${x.total} avec des « ${t.tag} »` }));
+          return ligne(a, el('small', { text: `${x.ensemble} sortie${x.ensemble > 1 ? 's' : ''} sur ${x.total} avec des « ${t.tag} »` }));
         });
         return el('div.verif-tag', {},
           el('div.verif-tete', {}, pastille(t.tag), el('small', { text: `${t.membres.length} plongeur${t.membres.length > 1 ? 's' : ''}` })),
@@ -200,7 +201,7 @@ export async function buddiesView() {
             text: `Plongent surtout à : ${t.lieux.map(l => `${l.lieu} (${l.n})`).join(', ')}` }) : null,
           lignes.length ? el('div', {}, el('div.verif-lbl', { text: `Sans le tag, mais souvent avec des « ${t.tag} » :` }), ...lignes) : null,
           t.sansPlongee.length ? el('div.hint', { style: { margin: '4px 0 0' },
-            text: `Aucune plongée au carnet : ${t.sansPlongee.map(nom).join(', ')}` }) : null,
+            text: `Ni plongée ni séance au carnet : ${t.sansPlongee.map(nom).join(', ')}` }) : null,
           !lignes.length && !t.sansPlongee.length ? el('div.hint', { style: { margin: '4px 0 0' }, text: '✓ Rien à signaler.' }) : null);
       });
 
@@ -238,7 +239,7 @@ export async function buddiesView() {
       return el('div', {},
         el('h3', { text: '🔎 Les tags, comparés à tes plongées' }),
         el('div.hint', { style: { marginTop: 0 },
-          text: 'D’après qui était dans tes palanquées. Coche ce qui est juste ; rien ne change sans « Ajouter ». '
+          text: 'D’après qui était dans tes palanquées et tes séances (fosse…). Coche ce qui est juste ; rien ne change sans « Ajouter ». '
             + 'Pour retirer un tag à quelqu’un : sa fiche. Pour renommer : touche le tag dans les filtres.' }),
         el('div.verif-liste', {}, ...blocs, sans),
         el('div.btn-row', {}, el('button.btn.ghost', { type: 'button', text: 'Fermer', onclick: close }), bouton));

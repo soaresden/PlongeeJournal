@@ -9,16 +9,21 @@
 //   - où plongent les gens d'un tag (pour voir un tag mal posé).
 // ============================================================
 
-const lieuDe = d => (d.lieuNom || d.site || d.centreNom || '').trim() || 'Lieu non précisé';
+const TYPES = { fosse: 'Fosse', piscine: 'Piscine', apnee: 'Apnée', snorkeling: 'Snorkeling' };
+const lieuDe = d => (d.seance ? (d.lieu || TYPES[d.type] || 'Séance')
+  : (d.lieuNom || d.site || d.centreNom || '')).trim() || 'Lieu non précisé';
 
 /**
  * @param {object[]} buddies  plongeurs ({id, categories, structure})
  * @param {object[]} dives    plongées ({buddyIds, lieuNom…})
+ * @param {object[]} seances  séances (fosse, piscine…) : elles comptent aussi —
+ *                            les gens de la fosse n'apparaissent souvent que là
  * @returns {{tags: object[], sansTag: object[]}}
  *   tags[] : { tag, membres, lieux:[{lieu,n}], aAjouter:[{buddy,ensemble,total}], sansPlongee:[buddy] }
  *   sansTag[] : { buddy, total, tag|null, ensemble }
  */
-export function verifierTags(buddies = [], dives = []) {
+export function verifierTags(buddies = [], dives0 = [], seances = []) {
+  const dives = [...dives0, ...seances.map(x => ({ ...x, seance: true }))];
   const gens = buddies.filter(b => !b.structure);
   const cats = b => (b.categories || []).filter(Boolean);
   const plongeesDe = new Map(gens.map(b => [b.id, dives.filter(d => (d.buddyIds || []).includes(b.id))]));

@@ -112,6 +112,9 @@ check('distance d’édition', N.distance('jullie', 'julie') === 1 && N.distance
   check('tags : un centre n’est pas compté', ogn.membres.length === 3);
   const gus = r.sansTag.find(x => x.buddy.id === 'g');
   check('sans tag : Gus → Malte (1/1)', gus?.tag === 'Malte' && gus.ensemble === 1 && gus.total === 1, JSON.stringify(gus));
+  const r2 = T.verifierTags(gens, dives, [{ type: 'fosse', lieu: '', buddyIds: ['e'] }]);
+  check('séances comptées : Eva vue en fosse n’est plus « sans plongée »',
+    !r2.tags.find(t => t.tag === 'OGN').sansPlongee.length && r2.tags.find(t => t.tag === 'OGN').lieux.some(l => l.lieu === 'Fosse'));
   check('sans tag : Cid → OGN (3 plongées, comptées une fois chacune)', r.sansTag.find(x => x.buddy.id === 'c')?.tag === 'OGN'
     && r.sansTag.find(x => x.buddy.id === 'c').ensemble === 3, JSON.stringify(r.sansTag.find(x => x.buddy.id === 'c')));
 }
