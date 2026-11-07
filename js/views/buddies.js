@@ -171,11 +171,13 @@ export async function buddiesView() {
       : filtres.sort((x, y) => n(y) - n(x) || nomPlongeur(x).localeCompare(nomPlongeur(y), 'fr'));
 
     if (vue === 'verse') {
+      // Une seule scène pour tout le monde : un filtre ou une recherche
+      // met les élus en rangs (une petite armée), les autres sortent.
+      if (!scene) scene = plongeurverse({ buddies, compte: n, onTap: b => apercuPlongeur(b.id, { onClose: recharger }) });
+      scene.ranger?.(!filtre && !q ? null : new Set(filtres.map(b => b.id)));
       // Les genres pas encore notés : on peut enregistrer ce que le prénom suggère.
       const aDeviner = buddies.filter(b => !b.structure && !b.genre && devinerGenre(b.prenom));
-      liste.replaceChildren(
-        plongeurverse({ buddies: filtres, compte: n, onTap: b => apercuPlongeur(b.id, { onClose: recharger }) }),
-        el('div.pverse-pied', {},
+      const pied = el('div.pverse-pied', {},
           el('span', {}, el('b', { style: { color: COULEUR_GENRE.h }, text: 'garçons' }), ' en bleu, ',
             el('b', { style: { color: COULEUR_GENRE.f }, text: 'filles' }), ' en rose, ',
             el('b', { style: { color: COULEUR_GENRE[''] }, text: 'inconnu' }), ' en gris.'),
@@ -187,16 +189,21 @@ export async function buddiesView() {
               }
               toast(`Genre noté pour ${aDeviner.length} plongeur${aDeviner.length > 1 ? 's' : ''} — corrige dans leur fiche si besoin`);
               recharger();
-            } }) : null));
+            } }) : null);
+      if (liste.firstElementChild !== scene) liste.replaceChildren(scene, pied);
+      else liste.lastElementChild.replaceWith(pied);
       return;
     }
+    scene = null;
     liste.replaceChildren(filtres.length
       ? el('div.pgrille', {}, ...filtres.map(carte))
       : el('div.empty', { text: 'Aucun plongeur ne correspond.' }));
   }
 
+  let scene = null;           // le Plongeurverse, gardé d'un filtre à l'autre
   async function recharger() {
     buddies.splice(0, buddies.length, ...await store.listBuddies());
+    scene = null;
     if (diverId) st = await store.stats(diverId);     // une fusion change les compteurs
     rendre();
   }

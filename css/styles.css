@@ -173,7 +173,7 @@ body { background-image: var(--bg-image); background-attachment: fixed; }
 /* ---------- Onglets (téléphone : en bas) ---------- */
 #tabbar {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 45;
-  display: grid; grid-template-columns: repeat(6, 1fr);
+  display: grid; grid-template-columns: repeat(7, 1fr);
   height: calc(var(--tabbar-h) + var(--safe-b));
   padding: 0 env(safe-area-inset-right) var(--safe-b) env(safe-area-inset-left);
   background: var(--bar);
@@ -1542,9 +1542,3 @@ select.imp-select {
 .carnet-lisible { position: relative; border-radius: var(--radius-sm); overflow: hidden; background: #10161c; margin: 6px 0 8px; }
 .carnet-lisible .zoom { height: 100%; }
 
-/* Le bouton thème : comme le bouton profil, à côté de lui */
-.btn-theme {
-  display: flex; align-items: center; padding: 4px 4px; margin-right: 4px;
-  background: none; border: 0; border-radius: 10px; color: inherit; cursor: pointer; flex: 0 0 auto;
-}
-.btn-theme:active { background: rgba(var(--accent-rgb), .12); }

@@ -9,12 +9,16 @@
 //
 //  Le nom : bleu pour les garçons, rose pour les filles (gris si on
 //  ne sait pas). La taille suit le nombre de sorties ensemble.
+//
+//  Un filtre (un tag, les moniteurs…) : ceux qui en sont se mettent en
+//  rangs comme une petite armée et saluent ; les autres quittent la
+//  scène. Sans filtre, tout le monde reprend sa vie.
 // ============================================================
 
 import { el, nomPlongeur, couleurCategorie } from '../lib.js';
 import { genreDe, COULEUR_GENRE } from '../genre.js';
 
-const MAX = 40;                       // au-delà, les plus fréquents seulement
+const MAX = 70;                       // au-delà, les plus fréquents seulement
 const G = 380;                        // gravité sous l'eau : on retombe lentement
 
 const hash = s => { let h = 2166136261; for (const c of String(s)) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); } return h >>> 0; };
@@ -23,7 +27,7 @@ const CHEVEUX = ['#2b1d14', '#5a3a22', '#8a5a2b', '#d4a253', '#161616', '#b5442e
 const COMBIS = ['#1f2937', '#0f4c75', '#24543f', '#5b2a86', '#8a1c3a', '#0e6375', '#3a4556'];
 const BLOCS = ['#facc15', '#cbd5e1', '#f97316', '#e2e8f0'];
 
-const EMOJIS = { bulles: '🫧', saut: '🤸', danse: '💃', chute: '😵', coucou: '👋', tope: '✋', nage: '🐠', attrape: '😱', vol: '🌀' };
+const EMOJIS = { garde: '🫡', bulles: '🫧', saut: '🤸', danse: '💃', chute: '😵', coucou: '👋', tope: '✋', nage: '🐠', attrape: '😱', vol: '🌀' };
 
 /**
  * @param {{buddies:object[], compte:(b)=>number, onTap:(b)=>void}} options
@@ -36,7 +40,7 @@ export function plongeurverse({ buddies, compte = () => 0, onTap = () => {} }) {
 
   const canvas = el('canvas.pverse-canvas');
   const info = el('div.pverse-info', { text: tries.length
-    ? `Attrape-les au doigt et lance-les ! Touche quelqu’un pour sa fiche.${buddies.length > MAX ? ` (Les ${MAX} plus fréquents.)` : ''}`
+    ? `Attrape-les au doigt et lance-les ! Touche quelqu’un pour sa fiche. Un filtre les met en rangs.${buddies.length > MAX ? ` (Les ${MAX} plus fréquents.)` : ''}`
     : 'Personne à afficher.' });
   const boite = el('div.pverse', {}, canvas, info);
   const ctx = canvas.getContext?.('2d');
@@ -56,7 +60,7 @@ export function plongeurverse({ buddies, compte = () => 0, onTap = () => {} }) {
     const z = ((h >>> 3) % 100) / 100;              // profondeur : derrière (0) → devant (1)
     plongeurs.push({
       b, nom: nomPlongeur(b) || 'Sans nom', genre: genreDe(b),
-      z, s: (1.0 + 0.4 * Math.sqrt(n / maxN)) * (0.82 + 0.3 * z),
+      z, s0: 1.0 + 0.4 * Math.sqrt(n / maxN), s: 1, slot: null, cache: false, salut: 0,
       x: 40 + ((h % 997) / 997) * 300, y: 0, vx: 0, vy: 0, dir: h % 2 ? 1 : -1,
       etat: 'marche', t: 1 + (i % 5) * 0.7, phase: h % 7, rot: 0, salto: false, cible: 0, cool: 0,
       vitesse: 22 + (h % 23),
@@ -69,6 +73,49 @@ export function plongeurverse({ buddies, compte = () => 0, onTap = () => {} }) {
   for (let i = 0; i < 4; i++) poissons.push({ x: Math.random() * 400, y: 60 + i * 50, v: (12 + Math.random() * 18) * (i % 2 ? 1 : -1), c: ['#fbbf24', '#fb7185', '#38bdf8', '#a3e635'][i] });
 
   const solDe = p => sol + 6 + p.z * 50;               // chacun sa rangée dans le sable
+  const echelle = p => { p.s = p.s0 * (0.82 + 0.3 * p.z); };
+  plongeurs.forEach(echelle);
+
+  // ---------- la petite armée ----------
+  let rangs = null;           // Set des ids rangés, ou null : tout le monde libre
+  const LIBRES = ['marche', 'pause', 'bulles', 'danse', 'coucou', 'tope', 'nage', 'chute', 'saut'];
+
+  function placerRangs() {
+    if (!rangs) return;
+    const membres = plongeurs.filter(p => rangs.has(p.b.id)).sort((a, b) => b.s0 - a.s0);
+    const k = membres.length;
+    if (!k) return;
+    const pas = 50;
+    const parRang = Math.max(1, Math.min(k, Math.floor((W - 20) / pas)));
+    const nbRangs = Math.ceil(k / parRang);
+    const ecart = Math.min(40, (H - 150) / Math.max(1, nbRangs));
+    membres.forEach((p, i) => {
+      const r = Math.floor(i / parRang), c = i % parRang;
+      const dansCeRang = Math.min(parRang, k - r * parRang);
+      // Premier rang devant : les plus fidèles. Les suivants en gradins,
+      // plus haut et un peu plus petits, pour qu'on voie tout le monde.
+      p.slot = { x: W / 2 + (c - (dansCeRang - 1) / 2) * pas, y: H - 12 - r * ecart, z: Math.max(0, 1 - r * 0.22), r };
+    });
+  }
+
+  /** Mettre en rangs (un Set d'ids) ou rendre la liberté (null). */
+  boite.ranger = ids => {
+    rangs = ids && ids.size ? ids : (ids ? new Set() : null);
+    plongeurs.forEach(p => { p.slot = null; });
+    placerRangs();
+    plongeurs.forEach(p => {
+      const dedans = !rangs || rangs.has(p.b.id);
+      if (p.etat === 'attrape') return;
+      if (dedans && p.cache) {                      // revient par un bord
+        p.cache = false;
+        p.x = Math.random() < 0.5 ? -20 : W + 20;
+        p.dir = p.x < 0 ? 1 : -1; p.y = solDe(p); p.rot = 0;
+      }
+      if (!rangs) { if (['rang', 'garde', 'sortie'].includes(p.etat) || p.etat === 'marche') { p.etat = 'marche'; p.t = 0.5 + Math.random() * 3; } return; }
+      if (dedans) { p.etat = 'rang'; p.t = 1e9; p.rot = 0; }
+      else if (!p.cache) { p.etat = 'sortie'; p.t = 1e9; p.rot = 0; p.dir = p.x < W / 2 ? -1 : 1; }
+    });
+  };
 
   // ---------- taille et décor ----------
   function dimensionner() {
@@ -83,6 +130,7 @@ export function plongeurverse({ buddies, compte = () => 0, onTap = () => {} }) {
     sol = H - 70;
     plongeurs.forEach(p => { p.x = Math.min(W - 20, Math.max(20, p.x * (W / 360) || p.x)); if (p.etat === 'marche' || !p.y) p.y = solDe(p); });
     fond = dessinerFond();
+    placerRangs();
   }
 
   function dessinerFond() {
@@ -144,9 +192,31 @@ export function plongeurverse({ buddies, compte = () => 0, onTap = () => {} }) {
   }
 
   function avancer(p, dt) {
+    if (p.cache) return;
+    if (rangs && p.slot && LIBRES.includes(p.etat) && !['saut', 'nage', 'chute'].includes(p.etat)) { p.etat = 'rang'; p.t = 1e9; }
     const s = solDe(p);
-    p.t -= dt; p.cool -= dt;
+    p.t -= dt; p.cool -= dt; p.salut -= dt;
     switch (p.etat) {
+      case 'rang': {
+        const dx = p.slot.x - p.x;
+        if (Math.abs(dx) > 1) p.dir = Math.sign(dx);
+        p.x += Math.max(-95 * dt, Math.min(95 * dt, dx));
+        p.z += (p.slot.z - p.z) * Math.min(1, dt * 3); echelle(p);
+        p.y += (p.slot.y - p.y) * Math.min(1, dt * 3); p.phase += dt * 11;
+        if (Math.abs(dx) < 1.5 && Math.abs(p.slot.z - p.z) < 0.02 && Math.abs(p.slot.y - p.y) < 1.5) {
+          p.x = p.slot.x; p.z = p.slot.z; echelle(p); p.y = p.slot.y;
+          p.dir = 1; p.etat = 'garde'; p.salut = 1.6;
+          if (Math.random() < 0.4) textes.push({ x: p.x, y: p.y - 86 * p.s, txt: '🫡', vie: 1.2 });
+        }
+        return;
+      }
+      case 'garde':
+        p.y = p.slot ? p.slot.y : solDe(p);
+        return;
+      case 'sortie':
+        p.x += p.dir * 95 * dt; p.phase += dt * 11; p.y = s;
+        if (p.x < -30 || p.x > W + 30) p.cache = true;
+        return;
       case 'marche':
         p.x += p.dir * p.vitesse * dt; p.phase += dt * 9; p.y = s;
         if (p.x < 18 || p.x > W - 18) { p.dir *= -1; p.x = Math.min(W - 18, Math.max(18, p.x)); }
@@ -165,6 +235,7 @@ export function plongeurverse({ buddies, compte = () => 0, onTap = () => {} }) {
           p.y = s;
           if (p.etat === 'vol' && p.vy > 160) { p.vy *= -0.38; break; }
           if (p.etat === 'vol' || Math.abs(Math.sin(p.rot)) > 0.5) { p.rot = (p.vx >= 0 ? 1 : -1) * Math.PI / 2; changer(p, 'chute', 1.3); }
+          else if (rangs && p.slot) { p.etat = 'rang'; p.t = 1e9; }
           else changer(p, 'marche', hasard(2, 5));
         }
         break;
@@ -175,11 +246,11 @@ export function plongeurverse({ buddies, compte = () => 0, onTap = () => {} }) {
         p.y += (p.cible - p.y) * Math.min(1, dt * 1.2);
         if (p.x < 30 || p.x > W - 30) { p.vx *= -1; p.dir *= -1; p.x = Math.min(W - 30, Math.max(30, p.x)); }
         if (Math.random() < dt * 2) bulles.push({ x: p.x, y: p.y - 30 * p.s, r: hasard(1.5, 3.5), v: hasard(30, 50) });
-        if (p.t <= 0) { p.vy = 0; p.vx *= 0.4; p.etat = 'vol'; p.t = 9; }
+        if (p.t <= 0 || (rangs && p.slot)) { p.vy = 0; p.vx *= 0.4; p.etat = 'vol'; p.t = 9; }
         return;
       case 'chute':
         if (p.t <= 0.4) p.rot *= 0.8;
-        if (p.t <= 0) { p.rot = 0; changer(p, 'marche', hasard(2, 5)); }
+        if (p.t <= 0) { p.rot = 0; if (rangs && p.slot) { p.etat = 'rang'; p.t = 1e9; } else changer(p, 'marche', hasard(2, 5)); }
         return;
       case 'attrape':
         p.phase += dt * 22;
@@ -210,7 +281,8 @@ export function plongeurverse({ buddies, compte = () => 0, onTap = () => {} }) {
   // ---------- dessin d'un plongeur (regardant vers la droite) ----------
   function dessiner(p) {
     const s = p.s;
-    const marche = p.etat === 'marche' || p.etat === 'attrape' || p.etat === 'nage';
+    if (p.cache) return;
+    const marche = ['marche', 'attrape', 'nage', 'rang', 'sortie'].includes(p.etat);
     const jambe = marche ? Math.sin(p.phase) * (p.etat === 'attrape' ? 0.9 : 0.45) : 0;
     ctx.save();
     ctx.translate(p.x, p.y);
@@ -257,6 +329,7 @@ export function plongeurverse({ buddies, compte = () => 0, onTap = () => {} }) {
     if (p.etat === 'attrape' || p.etat === 'vol') bras = Math.PI - 0.6 + Math.sin(p.phase) * 0.6;
     if (p.etat === 'tope') bras = Math.PI * 0.62;
     if (p.etat === 'nage') bras = 0.15;
+    if (p.etat === 'garde') bras = p.salut > 0 ? Math.PI - 0.35 : 0.05;     // salut, puis bras le long du corps
     ctx.strokeStyle = p.combi; ctx.lineWidth = 6;
     const mx = epaule[0] + Math.sin(bras) * 15, my = epaule[1] + Math.cos(bras) * 15;
     ctx.beginPath(); ctx.moveTo(...epaule); ctx.lineTo(mx, my); ctx.stroke();
@@ -294,8 +367,10 @@ export function plongeurverse({ buddies, compte = () => 0, onTap = () => {} }) {
 
     // Le nom est posé après tout le monde (voir poserNoms) : il s'écarte
     // de ses voisins au lieu de les recouvrir.
-    etiquettes.push({ x: p.x, y: p.etat === 'nage' ? p.y - 44 * s : p.y - 76 * s, nom: p.nom,
-      couleur: COULEUR_GENRE[p.genre || ''], taille: Math.round(11.5 * Math.min(1.15, s)) });
+    const auRang = p.etat === 'garde' || p.etat === 'rang';
+    etiquettes.push({ x: p.x, y: p.etat === 'nage' ? p.y - 44 * s : p.y - 76 * s,
+      nom: auRang ? (p.b.prenom || p.nom).split(' ')[0] : p.nom, fixe: auRang,
+      couleur: COULEUR_GENRE[p.genre || ''], taille: auRang ? 10.5 : Math.round(11.5 * Math.min(1.15, s)) });
   }
 
   // Noms : bleu, rose, ou gris — droits, lisibles, sans se chevaucher.
@@ -307,7 +382,7 @@ export function plongeurverse({ buddies, compte = () => 0, onTap = () => {} }) {
       ctx.font = `700 ${e.taille}px system-ui, sans-serif`;
       const l = ctx.measureText(e.nom).width + 6, h = e.taille + 3;
       let y = e.y;
-      for (let k = 0; k < 6; k++) {
+      for (let k = 0; k < (e.fixe ? 0 : 6); k++) {
         const gene = poses.find(q => Math.abs(q.x - e.x) < (q.l + l) / 2 && Math.abs(q.y - y) < h);
         if (!gene) break;
         y = gene.y - h;
@@ -388,7 +463,7 @@ export function plongeurverse({ buddies, compte = () => 0, onTap = () => {} }) {
   // ---------- le doigt ----------
   let prise = null;           // { p, dx, dy, x0, y0, t0, hist:[] }
   const position = e => { const r = canvas.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
-  const sous = ({ x, y }) => [...plongeurs].sort((a, b) => b.z - a.z).find(p => {
+  const sous = ({ x, y }) => [...plongeurs].filter(p => !p.cache).sort((a, b) => b.z - a.z).find(p => {
     const cy = p.etat === 'nage' ? p.y : p.y - 34 * p.s;
     return Math.hypot(x - p.x, y - cy) < 30 * p.s + 6;
   });

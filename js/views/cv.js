@@ -11,7 +11,7 @@ import { el, toast } from '../lib.js';
 import { store } from '../store.js';
 import { estBapteme, libelleMateriel, valeursMateriel } from '../model.js';
 import { paysDe } from '../secours.js';
-import { piecesEquipees, dessinPlongeur } from '../equipement.js';
+import { piecesEquipees } from '../equipement.js';
 import { cumulerALEcran } from './carte.js';
 import { ambianceDe } from '../ambiance.js';
 import { rangNiveau, typeMateriel } from '../config.js';
@@ -239,9 +239,9 @@ export async function cvView() {
     const nomRegion = id => t.regions[id] || ({ caraibes: 'Caraïbes', tropiques: 'Tropiques', merRouge: 'Mer Rouge', med: 'Méditerranée',
       atlantique: 'Îles atlantiques', nord: 'Manche & Atlantique', ocean: 'Océan', douce: 'Lac & carrière', fosse: 'Fosse' }[id] || id);
 
-    const langues = el('div.cv-langues', {}, ...LANGUES.map(([id, nom, drapeau]) => el(`button.cat-filtre${id === langue ? '.on' : ''}`, {
-      type: 'button', title: nom, onclick: () => { langue = id; try { localStorage.setItem(CLE_LANGUE, id); } catch { /* privé */ } rendreTout(); },
-    }, drapeau, ' ', nom)));
+    const langues = el('div.cv-langues', {}, ...LANGUES.map(([id, nom, drapeau]) => el(`button.cv-langue${id === langue ? '.on' : ''}`, {
+      type: 'button', title: nom, 'aria-label': nom, onclick: () => { langue = id; try { localStorage.setItem(CLE_LANGUE, id); } catch { /* privé */ } rendreTout(); },
+    }, drapeau)));
 
     const nomPays = code => { try { return new Intl.DisplayNames([loc], { type: 'region' }).of(code); } catch { return code; } };
     const nomMat = type => MAT[langue]?.[type] || typeMateriel(type).label;
@@ -263,50 +263,63 @@ export async function cvView() {
       p.pays.length ? `${TXT_PAYS[langue] || TXT_PAYS.fr} : ${p.pays.map(([c, n]) => `${drapeau(c)} ${nomPays(c)} (${n})`).join(', ')}.` : '',
     ].filter(Boolean).join('\n');
 
+    // Tout tient sur un écran, sans défiler : l'essentiel en haut, les pays
+    // en drapeaux, la carte prend la place qui reste.
+    const copier = el('button.btn.sm.ghost.cv-copier', { type: 'button', title: t.copier, 'aria-label': t.copier, text: '📋',
+      onclick: async () => { try { await navigator.clipboard.writeText(texte); toast(t.copie); } catch { toast(texte); } } });
+    const infos = el('div.cv-infos', {},
+      el('div.cv-tete', {},
+        el('div.cv-badge', { text: p.niveau || '🤿' }),
+        el('div.cv-ident', {},
+          el('div.cv-nom', { text: `${p.prenom} ${p.nom}`.trim() }),
+          el('div.cv-niveau', { text: [p.niveau ? `${t.plongeur} ${p.niveau}` : t.plongeur, CMAS[p.niveau]].filter(Boolean).join(' · ') }),
+          descNiv ? el('div.cv-desc', { text: descNiv }) : null)),
+      el('div.cv-chiffres', {},
+        chiffre(p.n, `${t.plongees} · ${t.depuis(annee)}`),
+        chiffre(`${p.profMax} m`, t.profMax),
+        chiffre(heures, t.sousLEau),
+        chiffre(ilYA(p.derniere) || '—', t.derniere)),
+      // Le reste en une ligne : la place va aux pays et à la carte.
+      el('div.cv-plus', { text: [`${p.douzeMois} ${t.douzeMois}`, `${p.mer} ${t.mer}`,
+        p.douce ? `${p.douce} ${t.douce}` : '', p.nuit ? `${p.nuit} ${t.nuit}` : ''].filter(Boolean).join(' · ') }),
+      p.brevets.length ? el('div.cv-ligne', {}, el('h3', { text: t.brevets }),
+        el('div.cv-puces.cv-defile', {}, ...p.brevets.map(b => el('span.cv-brevet', { title: b.date ? date(b.date) : '' },
+          el('b', { text: brevet(b.nom) }), CMAS[b.nom] ? el('small', { text: CMAS[b.nom] }) : null)))) : null,
+      p.pays.length ? el('div.cv-ligne', {}, el('h3', { text: `${t.ou} · ${p.pays.length} ${(TXT_PAYS[langue] || TXT_PAYS.fr).toLowerCase()}` }),
+        el('div.cv-pays', {},
+          ...p.pays.map(([code, n]) => el('button.cv-pays-puce', { type: 'button', title: `${nomPays(code)} · ${n}`, onclick: () => zoomPays(code) },
+            el('span.cv-drapeau', { text: drapeau(code) }), el('span.cv-pays-nom', { text: nomPays(code) }), el('small', { text: String(n) }))),
+          boiteCarte && p.pays.length > 1 ? el('button.cv-pays-puce', { type: 'button', onclick: () => zoomPays(null) },
+            el('span.cv-drapeau', { text: '🌍' }), el('span', { text: TXT_TOUT[langue] || TXT_TOUT.fr })) : null)) : null,
+      p.equipe.length ? el('div.cv-ligne', {}, el('h3', { text: TXT_PORTE[langue] || TXT_PORTE.fr }),
+        el('div.cv-puces.cv-mat', {}, ...p.equipe.map(m => el('span.cv-mat-puce', { title: nomMat(m.type) },
+          `${typeMateriel(m.type).icone} `, el('b', { text: libelle(m) }))))) : null);
+
     wrap.replaceChildren(
-      langues,
-      el('div.cv-carte', {},
-        el('div.cv-tete', {},
-          el('div.cv-badge', { text: p.niveau || '🤿' }),
-          el('div', {},
-            el('div.cv-nom', { text: `${p.prenom} ${p.nom}`.trim() }),
-            el('div.cv-niveau', { text: [p.niveau ? `${t.plongeur} ${p.niveau}` : t.plongeur, CMAS[p.niveau]].filter(Boolean).join(' · ') }),
-            descNiv ? el('div.cv-desc', { text: descNiv }) : null)),
-        el('p.cv-phrase', { text: t.phrase(p.prenom, p.niveau, p.n, annee) }),
-        el('div.cv-chiffres', {},
-          chiffre(p.n, `${t.plongees} · ${t.depuis(annee)}`),
-          chiffre(`${p.profMax} m`, t.profMax),
-          chiffre(heures, t.sousLEau),
-          chiffre(p.douzeMois, t.douzeMois),
-          chiffre(p.mer, t.mer),
-          p.douce ? chiffre(p.douce, t.douce) : null,
-          p.nuit ? chiffre(p.nuit, t.nuit) : null,
-          chiffre(ilYA(p.derniere) || '—', t.derniere)),
-        p.brevets.length ? el('div.cv-bloc', {}, el('h3', { text: t.brevets }),
-          el('div.cv-brevets', {}, ...p.brevets.map(b => el('div.cv-brevet', {},
-            el('b', { text: brevet(b.nom) }),
-            CMAS[b.nom] ? el('span', { text: `${t.equiv} ${CMAS[b.nom]}` }) : null,
-            b.date ? el('span', { text: date(b.date) }) : null)))) : null,
-        p.pays.length ? el('div.cv-bloc', {}, el('h3', { text: t.ou }),
-          el('div.cv-pays', {},
-            boiteCarte && p.pays.length > 1 ? el('button.cv-pays-puce', { type: 'button', onclick: () => zoomPays(null) },
-              el('span.cv-drapeau', { text: '🌍' }), el('span', { text: TXT_TOUT[langue] || TXT_TOUT.fr })) : null,
-            ...p.pays.map(([code, n]) => el('button.cv-pays-puce', { type: 'button', title: nomPays(code), onclick: () => zoomPays(code) },
-              el('span.cv-drapeau', { text: drapeau(code) }), el('span', { text: nomPays(code) }), el('small', { text: String(n) })))),
-          boiteCarte) : null,
-        p.equipe.length ? el('div.cv-bloc', {}, el('h3', { text: TXT_PORTE[langue] || TXT_PORTE.fr }),
-          el('div.cv-equipe', {},
-            el('div.equip-dessin.fixe', { html: dessinPlongeur(diver, { titre: nomMat }) }),
-            el('div.cv-mat', {}, ...p.equipe.map(m => el('div', {},
-              el('span', { text: `${typeMateriel(m.type).icone} ${nomMat(m.type)}` }), el('b', { text: libelle(m) })))))) : null),
-      el('div.btn-row', {}, el('button.btn.sm', { type: 'button', text: `📋 ${t.copier}`, onclick: async () => {
-        try { await navigator.clipboard.writeText(texte); toast(t.copie); } catch { toast(texte); }
-      } })));
+      el('div.cv-barre', {}, langues, copier),
+      el('div.cv-carte', {}, infos, boiteCarte || el('div.cv-monde.vide')));
+    requestAnimationFrame(ajusterHauteur);
   }
+
+  /** La page prend exactement la hauteur visible de l'écran. */
+  function ajusterHauteur() {
+    const vue = document.getElementById('view');
+    if (!vue || !wrap.isConnected) return;
+    const cs = getComputedStyle(vue);
+    const h = vue.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+    wrap.style.height = `${Math.max(420, Math.floor(h))}px`;
+    carte?.invalidateSize();
+  }
+  // La hauteur change aussi quand le bandeau du haut apparaît ou part.
+  const vueObs = document.getElementById('view');
+  if (vueObs && typeof ResizeObserver === 'function') {
+    const obs = new ResizeObserver(() => { if (wrap.isConnected) ajusterHauteur(); else obs.disconnect(); });
+    obs.observe(vueObs);
+  } else window.addEventListener('resize', () => { if (wrap.isConnected) ajusterHauteur(); });
 
   /** La carte des spots : on zoome, les spots proches se cumulent. */
   function poserCarte() {
-    const boite = wrap.querySelector('.cv-monde');
+    const boite = wrap.querySelector('.cv-monde:not(.vide)');
     if (carte) { carte.remove(); carte = null; }
     if (!boite || typeof L === 'undefined') return;
     carte = L.map(boite, { zoomControl: true, attributionControl: false, gestureHandling: true });

@@ -109,12 +109,6 @@ const settingsBtn = el('button.icon-btn.btn-reglages', { title: 'Réglages', 'ar
   onclick: () => navigate('reglages') }, svg('i-gear'));
 
 // Le thème : un bouton, et un volet qui change les couleurs en direct.
-// Même allure que le bouton profil, et juste à côté de lui.
-const themeBtn = el('button.btn-theme', { type: 'button', title: 'Thème', 'aria-label': 'Thème',
-  onclick: async () => (await import('./volet-theme.js')).basculerVoletTheme() },
-  el('span.ident-ico', {}, svg('i-palette')));
-identEl.after(themeBtn);
-
 actions.append(syncBtn, settingsBtn);
 
 // ------------------------------------------------------------
@@ -303,7 +297,8 @@ onRender(async path => {
     const { nom, prenom, compte, derniere } = identite;
     identEl.append(
       el('span.ident-txt', {},
-        el('span.ident-nom', {}, el('span.ident-long', { text: nom }), el('span.ident-court', { text: prenom || nom })),
+        // Le prénom seul : le nom complet est sur « Qui je suis », en touchant.
+        el('span.ident-nom', {}, el('span', { text: prenom || nom })),
         el('span.ident-sous', { text: derniere ? `${compte} · ${derniere}` : String(compte) })),
       el('span.ident-ico', { html: '<svg class="ico"><use href="#i-carte"/></svg>' }));
     identEl.title = 'Qui je suis, en plongée';
@@ -348,7 +343,11 @@ async function identiteParDefaut() {
 //  Navigation
 // ------------------------------------------------------------
 
-$$('#tabbar .tab').forEach(tab => tab.addEventListener('click', () => navigate(tab.dataset.route)));
+$$('#tabbar .tab').forEach(tab => tab.addEventListener('click', async () => {
+  // Le thème n'est pas une page : un volet, les couleurs changent en direct.
+  if (tab.dataset.action === 'theme') return (await import('./volet-theme.js')).basculerVoletTheme();
+  navigate(tab.dataset.route);
+}));
 
 backBtn.addEventListener('click', () => {
   if (history.length > 1) history.back();

@@ -267,10 +267,11 @@ check('réglages : l’état du stockage est expliqué',
   /Mode local/.test(view()), view().slice(0, 120));
 {
   check('thème : un bouton dans Réglages (plus de grille)', !!document.querySelector('#view .theme-bouton') && !document.querySelector('#view .themes'), '');
-  const btnTheme = document.querySelector('#topbar .btn-theme');
-  check('thème : un bouton 🎨 juste à côté du bouton profil, même allure',
-    btnTheme?.previousElementSibling?.id === 'topIdent' && !!btnTheme.querySelector('.ident-ico'), btnTheme?.previousElementSibling?.id);
+  const btnTheme = document.querySelector('#tabbar .tab-theme');
+  check('thème : un onglet « Thème » juste après « Profil » dans la barre du bas',
+    btnTheme?.previousElementSibling?.dataset.route === 'divers' && /Thème/.test(btnTheme.textContent), btnTheme?.previousElementSibling?.dataset.route);
   btnTheme.click();
+  await tick(40);
   await tick(80);
   const v = document.querySelector('.volet-theme');
   check('thème : le volet s’ouvre, tous les thèmes dedans', v?.classList.contains('ouvert') && v.querySelectorAll('.theme-choix').length >= 10, String(v?.querySelectorAll('.theme-choix').length));
@@ -483,9 +484,9 @@ window.dispatchEvent(new window.Event('hashchange'));
 await tick(150);
 
 const ident = document.getElementById('topIdent');
-check('barre du haut : le nom du plongeur y est affiché',
-  !ident.hidden && ident.querySelector('.ident-long')?.textContent === 'Denis Testeur' && ident.querySelector('.ident-court')?.textContent === 'Denis',
-  ident.querySelector('.ident-long')?.textContent);
+check('barre du haut : le prénom seul (le nom complet est sur « Qui je suis »)',
+  !ident.hidden && ident.querySelector('.ident-nom')?.textContent === 'Denis' && !/Testeur/.test(ident.textContent),
+  ident.querySelector('.ident-nom')?.textContent);
 check('barre du haut : le compte et la dernière date suivent',
   /^2 plongées · /.test(ident.querySelector('.ident-sous')?.textContent || ''),
   ident.querySelector('.ident-sous')?.textContent);

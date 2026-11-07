@@ -540,3 +540,54 @@ input.lecture-seule { opacity: .75; cursor: default; }
 .pverse-info { position: absolute; left: 10px; right: 10px; top: 18px; text-align: center; font-size: 12px; color: rgba(255,255,255,.9);
   text-shadow: 0 1px 2px rgba(0,0,0,.6); pointer-events: none; }
 .pverse-pied { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-top: 8px; font-size: 13px; color: var(--text-dim); }
+
+/* ---------- Qui je suis : un seul écran, sans défiler ---------- */
+.cv { display: flex; flex-direction: column; gap: 8px; overflow: hidden; }
+.cv-barre { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; }
+.cv-langues { flex: 1; margin: 0; gap: 4px; }
+.cv-langue { flex: 0 0 auto; width: 34px; height: 30px; border-radius: 9px; border: 1px solid var(--line); background: var(--surface);
+  font-size: 17px; line-height: 1; cursor: pointer; padding: 0; }
+.cv-langue.on { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(var(--accent-rgb), .25); }
+.cv-copier { flex: 0 0 auto; padding: 5px 10px; }
+.cv .cv-carte { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 18px; }
+.cv-infos { display: flex; flex-direction: column; gap: 8px; flex: 0 0 auto; min-height: 0; }
+.cv .cv-tete { gap: 12px; }
+.cv .cv-badge { width: 52px; height: 52px; flex-basis: 52px; border-radius: 16px; font-size: 18px; }
+.cv-ident { min-width: 0; }
+.cv .cv-nom { font-size: 19px; line-height: 1.15; }
+.cv .cv-niveau { font-size: 13px; }
+.cv .cv-desc { font-size: 12px; }
+.cv .cv-chiffres { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 5px; }
+.cv .cv-chiffre { padding: 6px 7px; border-radius: 10px; min-width: 0; }
+.cv .cv-chiffre b { font-size: 15.5px; line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cv .cv-chiffre span { font-size: 10.5px; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.cv-ligne h3 { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--text-dim); margin: 0 0 4px; }
+.cv-puces { display: flex; flex-wrap: wrap; gap: 5px; }
+.cv .cv-brevet { display: inline-flex; align-items: baseline; gap: 5px; flex-direction: row; padding: 3px 9px; border-radius: 99px; font-size: 12.5px; }
+.cv .cv-brevet small { color: var(--text-mute); font-size: 11px; }
+.cv .cv-pays { margin: 0; gap: 5px; }
+.cv .cv-pays-puce { padding: 3px 9px 3px 5px; gap: 5px; font-size: 12.5px; }
+.cv .cv-drapeau { font-size: 18px; }
+.cv-mat { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+.cv-mat::-webkit-scrollbar { display: none; }
+.cv-mat-puce { flex: 0 0 auto; font-size: 12px; padding: 3px 9px; border: 1px solid var(--line); border-radius: 99px; white-space: nowrap; }
+.cv-mat-puce b { font-weight: 600; }
+.cv .cv-monde { flex: 1; min-height: 110px; height: auto; }
+.cv .cv-monde.vide { display: none; }
+.cv + .btn-row { display: none; }
+/* Tablette et plus : les infos à gauche, la carte à droite, toute la hauteur. */
+@media (min-width: 760px) {
+  .cv { max-width: 1100px; }
+  .cv .cv-carte { flex-direction: row; }
+  .cv-infos { flex: 0 0 min(440px, 48%); overflow: hidden; }
+  .cv .cv-monde { min-height: 0; }
+}
+.cv-plus { font-size: 11.5px; color: var(--text-mute); margin-top: -3px; }
+.cv-defile { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+.cv-defile::-webkit-scrollbar { display: none; }
+.cv-defile > * { flex: 0 0 auto; white-space: nowrap; }
+@media (max-width: 520px) {
+  /* Téléphone : drapeau + nombre ; le nom du pays au toucher (la carte y zoome). */
+  .cv .cv-pays-nom { display: none; }
+  .cv .cv-pays-puce { padding: 3px 8px 3px 5px; }
+}
