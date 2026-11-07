@@ -116,10 +116,13 @@ donner au jeton GitHub la permission « Gists : Read and write » (Account
 permissions).
 
 **Plongeurverse** — bouton 🤿 de l'écran Plongeurs : tes compagnons en
-cartoon au fond de l'eau. Ils marchent, font des bulles, sautent, nagent,
-dansent, trébuchent, se tapent dans la main ; on les attrape au doigt et on
-les lance, un toucher ouvre leur fiche. Nom en bleu pour les garçons, en rose
-pour les filles (genre noté sur la fiche, sinon deviné d'après le prénom).
+cartoon, en isométrique sur un fond de sable en losange. Ils se promènent, font
+des bulles, sautent, nagent, dansent, trébuchent, se tapent dans la main ; on
+les attrape au doigt et on les lance, un toucher ouvre leur fiche. Pincer ou
+la molette zoome, glisser déplace la vue, ⤢ montre tout. Un filtre (tag,
+moniteurs…) les met en rangs et la caméra va sur eux. Toi aussi tu y es,
+d'après ton Mii (combi bleue, cheveux en pics), en chef devant l'armée. Nom en
+bleu pour les garçons, en rose pour les filles.
 
 **Plongeurs en double** — « ⇄ Fusionner… » sur la fiche d'un plongeur : on
 choisit l'autre fiche (les doublons probables sont en tête), ses plongées,

@@ -537,7 +537,7 @@ input.lecture-seule { opacity: .75; cursor: default; }
 .pverse { position: relative; width: 100%; border-radius: 16px; overflow: hidden; border: 1px solid var(--line); background: #0b3b63; }
 .pverse-canvas { display: block; width: 100%; touch-action: none; user-select: none; -webkit-user-select: none; cursor: grab; }
 .pverse-canvas:active { cursor: grabbing; }
-.pverse-info { position: absolute; left: 10px; right: 10px; top: 18px; text-align: center; font-size: 12px; color: rgba(255,255,255,.9);
+.pverse-info { position: absolute; left: 10px; right: 56px; top: 14px; text-align: center; font-size: 12px; color: rgba(255,255,255,.9);
   text-shadow: 0 1px 2px rgba(0,0,0,.6); pointer-events: none; }
 .pverse-pied { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-top: 8px; font-size: 13px; color: var(--text-dim); }
 
@@ -605,3 +605,10 @@ html.partage .apercu input, html.partage .apercu textarea, html.partage .apercu 
 .bandeau.partage { border-color: var(--accent); }
 .bandeau.partage > .ico { color: var(--accent); }
 html.partage input::placeholder, html.partage textarea::placeholder { color: transparent; }
+/* Plongeurverse isométrique : zoom et vue */
+.pverse-outils { position: absolute; right: 8px; top: 8px; display: flex; flex-direction: column; gap: 6px; }
+.pverse-btn { width: 38px; height: 38px; border-radius: 12px; border: 1px solid rgba(255,255,255,.35); background: rgba(8,47,73,.6);
+  color: #fff; font-size: 20px; line-height: 1; cursor: pointer; backdrop-filter: blur(4px); }
+.pverse-btn:active { transform: scale(.94); }
+.pverse-info { transition: opacity .6s ease; }
+.pverse-info.discret { opacity: 0; }

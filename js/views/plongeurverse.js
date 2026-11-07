@@ -27,6 +27,10 @@ const CHEVEUX = ['#2b1d14', '#5a3a22', '#8a5a2b', '#d4a253', '#161616', '#b5442e
 const COMBIS = ['#1f2937', '#0f4c75', '#24543f', '#5b2a86', '#8a1c3a', '#0e6375', '#3a4556'];
 const BLOCS = ['#facc15', '#cbd5e1', '#f97316', '#e2e8f0'];
 
+/** Moi, d'après mon Mii : combi bleue, peau claire, cheveux châtains en pics, sourcils marqués. */
+export const MOI = { combi: '#1d4ed8', bande: '#60a5fa', bloc: '#facc15', peau: '#f8c9a2', cheveux: '#5a3216',
+  pics: true, sourcils: true, barbe: false, chauve: false, genre: 'h' };
+
 const EMOJIS = { garde: '🫡', bulles: '🫧', saut: '🤸', danse: '💃', chute: '😵', coucou: '👋', tope: '✋', nage: '🐠', attrape: '😱', vol: '🌀' };
 
 // ---------- dessin d'un plongeur (regardant vers la droite) ----------
@@ -106,11 +110,22 @@ export function dessinerPlongeur(ctx, p) {
     if (p.genre === 'f') { ctx.beginPath(); ctx.arc(-6, hy - 1, 7, Math.PI * 0.6, Math.PI * 1.6); ctx.fill(); }
   }
   if (p.barbe) { ctx.fillStyle = p.cheveux; ctx.beginPath(); ctx.arc(2, hy + 5, 7.5, 0.1, Math.PI - 0.6); ctx.fill(); }
+  if (p.pics) {                    // la coupe en pics du Mii
+    ctx.fillStyle = p.cheveux;
+    ctx.beginPath(); ctx.moveTo(-11, hy - 2);
+    [[-10, -15], [-6, -9], [-3, -17], [1, -10], [4, -16], [7, -9], [11, -13], [11, -4]]
+      .forEach(([x, y]) => ctx.lineTo(x, hy + y));
+    ctx.lineTo(9, hy - 4); ctx.lineTo(-11, hy - 2); ctx.fill();
+  }
   // Masque et sangle
   ctx.strokeStyle = '#111827'; ctx.lineWidth = 2;
   ctx.beginPath(); ctx.moveTo(1, hy - 3); ctx.lineTo(-10, hy - 2); ctx.stroke();
   ctx.fillStyle = '#111827'; ctx.beginPath(); ctx.roundRect(1, hy - 8, 12, 9, 3); ctx.fill();
   ctx.fillStyle = 'rgba(165,243,252,.9)'; ctx.beginPath(); ctx.roundRect(2.5, hy - 6.5, 9, 6, 2); ctx.fill();
+  if (p.sourcils) {                // sourcils marqués, au-dessus du masque
+    ctx.strokeStyle = p.cheveux; ctx.lineWidth = 2.2;
+    ctx.beginPath(); ctx.moveTo(2.5, hy - 10); ctx.lineTo(6.5, hy - 11); ctx.moveTo(8.5, hy - 11); ctx.lineTo(12.5, hy - 10); ctx.stroke();
+  }
   // Yeux : normaux, ou en croix quand ça secoue
   ctx.fillStyle = '#0f172a';
   if (['chute', 'vol', 'attrape'].includes(p.etat)) {
@@ -143,223 +158,250 @@ export function plongeurCartoon(graine, extra = {}) {
 }
 
 /**
- * @param {{buddies:object[], compte:(b)=>number, onTap:(b)=>void}} options
+ * Le Plongeurverse, en isométrique : un fond de sable en losange, vu de
+ * trois quarts, où chacun se promène dans les deux sens. On zoome
+ * (pincer, molette, boutons) et on déplace la vue en glissant dans l'eau.
+ * Le propriétaire du carnet y est aussi (moi), d'après son Mii : combi
+ * bleue, cheveux en pics ; devant l'armée quand elle se met en rangs.
+ * @param {{buddies:object[], compte:(b)=>number, onTap:(b)=>void, moi?:{prenom:string}, onMoi?:Function}} options
  * @returns {HTMLElement}
  */
-export function plongeurverse({ buddies, compte = () => 0, onTap = () => {} }) {
+export function plongeurverse({ buddies, compte = () => 0, onTap = () => {}, moi = null, onMoi = () => {} }) {
   const tries = [...buddies].filter(b => !b.structure)
     .sort((a, b) => compte(b) - compte(a)).slice(0, MAX);
   const maxN = Math.max(1, ...tries.map(compte));
 
   const canvas = el('canvas.pverse-canvas');
   const info = el('div.pverse-info', { text: tries.length
-    ? `Attrape-les au doigt et lance-les ! Touche quelqu’un pour sa fiche. Un filtre les met en rangs.${buddies.length > MAX ? ` (Les ${MAX} plus fréquents.)` : ''}`
+    ? 'Pince pour zoomer, glisse pour te déplacer. Attrape un plongeur et lance-le ; touche-le pour sa fiche. Un filtre les met en rangs.'
     : 'Personne à afficher.' });
-  const boite = el('div.pverse', {}, canvas, info);
+  const bouton = (texte, titre, fn) => el('button.pverse-btn', { type: 'button', text: texte, title: titre, 'aria-label': titre, onclick: fn });
+  const outils = el('div.pverse-outils', {},
+    bouton('+', 'Zoomer', () => zoomerVers(cam.z * 1.35, W / 2, H / 2)),
+    bouton('−', 'Dézoomer', () => zoomerVers(cam.z / 1.35, W / 2, H / 2)),
+    bouton('⤢', 'Tout voir', () => cadrer()));
+  const boite = el('div.pverse', {}, canvas, info, outils);
   const ctx = canvas.getContext?.('2d');
   if (!ctx) { info.textContent = 'Le dessin n’est pas disponible sur cet appareil.'; return boite; }
+  setTimeout(() => info.classList.add('discret'), 6000);
 
-  let W = 360, H = 480, sol = 400;
+  // ---------- le monde : un carré de sable de côté L, vu en losange ----------
+  const L = Math.round(Math.max(320, 78 * Math.sqrt(tries.length + 4)));
+  const C = 0.866;                       // cos 30°
+  let W = 360, H = 480;
+  const cam = { z: 1, ox: 0, oy: 0, cible: null };
+  const proj = (x, y, h = 0) => ({ x: cam.ox + (x - y) * C * cam.z, y: cam.oy + ((x + y) * 0.5 - h) * cam.z });
+  const auSol = (sx, sy) => {
+    const a = (sx - cam.ox) / (cam.z * C), b = (sy - cam.oy) / cam.z * 2;
+    return { x: (a + b) / 2, y: (b - a) / 2 };
+  };
+  const borne = v => Math.max(8, Math.min(L - 8, v));
+
   const plongeurs = [];
   const bulles = [];
-  const textes = [];          // emojis qui flottent
-  const poissons = [];
-  let fond = null;
+  const textes = [];
+  const hasard = (a, b) => a + Math.random() * (b - a);
 
-  // ---------- les habitants ----------
   tries.forEach((b, i) => {
     const h = hash(b.id || nomPlongeur(b));
     const n = compte(b);
-    const z = ((h >>> 3) % 100) / 100;              // profondeur : derrière (0) → devant (1)
     plongeurs.push({
       b, nom: nomPlongeur(b) || 'Sans nom', genre: genreDe(b),
-      z, s0: 1.0 + 0.4 * Math.sqrt(n / maxN), s: 1, slot: null, cache: false, salut: 0,
-      x: 40 + ((h % 997) / 997) * 300, y: 0, vx: 0, vy: 0, dir: h % 2 ? 1 : -1,
-      etat: 'marche', t: 1 + (i % 5) * 0.7, phase: h % 7, rot: 0, salto: false, cible: 0, cool: 0,
-      vitesse: 22 + (h % 23),
+      wx: 20 + (h % 1000) / 1000 * (L - 40), wy: 20 + ((h >>> 10) % 1000) / 1000 * (L - 40), wz: 0,
+      vx: 0, vy: 0, vz: 0, cx: 0, cy: 0,
+      s0: 1.0 + 0.4 * Math.sqrt(n / maxN), s: 1, x: 0, y: 0, dir: h % 2 ? 1 : -1,
+      etat: 'marche', t: 1 + (i % 5) * 0.7, phase: h % 7, rot: 0, salto: false, cool: 0, salut: 0,
+      vitesse: 16 + (h % 18), slot: null, cache: false,
       peau: PEAUX[h % PEAUX.length], cheveux: CHEVEUX[(h >>> 5) % CHEVEUX.length],
       combi: COMBIS[(h >>> 8) % COMBIS.length], bloc: BLOCS[(h >>> 11) % BLOCS.length],
       bande: (b.categories || [])[0] ? couleurCategorie(b.categories[0]) : '#22d3ee',
       barbe: genreDe(b) === 'h' && (h >>> 13) % 4 === 0, chauve: genreDe(b) === 'h' && (h >>> 15) % 6 === 0,
     });
   });
-  for (let i = 0; i < 4; i++) poissons.push({ x: Math.random() * 400, y: 60 + i * 50, v: (12 + Math.random() * 18) * (i % 2 ? 1 : -1), c: ['#fbbf24', '#fb7185', '#38bdf8', '#a3e635'][i] });
+  if (moi) {
+    plongeurs.push({
+      ...plongeurCartoon('moi', MOI), estMoi: true,
+      b: { id: '__moi__', prenom: moi.prenom || 'Moi' }, nom: `★ ${moi.prenom || 'Moi'}`, genre: 'h',
+      wx: L / 2, wy: L / 2, wz: 0, vx: 0, vy: 0, vz: 0, cx: 0, cy: 0,
+      s0: 1.5, s: 1, x: 0, y: 0, etat: 'marche', t: 2, salto: false, cool: 0, salut: 0, vitesse: 22, slot: null, cache: false,
+    });
+  }
+  plongeurs.forEach(viser);
 
-  const solDe = p => sol + 6 + p.z * 50;               // chacun sa rangée dans le sable
-  const echelle = p => { p.s = p.s0 * (0.82 + 0.3 * p.z); };
-  plongeurs.forEach(echelle);
+  // Le décor, posé dans le monde (rochers, coraux, algues)
+  const decor = [];
+  for (let i = 0; i < Math.round(L / 45); i++) {
+    const h = hash(`decor${i}`);
+    decor.push({ wx: (h % 997) / 997 * L, wy: ((h >>> 10) % 997) / 997 * L, type: ['rocher', 'corail', 'algue', 'algue'][h % 4],
+      c: ['#fb7185', '#f59e0b', '#c084fc', '#34d399'][(h >>> 4) % 4], k: 0.7 + ((h >>> 7) % 50) / 100 });
+  }
+  const poissons = [0, 1, 2, 3].map(i => ({ x: Math.random(), y: 0.08 + i * 0.07, v: (0.02 + Math.random() * 0.03) * (i % 2 ? -1 : 1), c: ['#fbbf24', '#fb7185', '#38bdf8', '#a3e635'][i] }));
+
+  // ---------- caméra ----------
+  /** Montre une zone du monde (x0..x1, y0..y1) ; animé, sauf au premier affichage. */
+  function viserZone(x0, y0, x1, y1, { anime = true, marge = 1 } = {}) {
+    const coins = [[x0, y0], [x1, y0], [x1, y1], [x0, y1]].map(([x, y]) => ({ u: (x - y) * C, v: (x + y) * 0.5 }));
+    const u0 = Math.min(...coins.map(c => c.u)), u1 = Math.max(...coins.map(c => c.u));
+    const v0 = Math.min(...coins.map(c => c.v)) - 80, v1 = Math.max(...coins.map(c => c.v)) + 20;
+    const z = Math.max(0.25, Math.min(2.2, Math.min((W - 30) / ((u1 - u0) * marge || 1), (H - 40) / ((v1 - v0) * marge || 1))));
+    const cible = { z, ox: W / 2 - (u0 + u1) / 2 * z, oy: H / 2 - (v0 + v1) / 2 * z };
+    if (anime) cam.cible = cible; else Object.assign(cam, cible, { cible: null });
+  }
+  function cadrer(anime = true) { viserZone(0, 0, L, L, { anime }); }
+  function zoomerVers(z, px, py) {
+    cam.cible = null;
+    const avant = auSol(px, py);
+    cam.z = Math.max(0.25, Math.min(3, z));
+    const apres = proj(avant.x, avant.y);
+    cam.ox += px - apres.x; cam.oy += py - apres.y;
+  }
+
+  function dimensionner() {
+    const r = boite.getBoundingClientRect();
+    const premier = !W || W === 360;
+    W = Math.max(280, r.width);
+    H = Math.round(Math.max(320, Math.min(window.innerHeight * 0.62, 640)));
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
+    canvas.style.height = `${H}px`;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    if (premier || !cam.ox) cadrer(false);
+  }
 
   // ---------- la petite armée ----------
-  let rangs = null;           // Set des ids rangés, ou null : tout le monde libre
-  const LIBRES = ['marche', 'pause', 'bulles', 'danse', 'coucou', 'tope', 'nage', 'chute', 'saut'];
+  let rangs = null;
+  const LIBRES = ['marche', 'pause', 'bulles', 'danse', 'coucou', 'tope'];
 
   function placerRangs() {
     if (!rangs) return;
     const membres = plongeurs.filter(p => rangs.has(p.b.id)).sort((a, b) => b.s0 - a.s0);
     const k = membres.length;
     if (!k) return;
-    const pas = 50;
-    const parRang = Math.max(1, Math.min(k, Math.floor((W - 20) / pas)));
-    const nbRangs = Math.ceil(k / parRang);
-    const ecart = Math.min(40, (H - 150) / Math.max(1, nbRangs));
+    const pas = 30;
+    const cols = Math.max(1, Math.min(k, Math.ceil(Math.sqrt(k * 1.8)), Math.floor((L * 0.9) / pas)));
+    const nb = Math.ceil(k / cols);
     membres.forEach((p, i) => {
-      const r = Math.floor(i / parRang), c = i % parRang;
-      const dansCeRang = Math.min(parRang, k - r * parRang);
-      // Premier rang devant : les plus fidèles. Les suivants en gradins,
-      // plus haut et un peu plus petits, pour qu'on voie tout le monde.
-      p.slot = { x: W / 2 + (c - (dansCeRang - 1) / 2) * pas, y: H - 12 - r * ecart, z: Math.max(0, 1 - r * 0.22), r };
+      const r = Math.floor(i / cols), c = i % cols;
+      const dansCeRang = Math.min(cols, k - r * cols);
+      // Rangées parallèles à l'écran ; le premier rang (les plus fidèles) devant.
+      const u = (c - (dansCeRang - 1) / 2) * pas, v = ((nb - 1) / 2 - r) * pas;
+      p.slot = { x: borne(L / 2 + (u + v) / Math.SQRT2), y: borne(L / 2 + (v - u) / Math.SQRT2) };
     });
+    // Le chef devant sa troupe.
+    const chef = plongeurs.find(p => p.estMoi);
+    if (chef) { const v = ((nb - 1) / 2) * pas + 40; chef.slot = { x: borne(L / 2 + v / Math.SQRT2), y: borne(L / 2 + v / Math.SQRT2) }; }
   }
 
-  /** Mettre en rangs (un Set d'ids) ou rendre la liberté (null). */
   boite.ranger = ids => {
     rangs = ids && ids.size ? ids : (ids ? new Set() : null);
     plongeurs.forEach(p => { p.slot = null; });
     placerRangs();
+    const places = plongeurs.filter(p => p.slot).map(p => p.slot);
+    if (rangs && places.length) {
+      const xs = places.map(q => q.x), ys = places.map(q => q.y);
+      viserZone(Math.min(...xs) - 30, Math.min(...ys) - 30, Math.max(...xs) + 30, Math.max(...ys) + 30);
+    } else if (!rangs && W !== 360) cadrer();
     plongeurs.forEach(p => {
-      const dedans = !rangs || rangs.has(p.b.id);
+      const dedans = !rangs || rangs.has(p.b.id) || p.estMoi;
       if (p.etat === 'attrape') return;
-      if (dedans && p.cache) {                      // revient par un bord
-        p.cache = false;
-        p.x = Math.random() < 0.5 ? -20 : W + 20;
-        p.dir = p.x < 0 ? 1 : -1; p.y = solDe(p); p.rot = 0;
+      if (dedans && p.cache) {                    // revient par un bord
+        p.cache = false; p.wz = 0;
+        if (Math.random() < 0.5) { p.wx = Math.random() < 0.5 ? -20 : L + 20; p.wy = hasard(0, L); }
+        else { p.wy = Math.random() < 0.5 ? -20 : L + 20; p.wx = hasard(0, L); }
       }
-      if (!rangs) { if (['rang', 'garde', 'sortie'].includes(p.etat) || p.etat === 'marche') { p.etat = 'marche'; p.t = 0.5 + Math.random() * 3; } return; }
+      if (!rangs) { if (['rang', 'garde', 'sortie'].includes(p.etat)) { p.etat = 'marche'; p.t = hasard(0.5, 3); viser(p); } return; }
       if (dedans) { p.etat = 'rang'; p.t = 1e9; p.rot = 0; }
-      else if (!p.cache) { p.etat = 'sortie'; p.t = 1e9; p.rot = 0; p.dir = p.x < W / 2 ? -1 : 1; }
+      else if (!p.cache) {
+        p.etat = 'sortie'; p.t = 1e9; p.rot = 0;
+        // Vers le bord le plus proche
+        const d = [[p.wx, -40, p.wy], [L - p.wx, L + 40, p.wy], [p.wy, p.wx, -40], [L - p.wy, p.wx, L + 40]];
+        const [, a, bb] = d.sort((x, y) => x[0] - y[0])[0];
+        if (d[0] === d.find(x => x[1] === -40 || x[1] === L + 40)) { p.cx = a; p.cy = p.wy; } else { p.cx = p.wx; p.cy = bb; }
+        p.cx = a === -40 || a === L + 40 ? a : p.wx; p.cy = a === -40 || a === L + 40 ? p.wy : bb;
+      }
     });
   };
 
-  // ---------- taille et décor ----------
-  function dimensionner() {
-    const r = boite.getBoundingClientRect();
-    W = Math.max(280, r.width);
-    // Assez haut pour nager, assez bas pour voir le sable sans défiler.
-    H = Math.round(Math.max(300, Math.min(window.innerHeight * 0.5, 500)));
-    const dpr = Math.min(2, window.devicePixelRatio || 1);
-    canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
-    canvas.style.height = `${H}px`;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    sol = H - 70;
-    plongeurs.forEach(p => { p.x = Math.min(W - 20, Math.max(20, p.x * (W / 360) || p.x)); if (p.etat === 'marche' || !p.y) p.y = solDe(p); });
-    fond = dessinerFond();
-    placerRangs();
-  }
-
-  function dessinerFond() {
-    const c = document.createElement('canvas');
-    const dpr = Math.min(2, window.devicePixelRatio || 1);
-    c.width = canvas.width; c.height = canvas.height;
-    const g = c.getContext('2d');
-    g.setTransform(dpr, 0, 0, dpr, 0, 0);
-    const eau = g.createLinearGradient(0, 0, 0, H);
-    eau.addColorStop(0, '#5fd3f3'); eau.addColorStop(0.45, '#1b8fc4'); eau.addColorStop(1, '#0b3b63');
-    g.fillStyle = eau; g.fillRect(0, 0, W, H);
-    // Rayons de lumière
-    g.globalAlpha = 0.09; g.fillStyle = '#ffffff';
-    for (let i = 0; i < 6; i++) {
-      const x = (i + 0.3) * W / 6;
-      g.beginPath(); g.moveTo(x - 14, 0); g.lineTo(x + 14, 0); g.lineTo(x + 70, sol); g.lineTo(x + 20, sol); g.closePath(); g.fill();
-    }
-    g.globalAlpha = 1;
-    // Rochers et sable
-    g.fillStyle = '#21506b';
-    [[0.08, 46], [0.82, 60], [0.55, 30]].forEach(([fx, r]) => { g.beginPath(); g.ellipse(fx * W, sol + 6, r * 1.6, r, 0, Math.PI, 0); g.fill(); });
-    const sable = g.createLinearGradient(0, sol, 0, H);
-    sable.addColorStop(0, '#e8d3a2'); sable.addColorStop(1, '#c9a96b');
-    g.fillStyle = sable;
-    g.beginPath(); g.moveTo(0, sol + 4);
-    for (let x = 0; x <= W; x += 20) g.quadraticCurveTo(x + 10, sol - 4 + Math.sin(x) * 3, x + 20, sol + 4);
-    g.lineTo(W, H); g.lineTo(0, H); g.closePath(); g.fill();
-    g.fillStyle = 'rgba(120,90,40,.35)';
-    for (let i = 0; i < 70; i++) g.fillRect((i * 97) % W, sol + 10 + ((i * 53) % (H - sol - 12)), 2, 2);
-    // Coraux
-    [[0.18, '#fb7185'], [0.7, '#f59e0b'], [0.93, '#c084fc']].forEach(([fx, coul]) => {
-      g.strokeStyle = coul; g.lineWidth = 5; g.lineCap = 'round';
-      const x = fx * W;
-      [[0, -34], [-12, -24], [12, -26], [-6, -40], [7, -42]].forEach(([dx, dy]) => { g.beginPath(); g.moveTo(x, sol + 6); g.quadraticCurveTo(x + dx * 0.4, sol + dy * 0.5, x + dx, sol + dy); g.stroke(); });
-    });
-    return c;
-  }
-
   // ---------- comportement ----------
-  const hasard = (a, b) => a + Math.random() * (b - a);
+  function viser(p) { p.cx = borne(p.wx + hasard(-120, 120)); p.cy = borne(p.wy + hasard(-120, 120)); }
 
   function changer(p, etat, t) {
     p.etat = etat; p.t = t; p.rot = etat === 'chute' ? p.rot : 0; p.salto = false;
-    if (EMOJIS[etat] && etat !== 'marche') textes.push({ x: p.x, y: p.y - 86 * p.s, txt: EMOJIS[etat], vie: 1.4 });
-    if (etat === 'saut') { p.vy = -hasard(200, 300); p.vx = p.dir * hasard(10, 50); p.salto = Math.random() < 0.5; }
-    if (etat === 'nage') { p.cible = hasard(60, sol - 120); p.vx = p.dir * hasard(40, 70); }
+    if (EMOJIS[etat] && etat !== 'marche') textes.push({ wx: p.wx, wy: p.wy, wz: 95 * p.s0, txt: EMOJIS[etat], vie: 1.4 });
+    if (etat === 'saut') { p.vz = hasard(150, 230); p.salto = Math.random() < 0.5; }
+    if (etat === 'nage') { p.vz = 0; viser(p); p.cz = hasard(40, 110); }
+    if (etat === 'marche') viser(p);
   }
 
   function bêtise(p) {
     const r = Math.random();
-    if (r < 0.34) return changer(p, 'marche', hasard(2, 6));
-    if (r < 0.46) return changer(p, 'bulles', 1.6);
-    if (r < 0.58) return changer(p, 'saut', 9);
-    if (r < 0.68) return changer(p, 'nage', hasard(3, 6));
-    if (r < 0.76) return changer(p, 'danse', 2.2);
-    if (r < 0.84) return changer(p, 'coucou', 1.6);
-    if (r < 0.92) { p.rot = p.dir * Math.PI / 2; return changer(p, 'chute', 1.4); }
+    if (r < 0.38) return changer(p, 'marche', hasard(2, 6));
+    if (r < 0.5) return changer(p, 'bulles', 1.6);
+    if (r < 0.6) return changer(p, 'saut', 9);
+    if (r < 0.7) return changer(p, 'nage', hasard(3, 6));
+    if (r < 0.78) return changer(p, 'danse', 2.2);
+    if (r < 0.86) return changer(p, 'coucou', 1.6);
+    if (r < 0.93) { p.rot = p.dir * Math.PI / 2; return changer(p, 'chute', 1.4); }
     changer(p, 'pause', hasard(1, 2.5));
+  }
+
+  /** Avance vers (cx, cy) ; renvoie vrai une fois arrivé. */
+  function allerVers(p, v, dt, borner = true) {
+    const dx = p.cx - p.wx, dy = p.cy - p.wy, d = Math.hypot(dx, dy);
+    if (d < 1.5) return true;
+    const pas = Math.min(d, v * dt);
+    p.wx += dx / d * pas; p.wy += dy / d * pas;
+    if (borner) { p.wx = borne(p.wx); p.wy = borne(p.wy); }
+    const ecranX = (dx - dy);                   // sens à l'écran
+    if (Math.abs(ecranX) > 0.5) p.dir = ecranX > 0 ? 1 : -1;
+    p.phase += dt * 9;
+    return false;
   }
 
   function avancer(p, dt) {
     if (p.cache) return;
-    if (rangs && p.slot && LIBRES.includes(p.etat) && !['saut', 'nage', 'chute'].includes(p.etat)) { p.etat = 'rang'; p.t = 1e9; }
-    const s = solDe(p);
+    if (rangs && p.slot && LIBRES.includes(p.etat)) { p.etat = 'rang'; p.t = 1e9; }
     p.t -= dt; p.cool -= dt; p.salut -= dt;
     switch (p.etat) {
-      case 'rang': {
-        const dx = p.slot.x - p.x;
-        if (Math.abs(dx) > 1) p.dir = Math.sign(dx);
-        p.x += Math.max(-95 * dt, Math.min(95 * dt, dx));
-        p.z += (p.slot.z - p.z) * Math.min(1, dt * 3); echelle(p);
-        p.y += (p.slot.y - p.y) * Math.min(1, dt * 3); p.phase += dt * 11;
-        if (Math.abs(dx) < 1.5 && Math.abs(p.slot.z - p.z) < 0.02 && Math.abs(p.slot.y - p.y) < 1.5) {
-          p.x = p.slot.x; p.z = p.slot.z; echelle(p); p.y = p.slot.y;
-          p.dir = 1; p.etat = 'garde'; p.salut = 1.6;
-          if (Math.random() < 0.4) textes.push({ x: p.x, y: p.y - 86 * p.s, txt: '🫡', vie: 1.2 });
-        }
+      case 'rang':
+        p.cx = p.slot.x; p.cy = p.slot.y;
+        if (allerVers(p, 80, dt)) { p.etat = 'garde'; p.dir = 1; p.salut = 1.6;
+          if (Math.random() < 0.4) textes.push({ wx: p.wx, wy: p.wy, wz: 95 * p.s0, txt: '🫡', vie: 1.2 }); }
         return;
-      }
-      case 'garde':
-        p.y = p.slot ? p.slot.y : solDe(p);
-        return;
+      case 'garde': return;
       case 'sortie':
-        p.x += p.dir * 95 * dt; p.phase += dt * 11; p.y = s;
-        if (p.x < -30 || p.x > W + 30) p.cache = true;
+        if (allerVers(p, 85, dt, false)) p.cache = true;
+        if (p.wx < -30 || p.wx > L + 30 || p.wy < -30 || p.wy > L + 30) p.cache = true;
         return;
       case 'marche':
-        p.x += p.dir * p.vitesse * dt; p.phase += dt * 9; p.y = s;
-        if (p.x < 18 || p.x > W - 18) { p.dir *= -1; p.x = Math.min(W - 18, Math.max(18, p.x)); }
+        if (allerVers(p, p.vitesse, dt)) viser(p);
         break;
       case 'bulles':
-        if (Math.random() < dt * 9) bulles.push({ x: p.x + p.dir * 9 * p.s, y: p.y - 56 * p.s, r: hasard(2, 5), v: hasard(30, 60) });
+        if (Math.random() < dt * 9) { const e = proj(p.wx, p.wy, 56 * p.s0); bulles.push({ x: e.x + p.dir * 8 * p.s, y: e.y, r: hasard(2, 5), v: hasard(30, 60) }); }
         break;
-      case 'saut': case 'vol': {
-        p.vy += G * dt; p.y += p.vy * dt; p.x += p.vx * dt;
-        p.vx *= Math.pow(p.etat === 'vol' ? 0.55 : 0.8, dt);
+      case 'saut': case 'vol':
+        p.vz -= G * dt; p.wz += p.vz * dt;
+        p.wx += p.vx * dt; p.wy += p.vy * dt;
+        p.vx *= Math.pow(0.6, dt); p.vy *= Math.pow(0.6, dt);
+        if (p.wx < 8 || p.wx > L - 8) { p.vx *= -0.6; p.wx = borne(p.wx); }
+        if (p.wy < 8 || p.wy > L - 8) { p.vy *= -0.6; p.wy = borne(p.wy); }
         if (p.salto) p.rot += p.dir * dt * 7;
-        if (p.etat === 'vol') p.rot += p.vx * dt * 0.012;
-        if (p.x < 16 || p.x > W - 16) { p.vx *= -0.6; p.x = Math.min(W - 16, Math.max(16, p.x)); }
-        if (p.y < 70 * p.s) { p.y = 70 * p.s; p.vy = Math.abs(p.vy) * 0.4; }
-        if (p.y >= s) {
-          p.y = s;
-          if (p.etat === 'vol' && p.vy > 160) { p.vy *= -0.38; break; }
-          if (p.etat === 'vol' || Math.abs(Math.sin(p.rot)) > 0.5) { p.rot = (p.vx >= 0 ? 1 : -1) * Math.PI / 2; changer(p, 'chute', 1.3); }
+        if (p.etat === 'vol') p.rot += (p.vx - p.vy) * dt * 0.01;
+        if (p.wz <= 0) {
+          p.wz = 0;
+          if (p.etat === 'vol' && p.vz < -150) { p.vz *= -0.35; break; }
+          p.vx = p.vy = 0;
+          if (p.etat === 'vol' || Math.abs(Math.sin(p.rot)) > 0.5) { p.rot = p.dir * Math.PI / 2; changer(p, 'chute', 1.3); }
           else if (rangs && p.slot) { p.etat = 'rang'; p.t = 1e9; }
           else changer(p, 'marche', hasard(2, 5));
         }
-        break;
-      }
+        return;
       case 'nage':
-        p.phase += dt * 12;
-        p.x += p.vx * dt;
-        p.y += (p.cible - p.y) * Math.min(1, dt * 1.2);
-        if (p.x < 30 || p.x > W - 30) { p.vx *= -1; p.dir *= -1; p.x = Math.min(W - 30, Math.max(30, p.x)); }
-        if (Math.random() < dt * 2) bulles.push({ x: p.x, y: p.y - 30 * p.s, r: hasard(1.5, 3.5), v: hasard(30, 50) });
-        if (p.t <= 0 || (rangs && p.slot)) { p.vy = 0; p.vx *= 0.4; p.etat = 'vol'; p.t = 9; }
+        p.wz += ((p.cz || 60) - p.wz) * Math.min(1, dt * 1.2);
+        if (allerVers(p, 45, dt)) viser(p);
+        p.phase += dt * 4;
+        if (Math.random() < dt * 2) { const e = proj(p.wx, p.wy, p.wz + 30 * p.s0); bulles.push({ x: e.x, y: e.y, r: hasard(1.5, 3.5), v: hasard(30, 50) }); }
+        if (p.t <= 0 || (rangs && p.slot)) { p.vz = 0; p.vx = p.vy = 0; p.etat = 'vol'; p.t = 9; }
         return;
       case 'chute':
         if (p.t <= 0.4) p.rot *= 0.8;
@@ -374,16 +416,15 @@ export function plongeurverse({ buddies, compte = () => 0, onTap = () => {} }) {
     if (p.t <= 0 && !['saut', 'vol', 'attrape'].includes(p.etat)) bêtise(p);
   }
 
-  // Deux copains qui se croisent se tapent dans la main.
   function rencontres() {
     for (let i = 0; i < plongeurs.length; i++) {
       const a = plongeurs[i];
-      if (a.etat !== 'marche' || a.cool > 0) continue;
+      if (a.etat !== 'marche' || a.cool > 0 || a.cache) continue;
       for (let j = i + 1; j < plongeurs.length; j++) {
         const b = plongeurs[j];
-        if (b.etat !== 'marche' || b.cool > 0 || Math.abs(a.z - b.z) > 0.25) continue;
-        if (Math.abs(a.x - b.x) < 24 && a.dir !== b.dir && Math.random() < 0.5) {
-          a.dir = a.x < b.x ? 1 : -1; b.dir = -a.dir;
+        if (b.etat !== 'marche' || b.cool > 0 || b.cache) continue;
+        if (Math.hypot(a.wx - b.wx, a.wy - b.wy) < 16 && Math.random() < 0.5) {
+          a.dir = (a.wx - a.wy) < (b.wx - b.wy) ? 1 : -1; b.dir = -a.dir;
           changer(a, 'tope', 0.9); b.etat = 'tope'; b.t = 0.9;
           a.cool = b.cool = 6;
         }
@@ -391,153 +432,240 @@ export function plongeurverse({ buddies, compte = () => 0, onTap = () => {} }) {
     }
   }
 
-  function dessiner(p) {
-    if (p.cache) return;
-    const s = p.s;
-    dessinerPlongeur(ctx, p);
-
-    // Le nom est posé après tout le monde (voir poserNoms) : il s'écarte
-    // de ses voisins au lieu de les recouvrir.
-    const auRang = p.etat === 'garde' || p.etat === 'rang';
-    etiquettes.push({ x: p.x, y: p.etat === 'nage' ? p.y - 44 * s : p.y - 76 * s,
-      nom: auRang || plongeurs.length > 20 ? (p.b.prenom || p.nom).split(' ')[0] : p.nom, fixe: auRang,   // beaucoup de monde : le prénom
-      couleur: COULEUR_GENRE[p.genre || ''], taille: auRang ? 10.5 : Math.round(11.5 * Math.min(1.15, s)) });
+  // ---------- dessin ----------
+  function losange() {
+    const h = proj(0, 0), d = proj(L, 0), b = proj(L, L), g = proj(0, L);
+    // Épaisseur du sable (on voit la tranche)
+    const ep = 14 * cam.z;
+    ctx.fillStyle = '#b08d55';
+    ctx.beginPath(); ctx.moveTo(g.x, g.y); ctx.lineTo(b.x, b.y); ctx.lineTo(d.x, d.y); ctx.lineTo(d.x, d.y + ep); ctx.lineTo(b.x, b.y + ep); ctx.lineTo(g.x, g.y + ep); ctx.closePath(); ctx.fill();
+    const sable = ctx.createLinearGradient(0, h.y, 0, b.y);
+    sable.addColorStop(0, '#d9c08a'); sable.addColorStop(1, '#efdcae');
+    ctx.fillStyle = sable;
+    ctx.beginPath(); ctx.moveTo(h.x, h.y); ctx.lineTo(d.x, d.y); ctx.lineTo(b.x, b.y); ctx.lineTo(g.x, g.y); ctx.closePath(); ctx.fill();
+    // Un quadrillage léger : on lit mieux les distances
+    ctx.strokeStyle = 'rgba(120,90,40,.16)'; ctx.lineWidth = 1;
+    const pas = L / Math.max(4, Math.round(L / 60));
+    for (let v = pas; v < L - 1; v += pas) {
+      let a = proj(v, 0), c = proj(v, L); ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(c.x, c.y); ctx.stroke();
+      a = proj(0, v); c = proj(L, v); ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(c.x, c.y); ctx.stroke();
+    }
   }
 
-  // Noms : bleu, rose, ou gris — droits, lisibles, sans se chevaucher.
+  function dessinerDecor(o, t) {
+    const e = proj(o.wx, o.wy), k = cam.z * o.k;
+    ctx.save();
+    ctx.translate(e.x, e.y);
+    if (o.type === 'rocher') {
+      ctx.fillStyle = '#5b7a8c';
+      ctx.beginPath(); ctx.ellipse(0, -8 * k, 22 * k, 14 * k, 0, Math.PI, 0); ctx.ellipse(0, -8 * k, 22 * k, 6 * k, 0, 0, Math.PI); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,.18)'; ctx.beginPath(); ctx.ellipse(-6 * k, -14 * k, 8 * k, 4 * k, -0.3, 0, Math.PI * 2); ctx.fill();
+    } else if (o.type === 'corail') {
+      ctx.strokeStyle = o.c; ctx.lineWidth = 5 * k; ctx.lineCap = 'round';
+      [[0, -30], [-10, -22], [10, -24], [-5, -36], [6, -38]].forEach(([dx, dy]) => {
+        ctx.beginPath(); ctx.moveTo(0, 0); ctx.quadraticCurveTo(dx * 0.4 * k, dy * 0.5 * k, dx * k, dy * k); ctx.stroke(); });
+    } else {
+      ctx.strokeStyle = '#2f9e6a'; ctx.lineWidth = 4 * k; ctx.lineCap = 'round';
+      for (let i = -1; i <= 1; i++) {
+        ctx.beginPath(); ctx.moveTo(i * 5 * k, 0);
+        ctx.quadraticCurveTo((i * 5 + Math.sin(t * 1.4 + o.wx) * 10) * k, -28 * k, (i * 6 + Math.sin(t * 1.1 + o.wy) * 8) * k, -55 * k); ctx.stroke();
+      }
+    }
+    ctx.restore();
+  }
+
   const etiquettes = [];
+  function dessiner(p) {
+    if (p.cache) return;
+    const sol = proj(p.wx, p.wy);
+    const e = proj(p.wx, p.wy, p.wz);
+    p.s = p.s0 * cam.z * 0.85;
+    // Ombre au sol quand il est en l'air
+    if (p.wz > 2 || ['attrape', 'nage', 'vol', 'saut'].includes(p.etat)) {
+      ctx.fillStyle = `rgba(0,0,0,${Math.max(0.05, 0.22 - p.wz / 600)})`;
+      ctx.beginPath(); ctx.ellipse(sol.x, sol.y, 15 * p.s, 7 * p.s, 0, 0, Math.PI * 2); ctx.fill();
+    }
+    p.x = e.x; p.y = e.y;
+    dessinerPlongeur(ctx, p);
+    const auRang = p.etat === 'garde' || p.etat === 'rang';
+    const court = auRang || cam.z < 0.75 || plongeurs.length > 20;
+    etiquettes.push({ x: e.x, y: p.etat === 'nage' ? e.y - 44 * p.s : e.y - 78 * p.s,
+      nom: p.estMoi ? p.nom : court ? (p.b.prenom || p.nom).split(' ')[0] : p.nom,
+      couleur: COULEUR_GENRE[p.genre || ''], taille: Math.round(Math.max(9.5, Math.min(13, 11 * Math.sqrt(cam.z * 1.4)))) });
+  }
+
   function poserNoms() {
     const poses = [];
     etiquettes.sort((a, b) => b.y - a.y);
     for (const e of etiquettes) {
       ctx.font = `700 ${e.taille}px system-ui, sans-serif`;
-      const l = ctx.measureText(e.nom).width + 6, h = e.taille + 3;
+      const l = ctx.measureText(e.nom).width + 6, h = e.taille + 2;
       let y = e.y;
-      for (let k = 0; k < (e.fixe ? 0 : 6); k++) {
+      for (let k = 0; k < 3; k++) {
         const gene = poses.find(q => Math.abs(q.x - e.x) < (q.l + l) / 2 && Math.abs(q.y - y) < h);
         if (!gene) break;
         y = gene.y - h;
       }
       poses.push({ x: e.x, y, l });
       ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
-      ctx.lineWidth = 3.5; ctx.strokeStyle = 'rgba(255,255,255,.92)';
+      ctx.lineWidth = 3.2; ctx.strokeStyle = 'rgba(255,255,255,.92)';
       ctx.strokeText(e.nom, e.x, y);
       ctx.fillStyle = e.couleur; ctx.fillText(e.nom, e.x, y);
     }
     etiquettes.length = 0;
   }
 
-
-  // ---------- la boucle ----------
   let avant = performance.now();
-  let tempsVague = 0;
-  function image(t) {
-    if (!boite.isConnected) return;           // on a quitté l'écran : fin
+  let temps = 0;
+  function image(tt) {
+    if (!boite.isConnected) return;
     requestAnimationFrame(image);
-    if (document.hidden) { avant = t; return; }
-    const dt = Math.min(0.05, (t - avant) / 1000);
-    avant = t; tempsVague += dt;
+    if (document.hidden) { avant = tt; return; }
+    const dt = Math.min(0.05, (tt - avant) / 1000);
+    avant = tt; temps += dt;
 
     plongeurs.forEach(p => avancer(p, dt));
     rencontres();
-
-    ctx.clearRect(0, 0, W, H);
-    if (fond) ctx.drawImage(fond, 0, 0, W, H);
-    // Surface qui ondule
-    ctx.fillStyle = 'rgba(255,255,255,.25)';
-    ctx.beginPath(); ctx.moveTo(0, 0);
-    for (let x = 0; x <= W; x += 16) ctx.lineTo(x, 10 + Math.sin(x / 30 + tempsVague * 2) * 4);
-    ctx.lineTo(W, 0); ctx.closePath(); ctx.fill();
-    // Algues
-    ctx.strokeStyle = '#2f9e6a'; ctx.lineWidth = 4; ctx.lineCap = 'round';
-    for (let i = 0; i < 7; i++) {
-      const x = (i + 0.5) * W / 7 + 12, h = 50 + (i % 3) * 22;
-      ctx.beginPath(); ctx.moveTo(x, sol + 8);
-      ctx.quadraticCurveTo(x + Math.sin(tempsVague * 1.4 + i) * 14, sol - h / 2, x + Math.sin(tempsVague * 1.1 + i) * 10, sol - h);
-      ctx.stroke();
+    if (cam.cible) {
+      const k = Math.min(1, dt * 3.5);
+      cam.z += (cam.cible.z - cam.z) * k; cam.ox += (cam.cible.ox - cam.ox) * k; cam.oy += (cam.cible.oy - cam.oy) * k;
+      if (Math.abs(cam.cible.z - cam.z) < 0.002 && Math.abs(cam.cible.ox - cam.ox) < 0.5) cam.cible = null;
     }
-    // Poissons
+
+    // L'eau, puis le sable en losange
+    const eau = ctx.createLinearGradient(0, 0, 0, H);
+    eau.addColorStop(0, '#5fd3f3'); eau.addColorStop(0.5, '#1b8fc4'); eau.addColorStop(1, '#0b3b63');
+    ctx.fillStyle = eau; ctx.fillRect(0, 0, W, H);
+    ctx.globalAlpha = 0.08; ctx.fillStyle = '#fff';
+    for (let i = 0; i < 5; i++) {
+      const x = (i + 0.4) * W / 5 + Math.sin(temps * 0.6 + i) * 12;
+      ctx.beginPath(); ctx.moveTo(x - 14, 0); ctx.lineTo(x + 14, 0); ctx.lineTo(x + 70, H); ctx.lineTo(x + 20, H); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
     poissons.forEach(f => {
-      f.x += f.v * dt;
-      if (f.x > W + 20) f.x = -20; if (f.x < -20) f.x = W + 20;
-      const d = Math.sign(f.v);
+      const x = ((f.x + f.v * temps) % 1 + 1) % 1 * W, y = f.y * H + Math.sin(temps * 2 + f.y * 20) * 3, d = Math.sign(f.v);
       ctx.fillStyle = f.c;
-      ctx.beginPath(); ctx.ellipse(f.x, f.y + Math.sin(tempsVague * 2 + f.y) * 3, 8, 4.5, 0, 0, Math.PI * 2); ctx.fill();
-      ctx.beginPath(); ctx.moveTo(f.x - d * 7, f.y); ctx.lineTo(f.x - d * 13, f.y - 4); ctx.lineTo(f.x - d * 13, f.y + 4); ctx.closePath(); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(x, y, 8, 4.5, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(x - d * 7, y); ctx.lineTo(x - d * 13, y - 4); ctx.lineTo(x - d * 13, y + 4); ctx.fill();
     });
-    // Plongeurs : ceux du fond d'abord
-    [...plongeurs].sort((a, b) => (a.etat === 'attrape') - (b.etat === 'attrape') || a.z - b.z).forEach(dessiner);
-    poserNoms();
+    losange();
+
+    // Tout ce qui est posé dans le monde, du fond vers l'avant
+    const scene = [
+      ...decor.map(o => ({ prof: o.wx + o.wy, f: () => dessinerDecor(o, temps) })),
+      ...plongeurs.filter(p => !p.cache).map(p => ({ prof: p.wx + p.wy + (p.etat === 'attrape' ? 1e5 : 0), f: () => dessiner(p) })),
+    ].sort((a, b) => a.prof - b.prof);
+    scene.forEach(o => o.f());
+
     // Bulles
     ctx.strokeStyle = 'rgba(255,255,255,.8)'; ctx.lineWidth = 1.2;
     for (let i = bulles.length - 1; i >= 0; i--) {
       const u = bulles[i];
       u.y -= u.v * dt; u.x += Math.sin(u.y / 9) * 0.3;
-      if (u.y < 12) { bulles.splice(i, 1); continue; }
-      ctx.beginPath(); ctx.arc(u.x, u.y, u.r, 0, Math.PI * 2); ctx.stroke();
+      if (u.y < 0) { bulles.splice(i, 1); continue; }
+      ctx.beginPath(); ctx.arc(u.x, u.y, u.r * Math.max(0.6, cam.z), 0, Math.PI * 2); ctx.stroke();
     }
-    // Emojis des bêtises
-    ctx.textAlign = 'center'; ctx.font = '18px system-ui, sans-serif';
+    poserNoms();
+    // Emojis
+    ctx.textAlign = 'center'; ctx.font = `${Math.round(16 * Math.max(0.8, Math.min(1.4, cam.z)))}px system-ui, sans-serif`;
     for (let i = textes.length - 1; i >= 0; i--) {
       const e = textes[i];
-      e.vie -= dt; e.y -= 14 * dt;
+      e.vie -= dt; e.wz += 14 * dt;
       if (e.vie <= 0) { textes.splice(i, 1); continue; }
-      ctx.globalAlpha = Math.min(1, e.vie); ctx.fillText(e.txt, e.x, e.y); ctx.globalAlpha = 1;
+      const q = proj(e.wx, e.wy, e.wz);
+      ctx.globalAlpha = Math.min(1, e.vie); ctx.fillText(e.txt, q.x, q.y); ctx.globalAlpha = 1;
     }
   }
 
-  // ---------- le doigt ----------
-  let prise = null;           // { p, dx, dy, x0, y0, t0, hist:[] }
+  // ---------- le doigt : attraper, lancer, déplacer la vue, pincer ----------
+  const doigts = new Map();
+  let prise = null, glisse = null, pince = null;
   const position = e => { const r = canvas.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
-  const sous = ({ x, y }) => [...plongeurs].filter(p => !p.cache).sort((a, b) => b.z - a.z).find(p => {
-    const cy = p.etat === 'nage' ? p.y : p.y - 34 * p.s;
-    return Math.hypot(x - p.x, y - cy) < 30 * p.s + 6;
-  });
+  const sous = ({ x, y }) => plongeurs.filter(p => !p.cache)
+    .sort((a, b) => (b.wx + b.wy) - (a.wx + a.wy))
+    .find(p => { const e = proj(p.wx, p.wy, p.wz); return Math.hypot(x - e.x, y - (e.y - 34 * p.s)) < 32 * p.s + 8; });
 
   canvas.addEventListener('pointerdown', e => {
-    const pos = position(e);
-    const p = sous(pos);
-    if (!p) return;
     e.preventDefault();
+    cam.cible = null;
     canvas.setPointerCapture?.(e.pointerId);
-    prise = { p, dx: p.x - pos.x, dy: p.y - pos.y, x0: pos.x, y0: pos.y, t0: performance.now(), hist: [{ ...pos, t: performance.now() }], avant: p.etat };
+    const pos = position(e);
+    doigts.set(e.pointerId, pos);
+    if (doigts.size === 2) {                         // pincer : zoom
+      if (prise) { prise.p.etat = 'vol'; prise.p.vz = 0; prise = null; }
+      glisse = null;
+      const [a, b] = [...doigts.values()];
+      pince = { d0: Math.hypot(a.x - b.x, a.y - b.y), z0: cam.z, m: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 } };
+      pince.ancre = auSol(pince.m.x, pince.m.y);
+      return;
+    }
+    const p = sous(pos);
+    if (p) {
+      const sol = auSol(pos.x, pos.y);
+      prise = { p, x0: pos.x, y0: pos.y, t0: performance.now(), hist: [{ ...pos, t: performance.now() }], dx: p.wx - sol.x, dy: p.wy - sol.y };
+    } else {
+      glisse = { x: pos.x, y: pos.y, ox: cam.ox, oy: cam.oy, t0: performance.now() };
+    }
   });
   canvas.addEventListener('pointermove', e => {
-    if (!prise) return;
+    if (!doigts.has(e.pointerId)) return;
     const pos = position(e);
-    const { p } = prise;
-    if (p.etat !== 'attrape' && Math.hypot(pos.x - prise.x0, pos.y - prise.y0) > 8) {
-      changer(p, 'attrape', 99); p.rot = 0;
+    doigts.set(e.pointerId, pos);
+    if (pince && doigts.size >= 2) {
+      const [a, b] = [...doigts.values()];
+      const m = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+      cam.z = Math.max(0.25, Math.min(3, pince.z0 * Math.hypot(a.x - b.x, a.y - b.y) / pince.d0));
+      const q = proj(pince.ancre.x, pince.ancre.y);
+      cam.ox += m.x - q.x; cam.oy += m.y - q.y;
+      return;
     }
+    if (glisse) { cam.ox = glisse.ox + pos.x - glisse.x; cam.oy = glisse.oy + pos.y - glisse.y; return; }
+    if (!prise) return;
+    const { p } = prise;
+    if (p.etat !== 'attrape' && Math.hypot(pos.x - prise.x0, pos.y - prise.y0) > 8) { changer(p, 'attrape', 99); p.rot = 0; }
     if (p.etat === 'attrape') {
-      p.x = Math.min(W - 12, Math.max(12, pos.x + prise.dx));
-      p.y = Math.min(solDe(p), Math.max(70 * p.s, pos.y + prise.dy));
-      p.dir = pos.x < prise.hist.at(-1).x ? -1 : pos.x > prise.hist.at(-1).x ? 1 : p.dir;
+      // On le soulève : sous le doigt, un peu au-dessus du sable.
+      p.wz = 26;
+      const sol = auSol(pos.x, pos.y + 26 * cam.z);
+      p.wx = borne(sol.x + prise.dx); p.wy = borne(sol.y + prise.dy);
+      const dernier = prise.hist.at(-1);
+      if (Math.abs(pos.x - dernier.x) > 1) p.dir = pos.x > dernier.x ? 1 : -1;
     }
     prise.hist.push({ ...pos, t: performance.now() });
     if (prise.hist.length > 6) prise.hist.shift();
   });
   const lacher = e => {
+    doigts.delete(e.pointerId);
+    if (pince) { if (doigts.size < 2) pince = null; return; }
+    glisse = null;
     if (!prise) return;
     const { p } = prise;
     const pos = position(e);
     const court = performance.now() - prise.t0 < 350 && Math.hypot(pos.x - prise.x0, pos.y - prise.y0) < 8;
-    if (court && p.etat !== 'attrape') { prise = null; onTap(p.b); return; }
-    // On le lance avec la vitesse du doigt.
+    if (court && p.etat !== 'attrape') { prise = null; if (p.estMoi) onMoi(); else onTap(p.b); return; }
+    // Lancé : la vitesse du doigt, ramenée au sol, et un peu de hauteur.
     const a = prise.hist[0], b = prise.hist.at(-1);
     const dt = Math.max(0.016, (b.t - a.t) / 1000);
-    p.vx = Math.max(-900, Math.min(900, (b.x - a.x) / dt));
-    p.vy = Math.max(-900, Math.min(900, (b.y - a.y) / dt));
+    const dxs = (b.x - a.x) / dt, dys = (b.y - a.y) / dt;
+    const u = dxs / (cam.z * C), v = dys * 2 / cam.z;
+    p.vx = Math.max(-500, Math.min(500, (u + v) / 2));
+    p.vy = Math.max(-500, Math.min(500, (v - u) / 2));
+    p.vz = Math.min(320, 60 + Math.hypot(dxs, dys) * 0.25);
     p.etat = 'vol'; p.t = 9;
-    if (Math.abs(p.vx) + Math.abs(p.vy) > 500) textes.push({ x: p.x, y: p.y - 80 * p.s, txt: '🌀', vie: 1.2 });
+    if (Math.hypot(dxs, dys) > 500) textes.push({ wx: p.wx, wy: p.wy, wz: 90, txt: '🌀', vie: 1.2 });
     prise = null;
   };
   canvas.addEventListener('pointerup', lacher);
   canvas.addEventListener('pointercancel', lacher);
+  canvas.addEventListener('wheel', e => {
+    e.preventDefault();
+    const pos = position(e);
+    zoomerVers(cam.z * (e.deltaY < 0 ? 1.12 : 1 / 1.12), pos.x, pos.y);
+  }, { passive: false });
+  canvas.addEventListener('dblclick', () => cadrer());
 
   requestAnimationFrame(() => {
     dimensionner();
-    plongeurs.forEach(p => { p.x = 20 + ((hash(p.b.id) % 1000) / 1000) * (W - 40); p.y = solDe(p); });
     avant = performance.now();
     requestAnimationFrame(image);
   });

@@ -29,6 +29,7 @@ export async function buddiesView() {
   const buddies = await store.listBuddies();
   const diverId = await store.getActiveDiverId();
   let st = diverId ? await store.stats(diverId) : { buddyCount: {} };
+  const moi = diverId ? await store.getDiver(diverId) : null;     // dans le Plongeurverse aussi
   const wrap = el('div');
 
   if (!buddies.length) {
@@ -173,7 +174,8 @@ export async function buddiesView() {
     if (vue === 'verse') {
       // Une seule scène pour tout le monde : un filtre ou une recherche
       // met les élus en rangs (une petite armée), les autres sortent.
-      if (!scene) scene = plongeurverse({ buddies, compte: n, onTap: b => apercuPlongeur(b.id, { onClose: recharger }) });
+      if (!scene) scene = plongeurverse({ buddies, compte: n, moi, onMoi: () => navigate('cv'),
+        onTap: b => apercuPlongeur(b.id, { onClose: recharger }) });
       scene.ranger?.(!filtre && !q ? null : new Set(filtres.map(b => b.id)));
       // Les genres pas encore notés : on peut enregistrer ce que le prénom suggère.
       const aDeviner = buddies.filter(b => !b.structure && !b.genre && devinerGenre(b.prenom));

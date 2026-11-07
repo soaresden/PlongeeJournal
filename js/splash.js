@@ -10,7 +10,7 @@
 //  d'accessibilité) : le titre seul, un instant.
 // ============================================================
 
-import { dessinerPlongeur, plongeurCartoon } from './views/plongeurverse.js';
+import { dessinerPlongeur, plongeurCartoon, MOI } from './views/plongeurverse.js';
 
 const CLE_PRENOM = 'plongee-journal:prenom';
 // Great Vibes (licence libre OFL), embarquée : pas besoin de réseau.
@@ -48,6 +48,9 @@ const mix = (a, b, k) => a + (b - a) * k;
  * @returns {Promise<void>} quand il a disparu
  */
 export function ouvrirSplash({ signature = prenomSignature() } = {}) {
+  // La signature peut arriver en route (un carnet partagé se charge pendant
+  // l'animation) : on accepte une fonction, relue à chaque image.
+  const signer = () => (typeof signature === 'function' ? signature() : signature) || '';
   return new Promise(resolve => {
     const voile = document.createElement('div');
     voile.id = 'splash';
@@ -86,7 +89,7 @@ export function ouvrirSplash({ signature = prenomSignature() } = {}) {
     // ---------- la scène ----------
     const S = () => Math.max(1, Math.min(W, H * 0.75) / 300);
     const sol = () => H * 0.72;
-    const lecteur = plongeurCartoon('lecteur', { assis: true, combi: '#0e6375', bloc: '#facc15', bande: '#22d3ee', cheveux: '#2b1d14', barbe: false });
+    const lecteur = plongeurCartoon('lecteur', { ...MOI, assis: true });       // le lecteur, c'est moi (mon Mii)
     const auditoire = [
       plongeurCartoon('alison', { assis: true, genre: 'f', dir: 1 }),
       plongeurCartoon('marc', { assis: true, dir: 1, etat: 'coucou' }),
@@ -221,13 +224,14 @@ export function ouvrirSplash({ signature = prenomSignature() } = {}) {
       };
       ecrire(ligne1, y1, l1, 3.05);
       ecrire(ligne2, y2, l2, 3.6);
-      if (signature) {
+      const nom = signer();
+      if (nom) {
         const k = entre(t, 4.25, 4.75);
         ctx.globalAlpha = alpha * k;
         ctx.font = `${Math.round(taille * 0.55)}px ${MANUSCRIT}`;
         ctx.textAlign = 'right';
         ctx.fillStyle = '#a5f3fc';
-        ctx.fillText(`— ${signature}`, W / 2 + Math.max(l1, l2) / 2, y2 + taille * 0.95);
+        ctx.fillText(`— ${nom}`, W / 2 + Math.max(l1, l2) / 2, y2 + taille * 0.95);
       }
       ctx.restore();
     }

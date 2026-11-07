@@ -39,8 +39,13 @@ if (PARTAGE_ID) {
   document.documentElement.classList.add('partage');
 }
 
-// ---------- L'écran d'ouverture (pas pour un carnet partagé) ----------
-if (!PARTAGE_ID) import('./splash.js').then(m => m.ouvrirSplash()).catch(() => {});
+// ---------- L'écran d'ouverture ----------
+// Pour un carnet partagé aussi : signé du prénom de celui qui partage,
+// connu dès que son carnet est chargé (pendant l'animation).
+let signatureVisite = '';
+import('./splash.js')
+  .then(m => m.ouvrirSplash(PARTAGE_ID ? { signature: () => signatureVisite } : {}))
+  .catch(() => {});
 
 // ---------- Routes ----------
 route('dives',            divesView);
@@ -242,6 +247,7 @@ async function ouvrirPartage() {
     booted = true;
     const { store } = await import('./store.js');
     const moi = await store.getDiver(await store.getActiveDiverId());
+    signatureVisite = moi?.prenom || '';
     afficherBandeau({ classe: 'partage', icone: 'i-carte', duree: 7000,
       titre: `Carnet de ${moi?.prenom || 'plongée'}`, texte: 'Partagé en lecture seule : tu peux tout regarder, rien n’est modifiable.' });
   } catch (e) {
