@@ -99,6 +99,11 @@ recopié, un message, tes notes : « plongé avec jullie et Marc, 6 kg,
 froid ») : les plongeurs connus sont retrouvés même mal orthographiés, un
 nouveau nom est repéré après « avec ». Rien n'est ajouté sans qu'on touche.
 
+**Écran d'ouverture** — au fond de l'eau, un plongeur feuillette son carnet,
+les copains autour l'écoutent ; le carnet devient une tablette, on plonge
+dedans et « Mon journal de plongée » s'écrit à la main, signé du prénom
+(police Great Vibes, licence OFL, embarquée). Un toucher passe.
+
 **Partager son carnet (lecture seule)** — Réglages → « Partager mon
 carnet » → « Créer le lien ». Celui qui l'ouvre (sur son téléphone, sans rien
 installer) voit plongées, stats, carte, plongeurs, « Qui je suis », et ne peut

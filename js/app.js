@@ -39,6 +39,9 @@ if (PARTAGE_ID) {
   document.documentElement.classList.add('partage');
 }
 
+// ---------- L'écran d'ouverture (pas pour un carnet partagé) ----------
+if (!PARTAGE_ID) import('./splash.js').then(m => m.ouvrirSplash()).catch(() => {});
+
 // ---------- Routes ----------
 route('dives',            divesView);
 route('stats',            statsView);
@@ -334,6 +337,7 @@ onRender(async path => {
   identEl.hidden = !identite;
   if (identite) {
     const { nom, prenom, compte, derniere } = identite;
+    if (!PARTAGE_ID) import('./splash.js').then(m => m.retenirPrenom(prenom)).catch(() => {});
     identEl.append(
       el('span.ident-txt', {},
         // Le prénom seul : le nom complet est sur « Qui je suis », en touchant.
