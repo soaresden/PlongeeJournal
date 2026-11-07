@@ -253,8 +253,9 @@ async function sectionPartage() {
       carte.append(
         el('div', { style: { fontWeight: '650' }, text: '🔗 Un lien en lecture seule' }),
         el('div.hint', { text: 'La personne voit tes plongées, stats, carte, plongeurs et « Qui je suis », sur son téléphone, '
-          + 'sans rien installer ni pouvoir modifier. Rien de privé : ni adresse, ni groupe sanguin, ni contact d’urgence, '
-          + 'ni licence, ni photos. Le carnet est chiffré ; la clé n’est que dans le lien.' }),
+          + 'sans rien installer ni pouvoir modifier. Seuls ceux qui ont le lien peuvent le voir. '
+          + 'Restent cachés : les numéros de licence (les tiens et ceux des autres), ton adresse, ton groupe sanguin, '
+          + 'ton contact d’urgence, les notes sur les plongeurs, les photos.' }),
         el('button.btn.primary.sm', { type: 'button', text: 'Créer le lien', onclick: e => publier(e.currentTarget, null) }));
       return;
     }
@@ -293,7 +294,7 @@ async function sectionPartage() {
       const { publierPartage } = await import('../partage.js');
       const moi = await store.getDiver(await store.getActiveDiverId());
       const p = await publierPartage(await store.raw(), actuel || {}, { auteur: moi?.prenom || '' });
-      await store.saveSettings({ partage: { gistId: p.gistId, cle: p.cle, majLe: p.majLe } });
+      await store.saveSettings({ partage: { gistId: p.gistId, majLe: p.majLe } });
       toast(actuel ? 'Lien mis à jour' : 'Lien créé : copie-le et envoie-le');
       rendre();
     } catch (e) {

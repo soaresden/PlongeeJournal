@@ -1,4 +1,4 @@
-// Partage en lecture seule : rien de privé, chiffrement, mauvaise clé.
+// Partage en lecture seule : rien de privé (licences comprises), copie compressée, anciens liens.
 import path from 'node:path';
 import { fileURLToPath as __f2p, pathToFileURL as __p2u } from 'node:url';
 const ROOT = __f2p(new URL('..', import.meta.url));
@@ -33,15 +33,18 @@ check('le carnet, lui, est là : plongée, courbe, palanquée, séance, brevet, 
   && inst.certifs[0].nom === 'N3' && inst.divers[0].equipe[0] === 'm' && inst.divers[0].materiel.length === 1);
 check('seulement mon profil, pas les autres', inst.divers.length === 1 && inst.divers[0].id === 'moi');
 
+const emballe = await P.emballer(inst);
+check('pas chiffré, juste compressé (et bien plus petit)', JSON.parse(emballe).v === 2 && !JSON.parse(emballe).ct && emballe.length < texte.length * 2, String(emballe.length));
+check('déballé à l’identique', JSON.stringify(await P.deballer(emballe)) === texte);
+check('le lien est court : pas de clé', P.lienPartage({ gistId: 'g1' }) === 'https://soaresden.github.io/PlongeeJournal/?voir=g1', P.lienPartage({ gistId: 'g1' }));
+
+// Les anciens liens (chiffrés, clé après le « # ») marchent toujours.
 const cle = await P.nouvelleCle();
 const chiffre = await P.chiffrer(inst, cle);
-check('chiffré : aucun nom lisible', !/Denis|Alison|Malte/.test(chiffre));
-const retour = await P.dechiffrer(chiffre, cle);
-check('déchiffré à l’identique', JSON.stringify(retour) === texte);
+check('ancien lien chiffré : relu avec sa clé', JSON.stringify(await P.deballer(chiffre, cle)) === texte);
 let erreur = '';
-try { await P.dechiffrer(chiffre, await P.nouvelleCle()); } catch (e) { erreur = e.message; }
-check('mauvaise clé : message clair', /clé/.test(erreur), erreur);
-check('le lien porte la clé après le « # »', /^https:\/\/soaresden\.github\.io\/PlongeeJournal\/\?voir=g1#k=[A-Za-z0-9_-]{43}$/.test(P.lienPartage({ gistId: 'g1', cle })), P.lienPartage({ gistId: 'g1', cle }));
+try { await P.deballer(chiffre, ''); } catch (e) { erreur = e.message; }
+check('ancien lien sans sa clé : message clair', /ancien lien/.test(erreur), erreur);
 
 const ko = results.filter(r => r.startsWith(' FAIL'));
 console.log(results.join('\n'));

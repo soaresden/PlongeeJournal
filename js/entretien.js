@@ -81,6 +81,6 @@ export async function majPartage() {
   const { publierPartage } = await import('./partage.js');
   const moi = (carnet.divers || []).find(d => d.id === carnet.settings?.activeDiverId);
   const nouveau = await publierPartage(carnet, p, { auteur: moi?.prenom || '' });
-  await store.saveSettings({ partage: { gistId: nouveau.gistId, cle: nouveau.cle, majLe: nouveau.majLe } });
+  await store.saveSettings({ partage: { gistId: nouveau.gistId, majLe: nouveau.majLe } });
   return true;
 }

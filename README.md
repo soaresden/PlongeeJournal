@@ -102,12 +102,13 @@ nouveau nom est repéré après « avec ». Rien n'est ajouté sans qu'on touche
 **Partager son carnet (lecture seule)** — Réglages → « Partager mon
 carnet » → « Créer le lien ». Celui qui l'ouvre (sur son téléphone, sans rien
 installer) voit plongées, stats, carte, plongeurs, « Qui je suis », et ne peut
-rien modifier ; rien ne s'écrit chez lui. Le carnet publié est un instantané
-sans rien de privé (adresse, groupe sanguin, contact d'urgence, licences,
-notes, photos), compressé et chiffré (AES-256), dans un gist secret de ton
-compte ; la clé n'est que dans le lien, après le « # ». Il se remet à jour
-tout seul à l'ouverture de l'appli. Il faut une fois donner au jeton GitHub la
-permission « Gists : Read and write » (Account permissions).
+rien modifier ; rien ne s'écrit chez lui. La copie publiée, compressée, vit
+dans un gist secret de ton compte (introuvable sans le lien) et se remet à jour
+toute seule à l'ouverture de l'appli. Restent cachés : les numéros de licence
+(les tiens et ceux des autres), tes coordonnées (adresse, groupe sanguin,
+contact d'urgence), les notes sur les plongeurs, les photos. Il faut une fois
+donner au jeton GitHub la permission « Gists : Read and write » (Account
+permissions).
 
 **Plongeurverse** — bouton 🤿 de l'écran Plongeurs : tes compagnons en
 cartoon au fond de l'eau. Ils marchent, font des bulles, sautent, nagent,

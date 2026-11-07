@@ -28,9 +28,9 @@ import { seanceFormView }                 from './views/seances.js';
 import { cvView }                         from './views/cv.js';
 import { mn90View }                       from './views/mn90.js';
 
-// ---------- Un carnet partagé (lien « ?voir=…#k=… ») ----------
-// La clé est après le « # » : elle ne part jamais vers un serveur. On la
-// garde le temps de l'onglet, puis l'adresse redevient celle de l'appli.
+// ---------- Un carnet partagé (lien « ?voir=… ») ----------
+// Les anciens liens portaient une clé après le « # » : on la garde le temps
+// de l'onglet, puis l'adresse redevient celle de l'appli.
 const PARTAGE_ID = new URLSearchParams(location.search).get('voir');
 if (PARTAGE_ID) {
   const k = /(?:^#|&)k=([A-Za-z0-9_-]+)/.exec(location.hash)?.[1];
@@ -233,7 +233,6 @@ async function ouvrirPartage() {
   let cle = '';
   try { cle = sessionStorage.getItem(`plongee-journal:partage:${PARTAGE_ID}`) || ''; } catch { /* privé */ }
   try {
-    if (!cle) throw new Error('Lien incomplet : il manque la fin (après le « # »). Redemande le lien.');
     const { lirePartage } = await import('./partage.js');
     activerPartage(await lirePartage(PARTAGE_ID, cle));
     await initStore();

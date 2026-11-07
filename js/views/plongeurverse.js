@@ -29,6 +29,119 @@ const BLOCS = ['#facc15', '#cbd5e1', '#f97316', '#e2e8f0'];
 
 const EMOJIS = { garde: '🫡', bulles: '🫧', saut: '🤸', danse: '💃', chute: '😵', coucou: '👋', tope: '✋', nage: '🐠', attrape: '😱', vol: '🌀' };
 
+// ---------- dessin d'un plongeur (regardant vers la droite) ----------
+// Utilisé aussi par l'écran d'ouverture. p : x, y (les pieds), s (taille),
+// dir (1 / -1), etat, phase, rot, couleurs (peau, cheveux, combi, bloc,
+// bande), genre, barbe, chauve ; assis et bras (angle) en option.
+export function dessinerPlongeur(ctx, p) {
+  const s = p.s;
+  const marche = ['marche', 'attrape', 'nage', 'rang', 'sortie'].includes(p.etat);
+  const jambe = marche ? Math.sin(p.phase) * (p.etat === 'attrape' ? 0.9 : 0.45) : 0;
+  ctx.save();
+  ctx.translate(p.x, p.y);
+  ctx.scale(s, s);
+  ctx.translate(0, -32); ctx.rotate(p.etat === 'nage' ? p.dir * Math.PI / 2.3 : p.rot); ctx.translate(0, 32);
+  if (p.etat === 'danse') ctx.rotate(Math.sin(p.phase * 4) * 0.22);
+  ctx.scale(p.dir, 1);
+  if (p.assis) ctx.translate(0, 19);           // assis : les hanches au niveau du siège
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+
+  // Ombre
+  if (!p.assis && !['nage', 'vol', 'saut', 'attrape'].includes(p.etat)) {
+    ctx.save(); ctx.scale(1 / p.dir, 1); ctx.fillStyle = 'rgba(0,0,0,.18)';
+    ctx.beginPath(); ctx.ellipse(0, 1, 18, 4, 0, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+  }
+  // Bloc (dans le dos), avec le détendeur
+  ctx.fillStyle = p.bloc; ctx.strokeStyle = 'rgba(0,0,0,.35)'; ctx.lineWidth = 1.2;
+  ctx.beginPath(); ctx.roundRect(-17, -52, 9, 26, 4); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#334155'; ctx.fillRect(-14.5, -56, 4, 5);
+  ctx.strokeStyle = '#111827'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(-12, -55); ctx.quadraticCurveTo(-4, -66, 7, -53); ctx.stroke();
+
+  // Jambes et palmes
+  const pied = (a, couleur) => {
+    const hx = 0, hy = -25, L = 22;
+    let fx = hx + Math.sin(a) * L, fy = hy + Math.cos(a) * L;
+    ctx.strokeStyle = couleur; ctx.lineWidth = 7;
+    if (p.assis) {                     // cuisse en avant, mollet qui pend
+      fx = 13 + a * 4; fy = hy + 19;
+      ctx.beginPath(); ctx.moveTo(hx, hy); ctx.lineTo(13, hy); ctx.lineTo(fx, fy); ctx.stroke();
+    } else { ctx.beginPath(); ctx.moveTo(hx, hy); ctx.lineTo(fx, fy); ctx.stroke(); }
+    ctx.fillStyle = '#0f172a';
+    ctx.beginPath(); ctx.ellipse(fx + 6, fy + 1, 10, 3.2, a * 0.3, 0, Math.PI * 2); ctx.fill();
+  };
+  pied(-jambe, shade(p.combi, -18));
+  // Corps
+  ctx.fillStyle = p.combi;
+  ctx.beginPath(); ctx.roundRect(-9, -50, 18, 28, 7); ctx.fill();
+  ctx.fillStyle = p.bande; ctx.fillRect(-9, -42, 18, 4);
+  ctx.fillStyle = '#111827'; ctx.fillRect(-9, -27, 18, 3);     // ceinture de plombs
+  pied(jambe, p.combi);
+
+  // Bras
+  const epaule = [3, -46];
+  let bras = marche ? -jambe * 0.8 : 0.3;
+  if (p.etat === 'coucou') bras = Math.PI - 0.5 + Math.sin(p.phase * 10) * 0.45;
+  if (p.etat === 'danse') bras = Math.PI - 0.3 + Math.sin(p.phase * 4) * 0.5;
+  if (p.etat === 'attrape' || p.etat === 'vol') bras = Math.PI - 0.6 + Math.sin(p.phase) * 0.6;
+  if (p.etat === 'tope') bras = Math.PI * 0.62;
+  if (p.etat === 'nage') bras = 0.15;
+  if (p.etat === 'garde') bras = p.salut > 0 ? Math.PI - 0.35 : 0.05;     // salut, puis bras le long du corps
+  if (typeof p.bras === 'number') bras = p.bras;                            // imposé (tenir un carnet…)
+  ctx.strokeStyle = p.combi; ctx.lineWidth = 6;
+  const mx = epaule[0] + Math.sin(bras) * 15, my = epaule[1] + Math.cos(bras) * 15;
+  ctx.beginPath(); ctx.moveTo(...epaule); ctx.lineTo(mx, my); ctx.stroke();
+  ctx.fillStyle = p.peau; ctx.beginPath(); ctx.arc(mx, my, 3, 0, Math.PI * 2); ctx.fill();
+
+  // Tête, cheveux
+  const hy = -60;
+  if (p.genre === 'f') {           // queue de cheval qui flotte
+    ctx.fillStyle = p.cheveux;
+    ctx.beginPath(); ctx.ellipse(-12, hy + 1 + Math.sin(p.phase * 0.7) * 1.5, 7, 4, -0.5 + Math.sin(p.phase * 0.5) * 0.2, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.fillStyle = p.peau; ctx.beginPath(); ctx.arc(0, hy, 10.5, 0, Math.PI * 2); ctx.fill();
+  if (!p.chauve) {
+    ctx.fillStyle = p.cheveux;
+    ctx.beginPath(); ctx.arc(-1, hy - 2, 10.8, Math.PI * 1.05, Math.PI * 1.95); ctx.fill();
+    if (p.genre === 'f') { ctx.beginPath(); ctx.arc(-6, hy - 1, 7, Math.PI * 0.6, Math.PI * 1.6); ctx.fill(); }
+  }
+  if (p.barbe) { ctx.fillStyle = p.cheveux; ctx.beginPath(); ctx.arc(2, hy + 5, 7.5, 0.1, Math.PI - 0.6); ctx.fill(); }
+  // Masque et sangle
+  ctx.strokeStyle = '#111827'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(1, hy - 3); ctx.lineTo(-10, hy - 2); ctx.stroke();
+  ctx.fillStyle = '#111827'; ctx.beginPath(); ctx.roundRect(1, hy - 8, 12, 9, 3); ctx.fill();
+  ctx.fillStyle = 'rgba(165,243,252,.9)'; ctx.beginPath(); ctx.roundRect(2.5, hy - 6.5, 9, 6, 2); ctx.fill();
+  // Yeux : normaux, ou en croix quand ça secoue
+  ctx.fillStyle = '#0f172a';
+  if (['chute', 'vol', 'attrape'].includes(p.etat)) {
+    ctx.strokeStyle = '#0f172a'; ctx.lineWidth = 1.2;
+    [[5, hy - 3.5], [9.5, hy - 3.5]].forEach(([ex, ey]) => { ctx.beginPath(); ctx.moveTo(ex - 1.5, ey - 1.5); ctx.lineTo(ex + 1.5, ey + 1.5); ctx.moveTo(ex + 1.5, ey - 1.5); ctx.lineTo(ex - 1.5, ey + 1.5); ctx.stroke(); });
+  } else {
+    [[5, hy - 3.5], [9.5, hy - 3.5]].forEach(([ex, ey]) => { ctx.beginPath(); ctx.arc(ex, ey, 1.3, 0, Math.PI * 2); ctx.fill(); });
+  }
+  // Détendeur en bouche
+  ctx.fillStyle = '#111827'; ctx.beginPath(); ctx.arc(8, hy + 5, 3, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+}
+
+const shade = (hex, d) => {
+  const n = parseInt(hex.slice(1), 16);
+  const c = v => Math.max(0, Math.min(255, v + d));
+  return `rgb(${c(n >> 16)},${c((n >> 8) & 255)},${c(n & 255)})`;
+};
+
+/** Un plongeur prêt à dessiner, aux couleurs tirées d'un nom. */
+export function plongeurCartoon(graine, extra = {}) {
+  const h = hash(graine);
+  return {
+    x: 0, y: 0, s: 1, dir: 1, etat: 'pause', phase: h % 7, rot: 0,
+    peau: PEAUX[h % PEAUX.length], cheveux: CHEVEUX[(h >>> 5) % CHEVEUX.length],
+    combi: COMBIS[(h >>> 8) % COMBIS.length], bloc: BLOCS[(h >>> 11) % BLOCS.length],
+    bande: ['#22d3ee', '#f472b6', '#facc15', '#a3e635'][(h >>> 3) % 4],
+    genre: '', barbe: (h >>> 13) % 4 === 0, chauve: false, ...extra,
+  };
+}
+
 /**
  * @param {{buddies:object[], compte:(b)=>number, onTap:(b)=>void}} options
  * @returns {HTMLElement}
@@ -278,98 +391,16 @@ export function plongeurverse({ buddies, compte = () => 0, onTap = () => {} }) {
     }
   }
 
-  // ---------- dessin d'un plongeur (regardant vers la droite) ----------
   function dessiner(p) {
-    const s = p.s;
     if (p.cache) return;
-    const marche = ['marche', 'attrape', 'nage', 'rang', 'sortie'].includes(p.etat);
-    const jambe = marche ? Math.sin(p.phase) * (p.etat === 'attrape' ? 0.9 : 0.45) : 0;
-    ctx.save();
-    ctx.translate(p.x, p.y);
-    ctx.scale(s, s);
-    ctx.translate(0, -32); ctx.rotate(p.etat === 'nage' ? p.dir * Math.PI / 2.3 : p.rot); ctx.translate(0, 32);
-    if (p.etat === 'danse') ctx.rotate(Math.sin(p.phase * 4) * 0.22);
-    ctx.scale(p.dir, 1);
-    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-
-    // Ombre
-    if (!['nage', 'vol', 'saut', 'attrape'].includes(p.etat)) {
-      ctx.save(); ctx.scale(1 / p.dir, 1); ctx.fillStyle = 'rgba(0,0,0,.18)';
-      ctx.beginPath(); ctx.ellipse(0, 1, 18, 4, 0, 0, Math.PI * 2); ctx.fill(); ctx.restore();
-    }
-    // Bloc (dans le dos), avec le détendeur
-    ctx.fillStyle = p.bloc; ctx.strokeStyle = 'rgba(0,0,0,.35)'; ctx.lineWidth = 1.2;
-    ctx.beginPath(); ctx.roundRect(-17, -52, 9, 26, 4); ctx.fill(); ctx.stroke();
-    ctx.fillStyle = '#334155'; ctx.fillRect(-14.5, -56, 4, 5);
-    ctx.strokeStyle = '#111827'; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.moveTo(-12, -55); ctx.quadraticCurveTo(-4, -66, 7, -53); ctx.stroke();
-
-    // Jambes et palmes
-    const pied = (a, couleur) => {
-      const hx = 0, hy = -25, L = 22;
-      const fx = hx + Math.sin(a) * L, fy = hy + Math.cos(a) * L;
-      ctx.strokeStyle = couleur; ctx.lineWidth = 7;
-      ctx.beginPath(); ctx.moveTo(hx, hy); ctx.lineTo(fx, fy); ctx.stroke();
-      ctx.fillStyle = '#0f172a';
-      ctx.beginPath(); ctx.ellipse(fx + 6, fy + 1, 10, 3.2, a * 0.3, 0, Math.PI * 2); ctx.fill();
-    };
-    pied(-jambe, shade(p.combi, -18));
-    // Corps
-    ctx.fillStyle = p.combi;
-    ctx.beginPath(); ctx.roundRect(-9, -50, 18, 28, 7); ctx.fill();
-    ctx.fillStyle = p.bande; ctx.fillRect(-9, -42, 18, 4);
-    ctx.fillStyle = '#111827'; ctx.fillRect(-9, -27, 18, 3);     // ceinture de plombs
-    pied(jambe, p.combi);
-
-    // Bras
-    const epaule = [3, -46];
-    let bras = marche ? -jambe * 0.8 : 0.3;
-    if (p.etat === 'coucou') bras = Math.PI - 0.5 + Math.sin(p.phase * 10) * 0.45;
-    if (p.etat === 'danse') bras = Math.PI - 0.3 + Math.sin(p.phase * 4) * 0.5;
-    if (p.etat === 'attrape' || p.etat === 'vol') bras = Math.PI - 0.6 + Math.sin(p.phase) * 0.6;
-    if (p.etat === 'tope') bras = Math.PI * 0.62;
-    if (p.etat === 'nage') bras = 0.15;
-    if (p.etat === 'garde') bras = p.salut > 0 ? Math.PI - 0.35 : 0.05;     // salut, puis bras le long du corps
-    ctx.strokeStyle = p.combi; ctx.lineWidth = 6;
-    const mx = epaule[0] + Math.sin(bras) * 15, my = epaule[1] + Math.cos(bras) * 15;
-    ctx.beginPath(); ctx.moveTo(...epaule); ctx.lineTo(mx, my); ctx.stroke();
-    ctx.fillStyle = p.peau; ctx.beginPath(); ctx.arc(mx, my, 3, 0, Math.PI * 2); ctx.fill();
-
-    // Tête, cheveux
-    const hy = -60;
-    if (p.genre === 'f') {           // queue de cheval qui flotte
-      ctx.fillStyle = p.cheveux;
-      ctx.beginPath(); ctx.ellipse(-12, hy + 1 + Math.sin(p.phase * 0.7) * 1.5, 7, 4, -0.5 + Math.sin(p.phase * 0.5) * 0.2, 0, Math.PI * 2); ctx.fill();
-    }
-    ctx.fillStyle = p.peau; ctx.beginPath(); ctx.arc(0, hy, 10.5, 0, Math.PI * 2); ctx.fill();
-    if (!p.chauve) {
-      ctx.fillStyle = p.cheveux;
-      ctx.beginPath(); ctx.arc(-1, hy - 2, 10.8, Math.PI * 1.05, Math.PI * 1.95); ctx.fill();
-      if (p.genre === 'f') { ctx.beginPath(); ctx.arc(-6, hy - 1, 7, Math.PI * 0.6, Math.PI * 1.6); ctx.fill(); }
-    }
-    if (p.barbe) { ctx.fillStyle = p.cheveux; ctx.beginPath(); ctx.arc(2, hy + 5, 7.5, 0.1, Math.PI - 0.6); ctx.fill(); }
-    // Masque et sangle
-    ctx.strokeStyle = '#111827'; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.moveTo(1, hy - 3); ctx.lineTo(-10, hy - 2); ctx.stroke();
-    ctx.fillStyle = '#111827'; ctx.beginPath(); ctx.roundRect(1, hy - 8, 12, 9, 3); ctx.fill();
-    ctx.fillStyle = 'rgba(165,243,252,.9)'; ctx.beginPath(); ctx.roundRect(2.5, hy - 6.5, 9, 6, 2); ctx.fill();
-    // Yeux : normaux, ou en croix quand ça secoue
-    ctx.fillStyle = '#0f172a';
-    if (['chute', 'vol', 'attrape'].includes(p.etat)) {
-      ctx.strokeStyle = '#0f172a'; ctx.lineWidth = 1.2;
-      [[5, hy - 3.5], [9.5, hy - 3.5]].forEach(([ex, ey]) => { ctx.beginPath(); ctx.moveTo(ex - 1.5, ey - 1.5); ctx.lineTo(ex + 1.5, ey + 1.5); ctx.moveTo(ex + 1.5, ey - 1.5); ctx.lineTo(ex - 1.5, ey + 1.5); ctx.stroke(); });
-    } else {
-      [[5, hy - 3.5], [9.5, hy - 3.5]].forEach(([ex, ey]) => { ctx.beginPath(); ctx.arc(ex, ey, 1.3, 0, Math.PI * 2); ctx.fill(); });
-    }
-    // Détendeur en bouche
-    ctx.fillStyle = '#111827'; ctx.beginPath(); ctx.arc(8, hy + 5, 3, 0, Math.PI * 2); ctx.fill();
-    ctx.restore();
+    const s = p.s;
+    dessinerPlongeur(ctx, p);
 
     // Le nom est posé après tout le monde (voir poserNoms) : il s'écarte
     // de ses voisins au lieu de les recouvrir.
     const auRang = p.etat === 'garde' || p.etat === 'rang';
     etiquettes.push({ x: p.x, y: p.etat === 'nage' ? p.y - 44 * s : p.y - 76 * s,
-      nom: auRang ? (p.b.prenom || p.nom).split(' ')[0] : p.nom, fixe: auRang,
+      nom: auRang || plongeurs.length > 20 ? (p.b.prenom || p.nom).split(' ')[0] : p.nom, fixe: auRang,   // beaucoup de monde : le prénom
       couleur: COULEUR_GENRE[p.genre || ''], taille: auRang ? 10.5 : Math.round(11.5 * Math.min(1.15, s)) });
   }
 
@@ -396,11 +427,6 @@ export function plongeurverse({ buddies, compte = () => 0, onTap = () => {} }) {
     etiquettes.length = 0;
   }
 
-  function shade(hex, d) {
-    const n = parseInt(hex.slice(1), 16);
-    const c = v => Math.max(0, Math.min(255, v + d));
-    return `rgb(${c(n >> 16)},${c((n >> 8) & 255)},${c(n & 255)})`;
-  }
 
   // ---------- la boucle ----------
   let avant = performance.now();

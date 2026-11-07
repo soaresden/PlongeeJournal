@@ -2,14 +2,12 @@
 //  Partager son carnet en lecture seule (un lien, pour Alison…)
 //
 //  Le carnet vit dans un dépôt privé : on ne peut pas le montrer tel
-//  quel. On publie donc un INSTANTANÉ :
-//   - sans rien de privé (adresse, groupe sanguin, contact d'urgence,
-//     licence, notes sur les plongeurs, Suunto, photos) ;
-//   - compressé puis chiffré (AES-256-GCM) ;
-//   - déposé dans un gist secret de ton compte GitHub.
-//  La clé de déchiffrement n'est QUE dans le lien, après le « # » : elle
-//  ne part jamais vers un serveur. Sans le lien complet, le gist n'est
-//  qu'un bloc illisible.
+//  quel. On publie donc une COPIE, dans un gist secret de ton compte
+//  GitHub (introuvable sans le lien), compressée mais pas chiffrée :
+//  c'est ton carnet, il est fait pour être montré. Restent dehors : les
+//  numéros de licence (les tiens et ceux des autres), tes coordonnées
+//  (adresse, groupe sanguin, contact d'urgence), les notes sur les
+//  plongeurs, Suunto, les photos.
 //
 //  Celui qui ouvre le lien voit l'appli, tes plongées, tes stats, ta
 //  carte, tes plongeurs… et ne peut rien modifier : rien n'est enregistré,
@@ -71,7 +69,7 @@ export async function nouvelleCle() {
 }
 const importer = cle => crypto.subtle.importKey('raw', deB64url(cle), 'AES-GCM', false, ['encrypt', 'decrypt']);
 
-/** Données → texte chiffré (JSON, base64). */
+/** Ancien format (liens d'avant) : données → texte chiffré (JSON, base64). */
 export async function chiffrer(donnees, cle) {
   const brut = new TextEncoder().encode(JSON.stringify(donnees));
   const compresse = await gzip(brut);
@@ -114,24 +112,42 @@ async function appelGist(chemin, options = {}, cfg = gh.configGitHub()) {
   return r.status === 204 ? null : r.json();
 }
 
+/** Données → texte compressé (gzip, base64), lisible par l'appli seule… et par toi. */
+export async function emballer(donnees) {
+  const brut = new TextEncoder().encode(JSON.stringify(donnees));
+  const compresse = await gzip(brut);
+  return compresse ? JSON.stringify({ v: 2, gz: true, data: b64(compresse) }) : JSON.stringify({ v: 2, carnet: donnees });
+}
+
+/** Texte publié → données (nouveau format ; l'ancien, chiffré, avec sa clé). */
+export async function deballer(texte, cle = '') {
+  const o = JSON.parse(texte);
+  if (o.carnet) return o.carnet;
+  if (o.data) return JSON.parse(new TextDecoder().decode(await gunzip(deB64(o.data))));
+  if (o.ct) {
+    if (!cle) throw new Error('Ce lien est un ancien lien chiffré, incomplet : redemande le lien.');
+    return dechiffrer(texte, cle);
+  }
+  throw new Error('Ce lien ne mène pas à un carnet partagé.');
+}
+
 /**
- * Publie (ou met à jour) l'instantané chiffré.
+ * Publie (ou met à jour) la copie du carnet.
  * @param {object} carnet  le carnet complet (il est filtré ici)
  * @param {{gistId?:string, cle?:string}} actuel  le partage déjà créé, s'il y en a un
  * @returns {{gistId:string, cle:string, majLe:string, lien:string}}
  */
 export async function publierPartage(carnet, actuel = {}, { auteur = '' } = {}) {
   if (!gh.estConfigure()) throw new Error('Branche d’abord ton dépôt GitHub (Réglages).');
-  const cle = actuel.cle || await nouvelleCle();
-  const contenu = await chiffrer(instantane(carnet, { auteur }), cle);
-  const corps = { description: 'Carnet de plongée (partage chiffré, lecture seule)', files: { [FICHIER]: { content: contenu } } };
+  const contenu = await emballer(instantane(carnet, { auteur }));
+  const corps = { description: 'Carnet de plongée (partage, lecture seule)', files: { [FICHIER]: { content: contenu } } };
   let gist;
   if (actuel.gistId) {
     try { gist = await appelGist(`/gists/${actuel.gistId}`, { method: 'PATCH', body: JSON.stringify(corps) }); }
     catch (e) { if (!/404|gist/i.test(e.message)) throw e; }
   }
   if (!gist) gist = await appelGist('/gists', { method: 'POST', body: JSON.stringify({ ...corps, public: false }) });
-  const p = { gistId: gist.id, cle, majLe: new Date().toISOString() };
+  const p = { gistId: gist.id, majLe: new Date().toISOString() };
   return { ...p, lien: lienPartage(p) };
 }
 
@@ -140,13 +156,13 @@ export async function arreterPartage(gistId) {
   if (gistId) await appelGist(`/gists/${gistId}`, { method: 'DELETE' }).catch(e => { if (!/404/.test(e.message)) throw e; });
 }
 
-export const lienPartage = ({ gistId, cle }) => `${SITE}?voir=${encodeURIComponent(gistId)}#k=${cle}`;
+export const lienPartage = ({ gistId }) => `${SITE}?voir=${encodeURIComponent(gistId)}`;
 
 /**
  * Côté visiteur : récupère et déchiffre. Le gist est public pour qui a
  * son numéro ; aucun jeton n'est nécessaire.
  */
-export async function lirePartage(gistId, cle) {
+export async function lirePartage(gistId, cle = '') {
   let r;
   try { r = await fetch(`${API}/gists/${encodeURIComponent(gistId)}`, { headers: { Accept: 'application/vnd.github+json' } }); }
   catch { throw new Error('Pas de réseau : le carnet partagé ne peut pas être chargé.'); }
@@ -156,5 +172,5 @@ export async function lirePartage(gistId, cle) {
   const f = g.files?.[FICHIER];
   if (!f) throw new Error('Ce lien ne mène pas à un carnet partagé.');
   const texte = f.truncated ? await (await fetch(f.raw_url)).text() : f.content;
-  return dechiffrer(texte, cle);
+  return deballer(texte, cle);
 }
