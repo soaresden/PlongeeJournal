@@ -72,7 +72,7 @@ export async function entretenir({ analyser = null } = {}) {
 export async function majPartage() {
   const reglages = await store.getSettings();
   const p = reglages.partage;
-  if (!p?.gistId) return false;
+  if (!p?.siteId) return false;           // (un ancien partage en gist se met à jour à la main)
   const carnet = await store.raw();
   const derniere = ['dives', 'buddies', 'seances', 'certifs', 'divers']
     .flatMap(t => (carnet[t] || []).map(x => x.updatedAt || ''))
@@ -81,6 +81,6 @@ export async function majPartage() {
   const { publierPartage } = await import('./partage.js');
   const moi = (carnet.divers || []).find(d => d.id === carnet.settings?.activeDiverId);
   const nouveau = await publierPartage(carnet, p, { auteur: moi?.prenom || '' });
-  await store.saveSettings({ partage: { gistId: nouveau.gistId, majLe: nouveau.majLe } });
+  await store.saveSettings({ partage: { siteId: nouveau.siteId, majLe: nouveau.majLe } });
   return true;
 }

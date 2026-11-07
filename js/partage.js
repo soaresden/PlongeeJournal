@@ -2,9 +2,11 @@
 //  Partager son carnet en lecture seule (un lien, pour Alison…)
 //
 //  Le carnet vit dans un dépôt privé : on ne peut pas le montrer tel
-//  quel. On publie donc une COPIE, dans un gist secret de ton compte
-//  GitHub (introuvable sans le lien), compressée mais pas chiffrée :
-//  c'est ton carnet, il est fait pour être montré. Restent dehors : les
+//  quel. On publie donc une COPIE, compressée mais pas chiffrée (c'est
+//  ton carnet, il est fait pour être montré), dans le dépôt public du
+//  site : partage/<numéro>.json. Le numéro est tiré au hasard : sans le
+//  lien, on ne tombe pas dessus en visitant le site. (Les premiers liens
+//  passaient par un gist : ils restent lisibles.) Restent dehors : les
 //  numéros de licence (les tiens et ceux des autres), tes coordonnées
 //  (adresse, groupe sanguin, contact d'urgence), les notes sur les
 //  plongeurs, Suunto, les photos.
@@ -18,6 +20,13 @@ import * as gh from './github.js';
 
 export const SITE = 'https://soaresden.github.io/PlongeeJournal/';
 const FICHIER = 'carnet-partage.json';
+/** Le dépôt public du site, où la copie est déposée. */
+export const DEPOT_SITE = { owner: 'soaresden', repo: 'PlongeeJournal', branch: 'main' };
+const RAW = `https://raw.githubusercontent.com/${DEPOT_SITE.owner}/${DEPOT_SITE.repo}/${DEPOT_SITE.branch}/partage/`;
+const estGist = id => /^[0-9a-f]{20,}$/.test(String(id));
+const cheminPartage = id => `partage/${id}.json`;
+const nouveauNumero = () => b64url(crypto.getRandomValues(new Uint8Array(12)));
+const enB64 = texte => b64(new TextEncoder().encode(texte));
 const API = 'https://api.github.com';
 
 // ------------------------------------------------------------
@@ -131,38 +140,60 @@ export async function deballer(texte, cle = '') {
   throw new Error('Ce lien ne mène pas à un carnet partagé.');
 }
 
+/** Ce qu'il faut faire quand le jeton n'a pas accès au dépôt du site. */
+export const AIDE_JETON = 'Ton jeton GitHub n’a pas encore accès au dépôt du site. Sur GitHub : Settings → Developer settings → '
+  + 'Fine-grained tokens → ton jeton → Repository access → Select repositories → ajoute « PlongeeJournal » '
+  + '(en plus de « PlongeeJournal-data »), puis Update en bas. La permission « Contents : Read and write » vaut pour les deux.';
+
 /**
- * Publie (ou met à jour) la copie du carnet.
+ * Publie (ou met à jour) la copie du carnet sur le site.
  * @param {object} carnet  le carnet complet (il est filtré ici)
- * @param {{gistId?:string, cle?:string}} actuel  le partage déjà créé, s'il y en a un
- * @returns {{gistId:string, cle:string, majLe:string, lien:string}}
+ * @param {{siteId?:string}} actuel  le partage déjà créé, s'il y en a un
+ * @returns {{siteId:string, majLe:string, lien:string}}
  */
 export async function publierPartage(carnet, actuel = {}, { auteur = '' } = {}) {
   if (!gh.estConfigure()) throw new Error('Branche d’abord ton dépôt GitHub (Réglages).');
+  const siteId = actuel.siteId || nouveauNumero();
   const contenu = await emballer(instantane(carnet, { auteur }));
-  const corps = { description: 'Carnet de plongée (partage, lecture seule)', files: { [FICHIER]: { content: contenu } } };
-  let gist;
-  if (actuel.gistId) {
-    try { gist = await appelGist(`/gists/${actuel.gistId}`, { method: 'PATCH', body: JSON.stringify(corps) }); }
-    catch (e) { if (!/404|gist/i.test(e.message)) throw e; }
+  const cfg = { ...gh.configGitHub(), ...DEPOT_SITE };
+  try {
+    await gh.ecrireFichierBase64(cheminPartage(siteId), enB64(contenu), 'Partage du carnet : mise à jour', cfg);
+  } catch (e) {
+    if ([403, 404].includes(e.status) || /introuvable|droit/i.test(e.message)) throw new Error(AIDE_JETON);
+    throw e;
   }
-  if (!gist) gist = await appelGist('/gists', { method: 'POST', body: JSON.stringify({ ...corps, public: false }) });
-  const p = { gistId: gist.id, majLe: new Date().toISOString() };
+  const p = { siteId, majLe: new Date().toISOString() };
   return { ...p, lien: lienPartage(p) };
 }
 
-/** Arrête le partage : le gist est supprimé, le lien ne mène plus à rien. */
-export async function arreterPartage(gistId) {
-  if (gistId) await appelGist(`/gists/${gistId}`, { method: 'DELETE' }).catch(e => { if (!/404/.test(e.message)) throw e; });
+/** Arrête le partage : la copie est retirée, le lien ne mène plus à rien. */
+export async function arreterPartage(p = {}) {
+  if (p.siteId) {
+    await gh.supprimerFichier(cheminPartage(p.siteId), 'Partage du carnet : arrêté', { ...gh.configGitHub(), ...DEPOT_SITE });
+  } else if (p.gistId) {
+    await appelGist(`/gists/${p.gistId}`, { method: 'DELETE' }).catch(e => { if (!/404/.test(e.message)) throw e; });
+  }
 }
 
-export const lienPartage = ({ gistId }) => `${SITE}?voir=${encodeURIComponent(gistId)}`;
+export const lienPartage = ({ siteId, gistId }) => `${SITE}?voir=${encodeURIComponent(siteId || gistId)}`;
 
 /**
  * Côté visiteur : récupère et déchiffre. Le gist est public pour qui a
  * son numéro ; aucun jeton n'est nécessaire.
  */
-export async function lirePartage(gistId, cle = '') {
+export async function lirePartage(id, cle = '') {
+  if (!estGist(id)) {
+    // Sur le site : raw.githubusercontent (à jour en quelques minutes),
+    // sinon le site lui-même.
+    for (const url of [`${RAW}${encodeURIComponent(id)}.json`, `./partage/${encodeURIComponent(id)}.json`]) {
+      let r;
+      try { r = await fetch(url, { cache: 'no-store' }); } catch { continue; }
+      if (r.ok) return deballer(await r.text(), cle);
+      if (r.status === 404) continue;
+    }
+    throw new Error('Ce partage n’existe pas ou plus (il a peut-être été arrêté). Si le lien vient d’être créé, réessaie dans une minute.');
+  }
+  const gistId = id;
   let r;
   try { r = await fetch(`${API}/gists/${encodeURIComponent(gistId)}`, { headers: { Accept: 'application/vnd.github+json' } }); }
   catch { throw new Error('Pas de réseau : le carnet partagé ne peut pas être chargé.'); }

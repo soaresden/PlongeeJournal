@@ -37,6 +37,8 @@ const emballe = await P.emballer(inst);
 check('pas chiffré, juste compressé (et bien plus petit)', JSON.parse(emballe).v === 2 && !JSON.parse(emballe).ct && emballe.length < texte.length * 2, String(emballe.length));
 check('déballé à l’identique', JSON.stringify(await P.deballer(emballe)) === texte);
 check('le lien est court : pas de clé', P.lienPartage({ gistId: 'g1' }) === 'https://soaresden.github.io/PlongeeJournal/?voir=g1', P.lienPartage({ gistId: 'g1' }));
+check('lien du site : le numéro de la copie', P.lienPartage({ siteId: 'Ab3_x' }) === 'https://soaresden.github.io/PlongeeJournal/?voir=Ab3_x');
+check('la copie va dans le dépôt public du site', P.DEPOT_SITE.repo === 'PlongeeJournal' && /Select repositories/.test(P.AIDE_JETON));
 
 // Les anciens liens (chiffrés, clé après le « # ») marchent toujours.
 const cle = await P.nouvelleCle();

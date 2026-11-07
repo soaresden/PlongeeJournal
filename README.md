@@ -106,14 +106,14 @@ dedans et « Mon journal de plongée » s'écrit à la main, signé du prénom
 
 **Partager son carnet (lecture seule)** — Réglages → « Partager mon
 carnet » → « Créer le lien ». Celui qui l'ouvre (sur son téléphone, sans rien
-installer) voit plongées, stats, carte, plongeurs, « Qui je suis », et ne peut
-rien modifier ; rien ne s'écrit chez lui. La copie publiée, compressée, vit
-dans un gist secret de ton compte (introuvable sans le lien) et se remet à jour
-toute seule à l'ouverture de l'appli. Restent cachés : les numéros de licence
-(les tiens et ceux des autres), tes coordonnées (adresse, groupe sanguin,
-contact d'urgence), les notes sur les plongeurs, les photos. Il faut une fois
-donner au jeton GitHub la permission « Gists : Read and write » (Account
-permissions).
+installer) voit l'écran d'ouverture puis plongées, stats, carte, plongeurs,
+« Qui je suis », et ne peut rien modifier ; rien ne s'écrit chez lui. La copie,
+compressée, est déposée dans ce dépôt public, sous `partage/<numéro tiré au
+hasard>.json`, et se remet à jour toute seule à l'ouverture de l'appli. Restent
+cachés : les numéros de licence (les tiens et ceux des autres), tes coordonnées
+(adresse, groupe sanguin, contact d'urgence), les notes sur les plongeurs, les
+photos. Une fois : ajouter le dépôt `PlongeeJournal` au jeton GitHub
+(Repository access → Select repositories), à côté de `PlongeeJournal-data`.
 
 **Plongeurverse** — bouton 🤿 de l'écran Plongeurs : tes compagnons en
 cartoon, en isométrique sur un fond de sable en losange. Ils se promènent, font

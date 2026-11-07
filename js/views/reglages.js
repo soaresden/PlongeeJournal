@@ -253,7 +253,7 @@ async function sectionPartage() {
       carte.append(
         el('div', { style: { fontWeight: '650' }, text: '🔗 Un lien en lecture seule' }),
         el('div.hint', { text: 'La personne voit tes plongées, stats, carte, plongeurs et « Qui je suis », sur son téléphone, '
-          + 'sans rien installer ni pouvoir modifier. Seuls ceux qui ont le lien peuvent le voir. '
+          + 'sans rien installer ni pouvoir modifier. La copie est déposée sur ton site, sous un numéro tiré au hasard. '
           + 'Restent cachés : les numéros de licence (les tiens et ceux des autres), ton adresse, ton groupe sanguin, '
           + 'ton contact d’urgence, les notes sur les plongeurs, les photos.' }),
         el('button.btn.primary.sm', { type: 'button', text: 'Créer le lien', onclick: e => publier(e.currentTarget, null) }));
@@ -265,6 +265,7 @@ async function sectionPartage() {
     champ.onclick = () => champ.select();
     carte.append(
       el('div', { style: { fontWeight: '650' }, text: '🔗 Ton lien de partage (lecture seule)' }),
+      p.gistId && !p.siteId ? el('div.hint', { text: 'Ancien lien (gist) : « Mettre à jour » en crée un nouveau, sur le site.' }) : null,
       champ,
       el('div.hint', { text: `Mis à jour le ${new Date(p.majLe).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}. `
         + 'Il se met à jour tout seul quand tu ouvres l’appli après des changements.' }),
@@ -274,12 +275,12 @@ async function sectionPartage() {
         } }),
         navigator.share ? el('button.btn.sm', { type: 'button', text: '📤 Envoyer…', onclick: () =>
           navigator.share({ title: 'Mon carnet de plongée', text: 'Mon carnet de plongée (lecture seule)', url: lien }).catch(() => {}) }) : null,
-        el('button.btn.sm.ghost', { type: 'button', text: '↻ Mettre à jour', onclick: e => publier(e.currentTarget, p) }),
+        el('button.btn.sm.ghost', { type: 'button', text: '↻ Mettre à jour', onclick: e => publier(e.currentTarget, p.siteId ? p : null) }),
         el('button.btn.sm.danger', { type: 'button', text: 'Arrêter le partage', onclick: async () => {
           if (!(await confirmBox('Arrêter le partage ? Le lien ne mènera plus à rien (il faudra en redonner un nouveau).', 'Arrêter'))) return;
           try {
             const { arreterPartage } = await import('../partage.js');
-            await arreterPartage(p.gistId);
+            await arreterPartage(p);
             await store.saveSettings({ partage: null });
             toast('Partage arrêté');
             rendre();
@@ -294,7 +295,7 @@ async function sectionPartage() {
       const { publierPartage } = await import('../partage.js');
       const moi = await store.getDiver(await store.getActiveDiverId());
       const p = await publierPartage(await store.raw(), actuel || {}, { auteur: moi?.prenom || '' });
-      await store.saveSettings({ partage: { gistId: p.gistId, majLe: p.majLe } });
+      await store.saveSettings({ partage: { siteId: p.siteId, majLe: p.majLe } });
       toast(actuel ? 'Lien mis à jour' : 'Lien créé : copie-le et envoie-le');
       rendre();
     } catch (e) {
