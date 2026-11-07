@@ -6,7 +6,7 @@ import { el, fullName, nomPlongeur, couleurCategorie, toast, confirmBox, openMod
 import { verifierTags } from '../tags.js';
 import { store, emptyBuddy } from '../store.js';
 import { navigate } from '../router.js';
-import { ouvrirApercu, ligneApercu, apercuPlongee } from '../apercu.js';
+import { ouvrirApercu, fermerApercu, ligneApercu, apercuPlongee } from '../apercu.js';
 
 
 function field(label, control, hint) {
@@ -26,7 +26,7 @@ function input(type, value, oninput, attrs = {}) {
 export async function buddiesView() {
   const buddies = await store.listBuddies();
   const diverId = await store.getActiveDiverId();
-  const st = diverId ? await store.stats(diverId) : { buddyCount: {} };
+  let st = diverId ? await store.stats(diverId) : { buddyCount: {} };
   const wrap = el('div');
 
   if (!buddies.length) {
@@ -159,6 +159,7 @@ export async function buddiesView() {
 
   async function recharger() {
     buddies.splice(0, buddies.length, ...await store.listBuddies());
+    if (diverId) st = await store.stats(diverId);     // une fusion change les compteurs
     rendre();
   }
 
@@ -252,6 +253,72 @@ export async function buddiesView() {
   return { title: 'Plongeurs', node: wrap };
 }
 
+// ------------------------------------------------------------
+//  Fusionner deux fiches de la même personne
+// ------------------------------------------------------------
+
+const sansAccent = s => (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+
+/** Même prénom, ou un prénom qui commence l'autre : sans doute la même personne. */
+export function probablementLeMeme(a, b) {
+  const pa = sansAccent(a.prenom), pb = sansAccent(b.prenom), na = sansAccent(a.nom), nb = sansAccent(b.nom);
+  if (pa && pa === pb && (!na || !nb || na === nb)) return true;
+  if (na && na === nb && (!pa || !pb || pa[0] === pb[0])) return true;
+  return false;
+}
+
+/**
+ * Choisir la fiche en double, puis la fondre dans celle-ci : ses plongées,
+ * séances et tags passent ici, et elle disparaît.
+ */
+export async function fusionnerAvec(garderId, apres = () => {}) {
+  const garder = await store.getBuddy(garderId);
+  if (!garder) return toast('Plongeur introuvable', true);
+  const diverId = await store.getActiveDiverId();
+  const dives = diverId ? await store.listDives(diverId) : [];
+  const seances = diverId ? await store.listSeances(diverId) : [];
+  const nb = id => dives.filter(d => (d.buddyIds || []).includes(id)).length + seances.filter(x => (x.buddyIds || []).includes(id)).length;
+  const autres = (await store.listBuddies()).filter(x => x.id !== garderId)
+    .sort((x, y) => (probablementLeMeme(garder, y) - probablementLeMeme(garder, x)) || nomPlongeur(x).localeCompare(nomPlongeur(y), 'fr'));
+  const nomDe = x => nomPlongeur(x) || 'Sans nom';
+
+  openModal(close => {
+    const recherche = el('input', { type: 'search', placeholder: 'Chercher la fiche en double…', autocomplete: 'off' });
+    const liste = el('div.fusion-liste');
+    const rendre = () => {
+      const q = sansAccent(recherche.value);
+      const vus = autres.filter(x => !q || sansAccent(`${fullName(x)} ${(x.categories || []).join(' ')}`).includes(q)).slice(0, 40);
+      liste.replaceChildren(...vus.map(x => el('button.fusion-ligne', { type: 'button',
+        onclick: async () => {
+          const n = nb(x.id);
+          if (!(await confirmBox(`Fondre « ${nomDe(x)} » dans « ${nomDe(garder)} » ? `
+            + `${n ? `Ses ${n} plongée${n > 1 ? 's' : ''} et séance${n > 1 ? 's' : ''} passent à « ${nomDe(garder)} », ` : ''}`
+            + 'ses tags aussi, et sa fiche disparaît.', 'Fusionner', false))) return;
+          try {
+            const r = await store.fusionnerPlongeurs(garderId, x.id);
+            close();
+            toast(`Fusionnés : ${r.plongees} plongée${r.plongees > 1 ? 's' : ''}, ${r.seances} séance${r.seances > 1 ? 's' : ''} reprises`);
+            apres();
+          } catch (e) { toast(e.message, true); }
+        } },
+        el('span.personne-av', {}, ((x.prenom?.[0] || '') + (x.nom?.[0] || '')).toUpperCase() || '?'),
+        el('span.fusion-txt', {}, el('b', { text: nomDe(x) }),
+          el('small', { text: [probablementLeMeme(garder, x) ? '⚠ doublon probable' : '', (x.categories || []).join(', '),
+            `${nb(x.id)} sortie${nb(x.id) > 1 ? 's' : ''}`].filter(Boolean).join(' · ') })))));
+      if (!vus.length) liste.append(el('div.hint', { text: 'Personne ne correspond.' }));
+    };
+    recherche.addEventListener('input', rendre);
+    rendre();
+    requestAnimationFrame(() => recherche.focus());
+    return el('div', {},
+      el('h3', { text: `⇄ Fusionner avec « ${nomDe(garder)} »` }),
+      el('div.hint', { style: { marginTop: 0 },
+        text: `La même personne a deux fiches ? Choisis l’autre : elle sera fondue dans « ${nomDe(garder)} », qui reste. Les doublons probables sont en tête.` }),
+      recherche, liste,
+      el('div.btn-row', {}, el('button.btn.ghost', { type: 'button', text: 'Annuler', onclick: close })));
+  });
+}
+
 /** Aperçu modifiable d'un plongeur, sur le bord de l'écran. */
 export async function apercuPlongeur(id, { onClose = null } = {}) {
   const b = structuredClone(await store.getBuddy(id));
@@ -339,6 +406,9 @@ export async function apercuPlongeur(id, { onClose = null } = {}) {
       el('div.apercu-liste', {}, ...ensemble.map(d => ligneApercu(d, () => apercuPlongee(d.id, { retour: rouvrir, onClose }))))) : null);
 
   const pied = el('div.apercu-actions', {}, temoin,
+    el('button.btn.ghost.sm', { type: 'button', text: '⇄ Fusionner…', title: 'Même personne en deux fiches',
+      onclick: async () => { clearTimeout(t); if (String(b.prenom || b.nom || '').trim()) await store.saveBuddy(b);
+        fusionnerAvec(b.id, () => { fermerApercu(); onClose?.(); }); } }),
     el('button.btn.primary.sm', { type: 'button', text: 'Fiche complète ›', onclick: () => navigate(`buddy/${b.id}`) }));
 
   ouvrirApercu({ tete, corps, pied }, { onClose });
@@ -388,6 +458,10 @@ export async function buddyFormView({ id }) {
   );
 
   if (!isNew) {
+    buttons.append(el('button.btn.ghost', {
+      type: 'button', text: '⇄ Fusionner…', title: 'Même personne en deux fiches',
+      onclick: () => fusionnerAvec(b.id, () => navigate('buddies', true)),
+    }));
     buttons.append(el('button.btn.danger', {
       type: 'button', text: 'Supprimer',
       onclick: async () => {

@@ -99,6 +99,14 @@ recopié, un message, tes notes : « plongé avec jullie et Marc, 6 kg,
 froid ») : les plongeurs connus sont retrouvés même mal orthographiés, un
 nouveau nom est repéré après « avec ». Rien n'est ajouté sans qu'on touche.
 
+**Plongeurs en double** — « ⇄ Fusionner… » sur la fiche d'un plongeur : on
+choisit l'autre fiche (les doublons probables sont en tête), ses plongées,
+séances et tags passent à la première, puis elle disparaît.
+
+**Tags** — « 🔎 Vérifier les tags avec mes plongées » compare les tags aux
+palanquées et aux séances ; toucher un tag dans les filtres permet de le
+renommer pour tout le monde.
+
 **Numérotation** — automatique : les numéros suivent les dates (la plus
 ancienne est la n°1), à chaque ajout, suppression ou import. Les baptêmes
 (niveau « Baptême ») restent à part, en -2, -1.

@@ -182,6 +182,60 @@ export function creerStore(support) {
       await save({ table: 'buddies', id, supprime: true });
     },
 
+    /**
+     * Deux fiches pour la même personne : `retirerId` est fondu dans
+     * `garderId`. Ses plongées et séances passent à l'autre (sans doublon,
+     * à la même place dans la palanquée), les champs vides sont complétés,
+     * les tags réunis ; puis la fiche retirée est enterrée (une autre copie
+     * du carnet ne la fera pas revenir). Une seule écriture.
+     * @returns {{plongees:number, seances:number}}
+     */
+    async fusionnerPlongeurs(garderId, retirerId) {
+      const d = db();
+      if (garderId === retirerId) throw new Error('C’est le même plongeur');
+      const garder = d.buddies.find(x => x.id === garderId);
+      const retirer = d.buddies.find(x => x.id === retirerId);
+      if (!garder || !retirer) throw new Error('Plongeur introuvable');
+      const t = maintenant();
+
+      for (const k of ['prenom', 'nom', 'licence', 'club', 'note', 'siteWeb', 'niveau']) {
+        if (!String(garder[k] ?? '').trim() && String(retirer[k] ?? '').trim()) garder[k] = retirer[k];
+      }
+      garder.moniteur = !!(garder.moniteur || retirer.moniteur);
+      garder.categories = [...new Set([...(garder.categories || []), ...(retirer.categories || [])])];
+      if ((retirer.stamps || []).length) garder.stamps = [...(garder.stamps || []), ...retirer.stamps];
+      garder.updatedAt = t;
+
+      const remplacer = ids => {
+        const out = [];
+        for (const id of ids || []) {
+          const v = id === retirerId ? garderId : id;
+          if (!out.includes(v)) out.push(v);
+        }
+        return out;
+      };
+      let plongees = 0, seances = 0;
+      for (const dv of d.dives) {
+        const touche = (dv.buddyIds || []).includes(retirerId) || dv.chefBuddyId === retirerId || dv.stampBuddyId === retirerId;
+        if (!touche) continue;
+        dv.buddyIds = remplacer(dv.buddyIds);
+        if (dv.chefBuddyId === retirerId) dv.chefBuddyId = garderId;
+        if (dv.stampBuddyId === retirerId) dv.stampBuddyId = garderId;
+        dv.updatedAt = t;
+        plongees++;
+      }
+      for (const s of d.seances || []) {
+        if (!(s.buddyIds || []).includes(retirerId)) continue;
+        s.buddyIds = remplacer(s.buddyIds);
+        s.updatedAt = t;
+        seances++;
+      }
+      enterrer(d, retirerId);
+      d.buddies = d.buddies.filter(x => x.id !== retirerId);
+      await save({ table: 'buddies', id: garderId });
+      return { plongees, seances };
+    },
+
     // ---- Plongées ----
 
     async listDives(diverId) { return sortDives(db().dives.filter(d => d.diverId === diverId)); },

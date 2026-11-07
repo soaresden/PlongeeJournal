@@ -70,6 +70,24 @@ check('distance d’édition', N.distance('jullie', 'julie') === 1 && N.distance
   check('store : une plongée plus ancienne passe devant', p2.numero === 1 && p1.numero === 2, `${p1.numero}/${p2.numero}`);
   await store.deleteDive(p2.id);
   check('store : une suppression resserre les numéros', (await store.getDive(p1.id)).numero === 1);
+  // ---------- Fusion de deux plongeurs ----------
+  const x = { ...M.emptyBuddy(), prenom: 'Eva', categories: ['Cabo Verde'] };
+  const y = { ...M.emptyBuddy(), prenom: 'Eva', nom: 'Lopes', licence: 'A-1', moniteur: true, categories: ['Fosse'] };
+  const z = { ...M.emptyBuddy(), prenom: 'Zoé' };
+  for (const b of [x, y, z]) await store.saveBuddy(b);
+  const pa = await store.saveDive({ ...M.emptyDive('moi', 0), date: '2026-09-01', buddyIds: [y.id, z.id], chefBuddyId: y.id });
+  const pb = await store.saveDive({ ...M.emptyDive('moi', 0), date: '2026-09-02', buddyIds: [x.id, y.id] });
+  await store.saveSeance({ ...M.emptySeance('moi', 'fosse', '2026-09-03'), buddyIds: [y.id] });
+  const r = await store.fusionnerPlongeurs(x.id, y.id);
+  const fx = await store.getBuddy(x.id);
+  check('fusion : plongées et séances reprises', r.plongees === 2 && r.seances === 1, JSON.stringify(r));
+  check('fusion : à la même place, sans doublon', (await store.getDive(pa.id)).buddyIds.join() === `${x.id},${z.id}`
+    && (await store.getDive(pb.id)).buddyIds.join() === x.id && (await store.getDive(pa.id)).chefBuddyId === x.id);
+  check('fusion : champs vides complétés, tags réunis, moniteur gardé', fx.nom === 'Lopes' && fx.licence === 'A-1' && fx.moniteur
+    && fx.categories.join() === 'Cabo Verde,Fosse', JSON.stringify(fx));
+  check('fusion : la fiche retirée disparaît, enterrée', !(await store.getBuddy(y.id)) && !!support.donnees._supprimes[y.id]);
+  for (const id of [pa.id, pb.id]) await store.deleteDive(id);
+
   const avant = support.ecritures;
   check('store : numeroterAuto n’écrit rien si tout est en ordre', (await store.numeroterAuto('moi')) === 0 && support.ecritures === avant);
 
