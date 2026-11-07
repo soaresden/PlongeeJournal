@@ -60,6 +60,7 @@ export function ouvrirSplash({ signature = prenomSignature() } = {}) {
     passer.textContent = 'Toucher pour passer';
     voile.append(canvas, passer);
     document.body.append(voile);
+    document.getElementById('splash-pre')?.remove();    // l'animation prend le relais
     const ctx = canvas.getContext('2d');
     if (!ctx) { voile.remove(); resolve(); return; }
     chargerPolice();

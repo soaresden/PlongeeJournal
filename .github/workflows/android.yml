@@ -24,6 +24,7 @@ on:
       - 'capacitor.config.json'
       - 'package.json'
       - 'outils/android-icones.py'
+      - 'outils/android-lancement.py'
       - 'outils/build-www.mjs'
       - '.github/workflows/android.yml'
 
@@ -81,6 +82,8 @@ jobs:
         run: |
           pip install --quiet pillow
           python outils/android-icones.py android/app/src/main/res
+          python outils/android-lancement.py android/app/src/main/res
+          grep -q "lancement_vide" android/app/src/main/res/values/styles.xml || { echo "::error::Écran de lancement : logo non retiré"; exit 1; }
           MANIFEST=android/app/src/main/AndroidManifest.xml
           sed -i 's#<uses-permission android:name="android.permission.INTERNET" />#<uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-permission android:name="android.permission.CAMERA" />\n    <uses-feature android:name="android.hardware.location.gps" android:required="false" />\n    <uses-feature android:name="android.hardware.camera" android:required="false" />#' "$MANIFEST"
           # Bluetooth (montre Suunto) : SCAN/CONNECT depuis Android 12, l'ancien

@@ -41,17 +41,18 @@ valeurs.mkdir(exist_ok=True)
     '    <color name="ic_launcher_background">#06131F</color>\n</resources>\n',
     encoding='utf-8')
 
-# Écrans de lancement : on garde la taille de chaque image d'origine,
-# fond bleu nuit et icône centrée.
+# Écrans de lancement : l'eau seule, sans logo (l'appli a sa propre
+# ouverture animée, qui part de ce même dégradé).
+HAUT, BAS = (0x5F, 0xD3, 0xF3), (0x0B, 0x3B, 0x63)
 n = 0
 for splash in RES.glob('drawable*/splash.png'):
     with Image.open(splash) as ancien:
         l, h = ancien.size
-    img = Image.new('RGBA', (l, h), FOND)
-    cote = round(min(l, h) * 0.32)
-    logo = icone.resize((cote, cote), Image.LANCZOS)
-    img.alpha_composite(logo, ((l - cote) // 2, (h - cote) // 2))
-    img.convert('RGB').save(splash)
+    img = Image.new('RGB', (l, h))
+    for y in range(h):
+        k = y / max(1, h - 1)
+        img.paste(tuple(round(a + (b - a) * k) for a, b in zip(HAUT, BAS)), (0, y, l, y + 1))
+    img.save(splash)
     n += 1
 
 print(f'Icônes posées dans {RES} ; {n} écran(s) de lancement remplacé(s).')

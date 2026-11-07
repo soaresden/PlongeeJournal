@@ -1549,3 +1549,8 @@ select.imp-select {
 #splash.part { opacity: 0; pointer-events: none; }
 .splash-passer { position: absolute; left: 0; right: 0; bottom: calc(18px + var(--safe-b, 0px)); text-align: center;
   color: rgba(255,255,255,.65); font-size: 12px; letter-spacing: .04em; pointer-events: none; }
+
+/* Avant que l'animation démarre : la même eau, rien d'autre. */
+#splash-pre { position: fixed; inset: 0; z-index: 299; background: linear-gradient(#5fd3f3, #1b8fc4 50%, #0b3b63);
+  animation: preDisparait .3s ease 8s forwards; }
+@keyframes preDisparait { to { opacity: 0; visibility: hidden; } }

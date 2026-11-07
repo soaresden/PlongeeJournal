@@ -26,6 +26,8 @@
 <link rel="stylesheet" href="./vendor/leaflet/leaflet.css">
 </head>
 <body>
+<!-- Dès la première image : l'eau de l'écran d'ouverture (js/splash.js), sans logo. -->
+<div id="splash-pre"></div>
 
 <!-- Pictogrammes : un seul jeu, dessiné au trait, qui prend la couleur du thème. -->
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
@@ -88,11 +90,7 @@
   <div id="bandeau" hidden role="status" aria-live="polite"></div>
 
   <main id="view" tabindex="-1">
-    <div class="boot">
-      <img class="boot-logo" src="./assets/icon.svg" alt="">
-      <div class="boot-titre">Carnet de plongée</div>
-      <div class="boot-sous">Ouverture du carnet…</div>
-    </div>
+    <div class="boot"></div>
   </main>
 </div>
 

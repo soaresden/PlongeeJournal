@@ -45,7 +45,7 @@ if (PARTAGE_ID) {
 let signatureVisite = '';
 import('./splash.js')
   .then(m => m.ouvrirSplash(PARTAGE_ID ? { signature: () => signatureVisite } : {}))
-  .catch(() => {});
+  .catch(() => document.getElementById('splash-pre')?.remove());
 
 // ---------- Routes ----------
 route('dives',            divesView);
