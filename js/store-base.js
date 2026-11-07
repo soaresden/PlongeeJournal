@@ -125,6 +125,16 @@ export function creerStore(support) {
       return d.divers[0]?.id || null;
     },
 
+    /** Réglages partagés entre appareils (dans le carnet), par exemple le lien de partage. */
+    async getSettings() { return structuredClone(db().settings || {}); },
+    async saveSettings(patch) {
+      const d = db();
+      d.settings = { ...d.settings, ...patch };
+      for (const [k, v] of Object.entries(patch)) if (v === null) delete d.settings[k];
+      await save({ table: 'settings' });
+      return structuredClone(d.settings);
+    },
+
     async setActiveDiver(id) {
       db().settings.activeDiverId = id;
       await save({ table: 'settings' });

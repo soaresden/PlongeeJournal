@@ -63,6 +63,7 @@ export async function reglagesView() {
     carteAgenda()));
 
   wrap.append(sectionApparence());
+  wrap.append(await sectionPartage());
   wrap.append(sectionDonnees());
 
   const appli = el('div.section', {}, el('h2', { text: 'Application' }));
@@ -225,12 +226,83 @@ function sectionApparence() {
     bouton.replaceChildren(pastilleTheme(t),
       el('span', {}, el('b', { text: `🎨 Thème : ${t.nom}` }),
         el('span.hint', { style: { display: 'block', margin: '2px 0 0' },
-          text: 'Toucher pour changer : les couleurs changent en direct. Aussi par le bouton 🎨 en haut.' })));
+          text: 'Toucher pour changer : les couleurs changent en direct. Aussi par « Thème » dans la barre du bas.' })));
   };
   rendre();
   const suivre = () => { if (!bouton.isConnected) document.removeEventListener('theme-change', suivre); else rendre(); };
   document.addEventListener('theme-change', suivre);
   return el('div.section', {}, el('h2', { text: 'Apparence' }), bouton);
+}
+
+/**
+ * Un lien à donner (Alison…) : elle voit tout le carnet, ne peut rien
+ * modifier. Le lien est gardé dans le carnet : on le retrouve ici, sur
+ * chaque appareil.
+ */
+async function sectionPartage() {
+  const carte = el('div.card.partage-carte');
+  const rendre = async () => {
+    const reglages = await store.getSettings();
+    const p = reglages.partage || null;
+    carte.replaceChildren();
+    if (!estConfigure()) {
+      carte.append(el('div.hint', { style: { margin: 0 }, text: 'Branche d’abord ton dépôt GitHub (ci-dessus) : le partage passe par ton compte.' }));
+      return;
+    }
+    if (!p) {
+      carte.append(
+        el('div', { style: { fontWeight: '650' }, text: '🔗 Un lien en lecture seule' }),
+        el('div.hint', { text: 'La personne voit tes plongées, stats, carte, plongeurs et « Qui je suis », sur son téléphone, '
+          + 'sans rien installer ni pouvoir modifier. Rien de privé : ni adresse, ni groupe sanguin, ni contact d’urgence, '
+          + 'ni licence, ni photos. Le carnet est chiffré ; la clé n’est que dans le lien.' }),
+        el('button.btn.primary.sm', { type: 'button', text: 'Créer le lien', onclick: e => publier(e.currentTarget, null) }));
+      return;
+    }
+    const { lienPartage } = await import('../partage.js');
+    const lien = lienPartage(p);
+    const champ = el('input', { type: 'text', readOnly: true, value: lien, class: 'partage-lien' });
+    champ.onclick = () => champ.select();
+    carte.append(
+      el('div', { style: { fontWeight: '650' }, text: '🔗 Ton lien de partage (lecture seule)' }),
+      champ,
+      el('div.hint', { text: `Mis à jour le ${new Date(p.majLe).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}. `
+        + 'Il se met à jour tout seul quand tu ouvres l’appli après des changements.' }),
+      el('div.btn-row', {},
+        el('button.btn.primary.sm', { type: 'button', text: '📋 Copier', onclick: async () => {
+          try { await navigator.clipboard.writeText(lien); toast('Lien copié'); } catch { champ.select(); toast('Sélectionné : copie-le'); }
+        } }),
+        navigator.share ? el('button.btn.sm', { type: 'button', text: '📤 Envoyer…', onclick: () =>
+          navigator.share({ title: 'Mon carnet de plongée', text: 'Mon carnet de plongée (lecture seule)', url: lien }).catch(() => {}) }) : null,
+        el('button.btn.sm.ghost', { type: 'button', text: '↻ Mettre à jour', onclick: e => publier(e.currentTarget, p) }),
+        el('button.btn.sm.danger', { type: 'button', text: 'Arrêter le partage', onclick: async () => {
+          if (!(await confirmBox('Arrêter le partage ? Le lien ne mènera plus à rien (il faudra en redonner un nouveau).', 'Arrêter'))) return;
+          try {
+            const { arreterPartage } = await import('../partage.js');
+            await arreterPartage(p.gistId);
+            await store.saveSettings({ partage: null });
+            toast('Partage arrêté');
+            rendre();
+          } catch (err) { toast(err.message, true); }
+        } })));
+  };
+  async function publier(bouton, actuel) {
+    bouton.disabled = true;
+    const texte = bouton.textContent;
+    bouton.textContent = 'Chiffrement et envoi…';
+    try {
+      const { publierPartage } = await import('../partage.js');
+      const moi = await store.getDiver(await store.getActiveDiverId());
+      const p = await publierPartage(await store.raw(), actuel || {}, { auteur: moi?.prenom || '' });
+      await store.saveSettings({ partage: { gistId: p.gistId, cle: p.cle, majLe: p.majLe } });
+      toast(actuel ? 'Lien mis à jour' : 'Lien créé : copie-le et envoie-le');
+      rendre();
+    } catch (e) {
+      toast(e.message, true);
+      bouton.disabled = false; bouton.textContent = texte;
+    }
+  }
+  await rendre();
+  return el('div.section', {}, el('h2', { text: 'Partager mon carnet' }), carte);
 }
 
 function sectionDonnees() {

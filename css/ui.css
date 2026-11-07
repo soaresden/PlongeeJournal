@@ -591,3 +591,17 @@ input.lecture-seule { opacity: .75; cursor: default; }
   .cv .cv-pays-nom { display: none; }
   .cv .cv-pays-puce { padding: 3px 8px 3px 5px; }
 }
+
+/* ---------- Carnet partagé : lecture seule ---------- */
+html.partage .tab-add, html.partage [data-route="reglages"], html.partage .btn-reglages,
+html.partage .actions-fiche, html.partage .annuaire-ajout, html.partage .tag-actions, html.partage .tag-renommer,
+html.partage .apercu-actions .btn.ghost, html.partage .palq-saisie, html.partage .palq-props, html.partage .palq-puce button,
+html.partage .centre-ligne .btn, html.partage .seances-ajout, html.partage .pverse-pied .btn,
+html.partage .dives-actions, html.partage .btn.danger, html.partage .lien-texte { display: none !important; }
+/* Les champs se lisent, ne s'écrivent pas (la recherche, elle, marche). */
+html.partage #view :is(input:not([type="search"]), select, textarea, .seg button, .chip, .pastille),
+html.partage .apercu :is(input:not([type="search"]), select, textarea, .seg button) { pointer-events: none; }
+html.partage .apercu input, html.partage .apercu textarea, html.partage .apercu select { background: transparent; border-color: transparent; }
+.bandeau.partage { border-color: var(--accent); }
+.bandeau.partage > .ico { color: var(--accent); }
+html.partage input::placeholder, html.partage textarea::placeholder { color: transparent; }

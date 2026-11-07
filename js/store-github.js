@@ -24,8 +24,15 @@ const MIROIR = 'plongee-journal:miroir';          // même clé que l'ancien mod
 const ANCIEN_LOCAL = 'plongee-journal:v1';        // ancien mode navigateur
 const ETAT = 'plongee-journal:gh-etat';           // { depot, sha, dirty, derniere }
 
-/** 'local' | 'github' | 'github-hors-ligne' | 'github-erreur' */
+/** 'local' | 'github' | 'github-hors-ligne' | 'github-erreur' | 'partage' */
 let mode = 'local';
+
+// Un carnet partagé, ouvert en lecture seule (lien d'un ami) : on le montre,
+// on n'écrit RIEN — ni sur GitHub, ni dans la copie de l'appareil (qui est
+// peut-être le carnet du visiteur).
+let partage = null;
+export function activerPartage(donnees) { partage = donnees; mode = 'partage'; }
+export const enPartage = () => !!partage;
 let suivi = { depot: '', sha: null, dirty: false, derniere: null };
 let carnet = null;
 let derniereErreur = '';
@@ -69,6 +76,7 @@ const compter = d => (d?.dives || []).length;
 // ------------------------------------------------------------
 
 function publier() {
+  if (partage) { etat.setState('partage', 'Carnet partagé — lecture seule'); return; }
   const cfg = gh.configGitHub();
   const depot = `${cfg.owner}/${cfg.repo}`;
   if (mode === 'local') {
@@ -158,6 +166,7 @@ export async function envoyer() {
  * Renvoie true si le contenu affiché a changé.
  */
 export async function synchroniser() {
+  if (partage) return false;
   if (!gh.estConfigure()) { mode = 'local'; publier(); return false; }
   const cfg = gh.configGitHub();
   const avant = empreinte(carnet);
@@ -213,6 +222,7 @@ const adaptateur = creerStore({
   },
 
   async charger() {
+    if (partage) { carnet = normaliser(partage); mode = 'partage'; publier(); return carnet; }
     carnet = normaliser(carnetDeLAppareil());
     if (!gh.estConfigure()) { mode = 'local'; publier(); return carnet; }
     // Le miroir s'affiche tout de suite ; GitHub est consulté juste après
@@ -222,6 +232,7 @@ const adaptateur = creerStore({
   },
 
   enregistrer(data, quoi = {}) {
+    if (partage) return;                 // lecture seule : rien ne s'écrit
     carnet = data;
     ecrireMiroir(data);
     if (!gh.estConfigure()) { mode = 'local'; publier(); return; }
@@ -249,6 +260,7 @@ export const githubStore = adaptateur;
 
 /** Écrit tout de suite ce qui attend (avant de quitter l'app). */
 export function vider() {
+  if (partage) return Promise.resolve(true);
   if (suivi.dirty && gh.estConfigure()) { clearTimeout(minuteur); return envoyer(); }
   return Promise.resolve(true);
 }

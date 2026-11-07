@@ -5,7 +5,7 @@
 import { $, $$, el, toast, fullName, fmtDate } from './lib.js';
 import { route, onRender, navigate, match, startRouter, currentPath } from './router.js';
 import { initStore, store } from './store.js';
-import { modeActuel, synchroniser, vider, erreurGitHub } from './store-github.js';
+import { modeActuel, synchroniser, vider, erreurGitHub, activerPartage, enPartage } from './store-github.js';
 import { configGitHub, estConfigure } from './github.js';
 import { appliquerTheme } from './theme.js';
 import * as sync from './sync.js';
@@ -27,6 +27,17 @@ import { urgenceView }                    from './views/urgence.js';
 import { seanceFormView }                 from './views/seances.js';
 import { cvView }                         from './views/cv.js';
 import { mn90View }                       from './views/mn90.js';
+
+// ---------- Un carnet partagé (lien « ?voir=…#k=… ») ----------
+// La clé est après le « # » : elle ne part jamais vers un serveur. On la
+// garde le temps de l'onglet, puis l'adresse redevient celle de l'appli.
+const PARTAGE_ID = new URLSearchParams(location.search).get('voir');
+if (PARTAGE_ID) {
+  const k = /(?:^#|&)k=([A-Za-z0-9_-]+)/.exec(location.hash)?.[1];
+  try { if (k) sessionStorage.setItem(`plongee-journal:partage:${PARTAGE_ID}`, k); } catch { /* privé */ }
+  if (k || !location.hash.startsWith('#/')) history.replaceState(null, '', `${location.pathname}${location.search}#/dives`);
+  document.documentElement.classList.add('partage');
+}
 
 // ---------- Routes ----------
 route('dives',            divesView);
@@ -75,6 +86,7 @@ const ETATS = {
   offline: { icone: 'i-offline', court: 'Hors ligne', classe: 'offline', label: 'GitHub injoignable' },
   local:   { icone: 'i-device',  court: 'Local',      classe: 'local',   label: 'Mode local' },
   error:   { icone: 'i-alert',   court: 'Erreur',     classe: 'error',   label: 'Problème de synchronisation' },
+  partage: { icone: 'i-carte',   court: 'Lecture',    classe: 'local',   label: 'Carnet partagé — lecture seule' },
 };
 
 const svg = id => {
@@ -96,6 +108,7 @@ sync.onSyncChange(s => {
 
 syncBtn.onclick = async () => {
   const s = sync.status();
+  if (s.state === 'partage') return toast('Carnet partagé : lecture seule');
   if (s.state === 'local' || s.state === 'error') return navigate('reglages');
   toast('Synchronisation…');
   const change = await synchroniser().catch(() => false);
@@ -121,13 +134,13 @@ let minuteurBandeau = null;
 function afficherBandeau({ classe, icone, titre, texte, action, duree = 5000, surFermer }) {
   clearTimeout(minuteurBandeau);
   bandeau.className = `bandeau ${classe}`;
-  bandeau.replaceChildren(
+  bandeau.replaceChildren(...[
     svg(icone),
     el('div.bandeau-txt', {}, el('b', { text: titre }), texte ? el('span', { text: texte }) : null),
     action ? el('button.btn.sm', { type: 'button', text: action.label, onclick: action.onclick }) : null,
     el('button.bandeau-x', { type: 'button', 'aria-label': 'Fermer', text: '×',
       onclick: () => { bandeau.hidden = true; surFermer?.(); } }),
-  );
+  ].filter(Boolean));    // un « null » passé à replaceChildren s'afficherait en texte
   bandeau.hidden = false;
   if (duree) minuteurBandeau = setTimeout(() => { bandeau.hidden = true; }, duree);
 }
@@ -201,6 +214,7 @@ let booted = false;
 
 async function ensureStore() {
   if (booted) return;
+  if (PARTAGE_ID) return ouvrirPartage();
   await initStore();
   booted = true;
   await majFicheUrgence();
@@ -212,6 +226,28 @@ async function ensureStore() {
     .then(change => { if (change) navigate(currentPath(), true); })
     .catch(() => {})
     .finally(() => { annoncerConnexion(); envoyerPhotos().catch(() => {}); entretienDeFond(); });
+}
+
+/** Lecture seule : on charge le carnet partagé, rien d'autre ne tourne. */
+async function ouvrirPartage() {
+  let cle = '';
+  try { cle = sessionStorage.getItem(`plongee-journal:partage:${PARTAGE_ID}`) || ''; } catch { /* privé */ }
+  try {
+    if (!cle) throw new Error('Lien incomplet : il manque la fin (après le « # »). Redemande le lien.');
+    const { lirePartage } = await import('./partage.js');
+    activerPartage(await lirePartage(PARTAGE_ID, cle));
+    await initStore();
+    booted = true;
+    const { store } = await import('./store.js');
+    const moi = await store.getDiver(await store.getActiveDiverId());
+    afficherBandeau({ classe: 'partage', icone: 'i-carte', duree: 7000,
+      titre: `Carnet de ${moi?.prenom || 'plongée'}`, texte: 'Partagé en lecture seule : tu peux tout regarder, rien n’est modifiable.' });
+  } catch (e) {
+    booted = true;
+    activerPartage({ divers: [], dives: [], buddies: [], seances: [], certifs: [] });
+    await initStore();
+    afficherBandeau({ classe: 'error', icone: 'i-alert', duree: 0, titre: 'Carnet partagé indisponible', texte: e.message });
+  }
 }
 
 /** Numéros dans l'ordre des dates, eau douce / salée d'après le GPS. */
@@ -244,6 +280,10 @@ onRender(async path => {
 
   const m = match(path);
   if (!m) { navigate('dives', true); return; }
+  // Lecture seule : les écrans de saisie et de réglage restent fermés.
+  if (PARTAGE_ID && /^(reglages|setup|suunto|suunto-cloud|montre|montre-aide|urgence|dive\/new|seance\/new|buddy\/new)$|\/edit$|^buddy\/|^diver\/|^seance\//.test(path)) {
+    navigate('dives', true); return;
+  }
 
   // La fiche d'urgence reste lisible quoi qu'il arrive : elle n'attend
   // pas le chargement du carnet.

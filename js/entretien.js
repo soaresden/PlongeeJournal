@@ -61,5 +61,26 @@ export async function entretenir({ analyser = null } = {}) {
   }
   if (modifiees.length) await store.savePlongees(modifiees);
   eaux = modifiees.filter(d => d.eau).length;
-  return { numeros, eaux, chefs: chefs.length };
+  const partage = await majPartage().catch(() => false);
+  return { numeros, eaux, chefs: chefs.length, partage };
+}
+
+/**
+ * Le lien de partage montre une copie : si le carnet a changé depuis, on
+ * la republie (une fois par ouverture, en silence).
+ */
+export async function majPartage() {
+  const reglages = await store.getSettings();
+  const p = reglages.partage;
+  if (!p?.gistId) return false;
+  const carnet = await store.raw();
+  const derniere = ['dives', 'buddies', 'seances', 'certifs', 'divers']
+    .flatMap(t => (carnet[t] || []).map(x => x.updatedAt || ''))
+    .reduce((a, b) => (b > a ? b : a), '');
+  if (!derniere || derniere <= p.majLe) return false;
+  const { publierPartage } = await import('./partage.js');
+  const moi = (carnet.divers || []).find(d => d.id === carnet.settings?.activeDiverId);
+  const nouveau = await publierPartage(carnet, p, { auteur: moi?.prenom || '' });
+  await store.saveSettings({ partage: { gistId: nouveau.gistId, cle: nouveau.cle, majLe: nouveau.majLe } });
+  return true;
 }
