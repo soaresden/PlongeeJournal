@@ -80,16 +80,71 @@ const corps = (couleur, col = 'rgba(255,255,255,.18)') => `
   <path d="M26 200 C30 166 62 156 100 156 C138 156 170 166 174 200 Z" fill="${couleur}"/>
   <path d="M84 158 Q100 170 116 158" fill="none" stroke="${col}" stroke-width="3.5"/>`;
 
+// ---------- Portrait illustré, d'après la photo ----------
+const defsPortrait = `
+  <defs>
+    <radialGradient id="pPeau" cx=".45" cy=".4" r=".7"><stop offset="0" stop-color="#f6d0b1"/><stop offset=".75" stop-color="#ebb58f"/><stop offset="1" stop-color="#dc9f78"/></radialGradient>
+    <linearGradient id="pCheveux" gradientUnits="userSpaceOnUse" x1="0" y1="24" x2="0" y2="90"><stop offset="0" stop-color="#3a281d"/><stop offset="1" stop-color="#1f1510"/></linearGradient>
+    <linearGradient id="pBarbe" gradientUnits="userSpaceOnUse" x1="0" y1="90" x2="0" y2="152"><stop offset="0" stop-color="#3b2a20" stop-opacity=".3"/><stop offset=".45" stop-color="#33241b" stop-opacity=".72"/><stop offset="1" stop-color="#2a1d15" stop-opacity=".88"/></linearGradient>
+  </defs>`;
+
+function portraitTete({ cheveux = true, lunettesFront = false, cagoule = false } = {}) {
+  return `
+  <path d="M85 130 L85 158 Q100 165 115 158 L115 130 Z" fill="#cf9470"/>
+  <ellipse cx="59" cy="99" rx="7" ry="12" fill="#e2a883"/><ellipse cx="141" cy="99" rx="7" ry="12" fill="#e2a883"/>
+  <path d="M100 38 C127 38 143 57 143 88 C143 114 137 132 123 143 C115 149 108 152 100 152 C92 152 85 149 77 143 C63 132 57 114 57 88 C57 57 73 38 100 38 Z" fill="url(#pPeau)"/>
+  <!-- barbe courte taillée, reliée à la moustache -->
+  <path d="M57 88 C57 114 63 132 77 143 C85 149 92 152 100 152 C108 152 115 149 123 143 C137 132 143 114 143 88
+           C141 102 136 112 129 117 C121 122 114 121 110 119 C105 117 95 117 90 119 C86 121 79 122 71 117 C64 112 59 102 57 88 Z" fill="url(#pBarbe)"/>
+  <path d="M84 119.5 C89 114 96 114 100 116 C104 114 111 114 116 119.5 C110 118 105 118.5 100 120 C95 118.5 90 118 84 119.5 Z" fill="#2a1d15" opacity=".92"/>
+  <!-- bouche : léger sourire, bouche fermée -->
+  <path d="M89 125 Q100 132 111 125 Q100 128.5 89 125 Z" fill="#c9877a"/>
+  <path d="M86 122.5 Q100 130 114 122.5" fill="none" stroke="#3a211a" stroke-width="2.3" stroke-linecap="round"/>
+  <path d="M84.5 121 Q85.5 123 87.5 123.5 M115.5 121 Q114.5 123 112.5 123.5" fill="none" stroke="#3a211a" stroke-width="1.8" stroke-linecap="round"/>
+  <!-- nez -->
+  <path d="M100 91 C99 99 96 106 95 110 Q99 113.5 105 110.5" fill="none" stroke="#c08463" stroke-width="2.4" stroke-linecap="round"/>
+  <!-- yeux bruns -->
+  <path d="M77 93 Q85.5 86 94 93 Q85.5 97.5 77 93 Z" fill="#fff"/>
+  <circle cx="85.5" cy="92" r="3.9" fill="#5b3a22"/><circle cx="85.5" cy="92" r="1.9" fill="#120c08"/><circle cx="86.8" cy="90.8" r="1" fill="#fff"/>
+  <path d="M76.5 93 Q85.5 85 94.5 92.5" fill="none" stroke="#24170f" stroke-width="2.3" stroke-linecap="round"/>
+  <path d="M106 93 Q114.5 86 123 93 Q114.5 97.5 106 93 Z" fill="#fff"/>
+  <circle cx="114.5" cy="92" r="3.9" fill="#5b3a22"/><circle cx="114.5" cy="92" r="1.9" fill="#120c08"/><circle cx="115.8" cy="90.8" r="1" fill="#fff"/>
+  <path d="M105.5 92.5 Q114.5 85 123.5 93" fill="none" stroke="#24170f" stroke-width="2.3" stroke-linecap="round"/>
+  <!-- sourcils épais et droits -->
+  <path d="M73 83 Q84 77.5 96 80.5 L95.5 84.5 Q84.5 82 74 87 Z" fill="#24170f"/>
+  <path d="M127 83 Q116 77.5 104 80.5 L104.5 84.5 Q115.5 82 126 87 Z" fill="#24170f"/>
+  ${cheveux ? `
+  <!-- cheveux courts sur les côtés, volume relevé vers l'arrière -->
+  <path d="M56 90 C52 58 70 34 100 33 C131 33 149 56 144 90 C142 74 137 64 130 59 C120 54 108 55 98 54 C86 53 74 58 67 66 C61 72 58 80 56 90 Z" fill="url(#pCheveux)"/>
+  <path d="M68 58 C71 42 88 31 107 31 C125 31 138 42 136 58 C128 48 116 44 101 44 C88 44 77 49 68 58 Z" fill="url(#pCheveux)"/>
+  <path d="M84 39 Q100 33 120 38 M80 46 Q98 39 124 45" fill="none" stroke="#5a4130" stroke-width="2" stroke-linecap="round" opacity=".75"/>` : ''}
+  ${lunettesFront ? `
+  <path d="M56 54 Q100 42 144 54" fill="none" stroke="#111" stroke-width="3.5"/>
+  <path d="M66 40 h30 a4 4 0 0 1 4 4 v6 a10 10 0 0 1 -10 10 h-14 a10 10 0 0 1 -10 -10 v-6 a4 4 0 0 1 4 -4 z" fill="#1d2a33" stroke="#0c0c0c" stroke-width="2.5"/>
+  <path d="M104 40 h30 a4 4 0 0 1 4 4 v6 a10 10 0 0 1 -10 10 h-14 a10 10 0 0 1 -10 -10 v-6 a4 4 0 0 1 4 -4 z" fill="#1d2a33" stroke="#0c0c0c" stroke-width="2.5"/>
+  <path d="M96 46 h8" stroke="#0c0c0c" stroke-width="3"/>
+  <path d="M71 45 l9 0 M109 45 l9 0" stroke="#9fd3ff" stroke-width="2.4" stroke-linecap="round" opacity=".6"/>` : ''}
+  ${cagoule ? `
+  <path d="M36 112 C32 52 62 18 100 18 C138 18 168 52 164 112 C162 152 142 180 100 182 C58 180 38 152 36 112 Z
+           M56 96 C56 132 76 156 100 156 C124 156 144 132 144 96 C144 62 126 44 100 44 C74 44 56 62 56 96 Z" fill="#14324f" fill-rule="evenodd"/>
+  <path d="M56 96 C56 62 74 44 100 44 C126 44 144 62 144 96" fill="none" stroke="#ff8a1f" stroke-width="3"/>` : ''}`;
+}
+
+const teeShirt = (couleur, col = '#2c2c33') => `
+  <path d="M28 200 C32 168 60 156 85 153 Q100 162 115 153 C140 156 168 168 172 200 Z" fill="${couleur}"/>
+  <path d="M85 153 Q100 162 115 153" fill="none" stroke="${col}" stroke-width="3"/>`;
+
 /** Les avatars proposés : { id, nom, svg }. */
 export const AVATARS = [
-  { id: 'mii', nom: 'Mii barbu', svg: enveloppe('<rect width="200" height="200" fill="#f4f6f8"/>' + defsMii, corps('#1c1c22') + teteMii()) },
-  { id: 'bateau', nom: 'Sur le bateau', svg: enveloppe(`${defsMii}
-    <rect width="200" height="200" fill="#9fdcff"/><rect y="132" width="200" height="68" fill="#2a8fd1"/>
-    <path d="M0 136 Q25 130 50 136 T100 136 T150 136 T200 136" fill="none" stroke="#fff" stroke-width="3" opacity=".7"/>
-    <circle cx="168" cy="34" r="14" fill="#ffd54d"/>`, corps('#ff8a1f', 'rgba(0,0,0,.18)') + teteMii({ lunettesFront: true })) },
-  { id: 'cagoule', nom: 'En cagoule', svg: enveloppe('<rect width="200" height="200" fill="#ffe7cf"/>' + defsMii, `
-    <path d="M26 200 C30 166 62 156 100 156 C138 156 170 166 174 200 Z" fill="#14324f"/>
-    <path d="M86 166 L86 200 M114 166 L114 200" stroke="#ff8a1f" stroke-width="5"/>` + teteMii({ cheveux: false, cagoule: true })) },
+  { id: 'portrait', nom: 'Portrait', svg: enveloppe(`${defsPortrait}<defs><radialGradient id="pFond" cx=".5" cy=".4" r=".7"><stop offset="0" stop-color="#9aa0a6"/><stop offset="1" stop-color="#5f656b"/></radialGradient></defs>
+    <rect width="200" height="200" fill="url(#pFond)"/>`, teeShirt('#151518') + portraitTete()) },
+  { id: 'bateau', nom: 'Sur le bateau', svg: enveloppe(`${defsPortrait}
+    <rect width="200" height="200" fill="#a6defa"/><rect y="128" width="200" height="72" fill="#2a8fd1"/>
+    <path d="M0 132 Q25 126 50 132 T100 132 T150 132 T200 132" fill="none" stroke="#fff" stroke-width="3" opacity=".7"/>
+    <circle cx="170" cy="32" r="13" fill="#ffd54d"/>`, teeShirt('#151518') + portraitTete({ lunettesFront: true })) },
+  { id: 'cagoule', nom: 'En cagoule', svg: enveloppe(`${defsPortrait}<rect width="200" height="200" fill="#d6e9f3"/>`, `
+    <path d="M28 200 C32 168 60 156 100 156 C140 156 168 168 172 200 Z" fill="#14324f"/>
+    <path d="M86 166 L86 200 M114 166 L114 200" stroke="#ff8a1f" stroke-width="5"/>` + portraitTete({ cheveux: false, cagoule: true })) },
   { id: 'sous-l-eau', nom: 'Sous l’eau', svg: enveloppe(`
     <defs><linearGradient id="eau" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3fb4e6"/><stop offset="1" stop-color="#0b4f7c"/></linearGradient></defs>
     <rect width="200" height="200" fill="url(#eau)"/>
