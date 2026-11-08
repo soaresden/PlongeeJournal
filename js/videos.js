@@ -117,23 +117,31 @@ export function dossiersDates(racine) {
   return out.sort((a, b) => a.date.localeCompare(b.date));
 }
 
+/** L'heure de début d'une plongée (heureImmersion) ou d'une séance (heure). */
+const heureDe = d => d?.heureImmersion || d?.heure || '';
+
 /**
- * Les vidéos d'une plongée : le dossier lié à la main, sinon celui de sa
- * date. Deux plongées le même jour : si les noms des fichiers donnent
- * l'heure, chacune ne garde que les siens.
+ * Les vidéos d'une plongée ou d'une séance : le dossier lié à la main,
+ * sinon celui de sa date (sauf un dossier mis de côté : test caméra…).
+ * Deux sorties le même jour : si les noms des fichiers donnent l'heure,
+ * chacune ne garde que les siens.
+ * @param {object} dive  plongée ou séance
+ * @param {Array} toutes plongées et séances (pour le partage d'un même jour)
+ * @param {{autres?:object}} options  dossiers mis de côté : { folderid: libellé }
  * @returns {{dossier, fichiers, parHeure:boolean}|null}
  */
-export function videosDePlongee(dive, dossiers, toutes = []) {
+export function videosDePlongee(dive, dossiers, toutes = [], { autres = {} } = {}) {
   if (!dive || !dossiers?.length) return null;
   const dossier = dive.videoDossier
     ? dossiers.find(x => String(x.folderid) === String(dive.videoDossier))
-    : dossiers.find(x => x.date === dive.date);
+    : dossiers.find(x => x.date === dive.date && !(String(x.folderid) in (autres || {}))
+      && !toutes.some(d => d.id !== dive.id && String(d.videoDossier) === String(x.folderid)));
   if (!dossier) return null;
   let fichiers = dossier.fichiers;
   let parHeure = false;
-  const memeJour = toutes.filter(d => d.date === dive.date && d.id !== dive.id && /^\d\d:\d\d/.test(d.heureImmersion || ''));
+  const memeJour = toutes.filter(d => d.date === dive.date && d.id !== dive.id && !d.videoDossier && /^\d\d:\d\d/.test(heureDe(d)));
   const h = s => (/^\d\d:\d\d/.test(s || '') ? Number(s.slice(0, 2)) * 60 + Number(s.slice(3, 5)) : null);
-  const debut = h(dive.heureImmersion);
+  const debut = h(heureDe(dive));
   if (!dive.videoDossier && memeJour.length && debut != null) {
     const dates = fichiers.map(f => heureDuNom(f.nom));
     if (dates.filter(Boolean).length >= fichiers.length / 2) {

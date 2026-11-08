@@ -14,7 +14,7 @@ import { analyserProfil } from '../profil-analyse.js';
 import { ambianceDe, stylesAmbiance, vignetteLieu, etiquetteAmbiance } from '../ambiance.js';
 import { plongeesARanger } from '../seances.js';
 import { bilanDonnees, debutOrdinateur, listeMontre, LIBELLE_SOURCE } from '../donnees.js';
-import { configVideos, sectionVideos } from './videos.js';
+import { configVideos, autresVideos, sectionVideos } from './videos.js';
 import { aVerifier, ouvrirAVerifier, alertesFiche } from './verifs.js';
 import { dossiersEnCache, videosDePlongee, chargerDossiers } from '../videos.js';
 import { photoCarnetFiche } from './carnet-photo.js';
@@ -189,7 +189,9 @@ export async function divesView() {
   const cfgVideos = await configVideos().catch(() => null);
   const dossiersVideos = cfgVideos ? dossiersEnCache(cfgVideos) : null;
   if (cfgVideos) chargerDossiers(cfgVideos).catch(() => {});
-  const aDesVideos = d => !!(dossiersVideos && videosDePlongee(d, dossiersVideos)?.fichiers.length);
+  const autresV = cfgVideos ? await autresVideos().catch(() => ({})) : {};
+  const toutesV = [...dives, ...seances];
+  const aDesVideos = d => !!(dossiersVideos && videosDePlongee(d, dossiersVideos, toutesV, { autres: autresV })?.fichiers.length);
 
   // Ce qui manque, et ce qu'on peut aller chercher.
   const liste = listeMontre();
@@ -304,7 +306,8 @@ export async function divesView() {
       vignetteLieu(commePlongee, { boite: 84, contenu: jour ? el('span.vj', {}, el('small', { text: JOURS_COURTS[jour.getDay()] }), String(jour.getDate())) : '—' }),
       el('div.dive-main', {},
         el('div.dive-title', { text: s.lieu || 'Fosse' }),
-        el('div.dive-sub', {}, fmtDate(s.date), s.heure ? ` · ${s.heure}` : ''),
+        el('div.dive-sub', {}, fmtDate(s.date), s.heure ? ` · ${s.heure}` : '',
+          aDesVideos(s) ? el('span.donnees', { title: 'Vidéos dans pCloud', style: { marginLeft: '6px' }, text: '🎬' }) : null),
         el('div.dive-bas', {},
           el('div.dive-metrics', {},
             chiffre('prof', prof ? `${prof} m` : '—', 'Profondeur max'),

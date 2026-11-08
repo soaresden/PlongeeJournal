@@ -49,6 +49,18 @@ check('une seule plongée ce jour-là : tout le dossier', V.videosDePlongee({ da
 check('dossier choisi à la main', V.videosDePlongee({ date: '2020-01-01', videoDossier: 10 }, dossiers)?.dossier.folderid === 10);
 check('pas de dossier ce jour-là', V.videosDePlongee({ date: '2020-01-01' }, dossiers) === null);
 
+// Séances et dossiers mis de côté
+{
+  const fosse = { id: 'f', type: 'fosse', date: '2026-08-30', heure: '19:00' };
+  const plongee = { id: 'p', date: '2026-08-30', heureImmersion: '12:38' };
+  check('séance : son dossier du jour', V.videosDePlongee(fosse, dossiers, [fosse])?.dossier.folderid === 10);
+  const reliee = { ...fosse, videoDossier: 10 };
+  check('dossier relié à la séance : plus sur la plongée du même jour', V.videosDePlongee(plongee, dossiers, [plongee, reliee]) === null
+    && V.videosDePlongee(reliee, dossiers, [plongee, reliee])?.dossier.folderid === 10);
+  check('dossier « test caméra » : ne va plus tout seul sur une plongée', V.videosDePlongee(plongee, dossiers, [plongee], { autres: { 10: 'Test caméra' } }) === null);
+  check('… sauf si on le relie à la main', V.videosDePlongee({ ...plongee, videoDossier: 10 }, dossiers, [], { autres: { 10: 'Test caméra' } })?.dossier.folderid === 10);
+}
+
 // API simulée : le lien est en fait américain, le serveur européen répond 7001.
 const appels = [];
 const http = async url => {

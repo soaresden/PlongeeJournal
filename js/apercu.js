@@ -340,6 +340,7 @@ export async function apercuSeance(id, { retour = null, onClose = null } = {}) {
       chiffre(s.profMax ? `${s.profMax}` : '—', 'm max'),
       chiffre(s.tempEau != null ? `${s.tempEau}°` : '—', 'eau')),
     courbe(s.samples),
+    sectionVideos(s, [], { lecture: document.documentElement.classList.contains('partage'), sauver: x => store.saveSeance(x) }),
     el('div.apercu-grille', {},
       champ('Type', liste(TYPES_SEANCE.map(x => [x.id, `${x.icone} ${x.label}`]), s.type, v => maj({ type: v }))),
       champ('Date', saisie('date', s.date, v => maj({ date: v }))),

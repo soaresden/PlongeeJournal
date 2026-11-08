@@ -10,7 +10,8 @@
 import { el, fmtDate, fmtDateLong, fmtDuration, todayISO, num, toast, confirmBox, openModal, fullName } from '../lib.js';
 import { store, TYPES_SEANCE, typeSeance, emptySeance, statsSeances } from '../store.js';
 import { navigate } from '../router.js';
-import { profileSvg } from '../fit.js';
+import { graphiquePlongee } from '../courbes.js';
+import { sectionVideos } from './videos.js';
 import { plongeesARanger } from '../seances.js';
 import { apercuSeance } from '../apercu.js';
 import { editeurPalanquee, propositionsTexte } from '../palanquee.js';
@@ -459,7 +460,9 @@ export async function seanceFormView({ id } = {}) {
     el('div.row', {}, blocProf, blocDistance, blocApnee),
     champ('Notes', notes));
 
-  if (s.samples?.length) wrap.append(el('div.card', {}, el('div.lbl', { text: 'Profil (montre)' }), el('div', { html: profileSvg(s.samples) })));
+  if (s.samples?.length) wrap.append(el('div.card', {}, el('div.lbl', { text: 'Profil (montre)' }), graphiquePlongee(s.samples, { dive: s })));
+  // Les vidéos de la séance (pCloud) : une fosse, un test caméra en piscine…
+  if (!nouvelle) wrap.append(sectionVideos(s, [], { sauver: async x => { const f = await store.getSeance(x.id); await store.saveSeance({ ...(f || x), videoDossier: x.videoDossier ?? null }); } }));
   if (s.source === 'plongee') wrap.append(el('div.hint', { text: 'Rangée ici depuis le carnet de plongées.' }));
   else if (s.source === 'bluetooth') wrap.append(el('div.hint', { text: 'Importée de la montre en Bluetooth.' }));
 
