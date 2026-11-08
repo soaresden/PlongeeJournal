@@ -85,6 +85,7 @@ const defsPortrait = `
   <defs>
     <radialGradient id="pPeau" cx=".45" cy=".4" r=".7"><stop offset="0" stop-color="#f6d0b1"/><stop offset=".75" stop-color="#ebb58f"/><stop offset="1" stop-color="#dc9f78"/></radialGradient>
     <linearGradient id="pCheveux" gradientUnits="userSpaceOnUse" x1="0" y1="24" x2="0" y2="90"><stop offset="0" stop-color="#3a281d"/><stop offset="1" stop-color="#1f1510"/></linearGradient>
+    <filter id="pFlou" x="-10%" y="-10%" width="120%" height="120%"><feGaussianBlur stdDeviation="1.4"/></filter>
     <linearGradient id="pBarbe" gradientUnits="userSpaceOnUse" x1="0" y1="90" x2="0" y2="152"><stop offset="0" stop-color="#3b2a20" stop-opacity=".3"/><stop offset=".45" stop-color="#33241b" stop-opacity=".72"/><stop offset="1" stop-color="#2a1d15" stop-opacity=".88"/></linearGradient>
   </defs>`;
 
@@ -93,12 +94,15 @@ function portraitTete({ cheveux = true, lunettesFront = false, cagoule = false }
   <path d="M85 130 L85 158 Q100 165 115 158 L115 130 Z" fill="#cf9470"/>
   <ellipse cx="59" cy="99" rx="7" ry="12" fill="#e2a883"/><ellipse cx="141" cy="99" rx="7" ry="12" fill="#e2a883"/>
   <path d="M100 38 C127 38 143 57 143 88 C143 114 137 132 123 143 C115 149 108 152 100 152 C92 152 85 149 77 143 C63 132 57 114 57 88 C57 57 73 38 100 38 Z" fill="url(#pPeau)"/>
-  <!-- barbe courte taillée, reliée à la moustache -->
-  <path d="M57 88 C57 114 63 132 77 143 C85 149 92 152 100 152 C108 152 115 149 123 143 C137 132 143 114 143 88
-           C141 102 136 112 129 117 C121 122 114 121 110 119 C105 117 95 117 90 119 C86 121 79 122 71 117 C64 112 59 102 57 88 Z" fill="url(#pBarbe)"/>
-  <path d="M84 119.5 C89 114 96 114 100 116 C104 114 111 114 116 119.5 C110 118 105 118.5 100 120 C95 118.5 90 118 84 119.5 Z" fill="#2a1d15" opacity=".92"/>
+  <!-- barbe de 3 jours : une ombre légère, floue -->
+  <g filter="url(#pFlou)" opacity=".42" fill="#24170f">
+    <path d="M60 96 C60 118 66 134 79 143 C86 148 93 151 100 151 C107 151 114 148 121 143 C134 134 140 118 140 96
+             C138 110 132 120 124 124 C118 128 112 132 100 132 C88 132 82 128 76 124 C68 120 62 110 60 96 Z"/>
+    <path d="M84 118 C90 114 96 115 100 116.5 C104 115 110 114 116 118 C114 121 108 121 100 121 C92 121 86 121 84 118 Z"/>
+    <path d="M90 130 C94 129 106 129 110 130 L110 142 C106 145 94 145 90 142 Z"/>
+  </g>
   <!-- bouche : léger sourire, bouche fermée -->
-  <path d="M89 125 Q100 132 111 125 Q100 128.5 89 125 Z" fill="#c9877a"/>
+  <path d="M89.5 125 Q100 132.5 110.5 125 Q100 128.5 89.5 125 Z" fill="#cf8d7d"/>
   <path d="M86 122.5 Q100 130 114 122.5" fill="none" stroke="#3a211a" stroke-width="2.3" stroke-linecap="round"/>
   <path d="M84.5 121 Q85.5 123 87.5 123.5 M115.5 121 Q114.5 123 112.5 123.5" fill="none" stroke="#3a211a" stroke-width="1.8" stroke-linecap="round"/>
   <!-- nez -->
@@ -115,9 +119,9 @@ function portraitTete({ cheveux = true, lunettesFront = false, cagoule = false }
   <path d="M127 83 Q116 77.5 104 80.5 L104.5 84.5 Q115.5 82 126 87 Z" fill="#24170f"/>
   ${cheveux ? `
   <!-- cheveux courts sur les côtés, volume relevé vers l'arrière -->
-  <path d="M56 90 C52 58 70 34 100 33 C131 33 149 56 144 90 C142 74 137 64 130 59 C120 54 108 55 98 54 C86 53 74 58 67 66 C61 72 58 80 56 90 Z" fill="url(#pCheveux)"/>
-  <path d="M68 58 C71 42 88 31 107 31 C125 31 138 42 136 58 C128 48 116 44 101 44 C88 44 77 49 68 58 Z" fill="url(#pCheveux)"/>
-  <path d="M84 39 Q100 33 120 38 M80 46 Q98 39 124 45" fill="none" stroke="#5a4130" stroke-width="2" stroke-linecap="round" opacity=".75"/>` : ''}
+  <path d="M56 90 C53 56 72 31 100 30 C129 30 148 55 144 90 C143 76 139 66 132 60 C126 57 121 59 116 56 C110 59 104 55 98 57 C92 54 86 58 80 57 C72 60 61 70 56 90 Z" fill="url(#pCheveux)"/>
+  <path d="M76 43 Q90 35 106 36 M98 35 Q114 34 126 43 M70 52 Q84 44 96 45" fill="none" stroke="#56402f" stroke-width="2.2" stroke-linecap="round" opacity=".6"/>
+  <path d="M56.5 86 Q57.5 95 61 101 L63 86 Z M143.5 86 Q142.5 95 139 101 L137 86 Z" fill="#2a1c14"/>` : ''}
   ${lunettesFront ? `
   <path d="M56 54 Q100 42 144 54" fill="none" stroke="#111" stroke-width="3.5"/>
   <path d="M66 40 h30 a4 4 0 0 1 4 4 v6 a10 10 0 0 1 -10 10 h-14 a10 10 0 0 1 -10 -10 v-6 a4 4 0 0 1 4 -4 z" fill="#1d2a33" stroke="#0c0c0c" stroke-width="2.5"/>
