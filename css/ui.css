@@ -849,3 +849,18 @@ html.partage .btn-visites { display: none !important; }
 .qr-modal .btn-row { justify-content: center; }
 .partage-qr.grand { width: 280px; max-width: 80vw; margin: 12px auto; }
 .qr-lien { word-break: break-all; font-size: 12px; }
+
+/* --- Qui je suis : QR toujours visible, plongées d'un repère -------- */
+.cv-qr { display: inline-flex; align-items: center; gap: 6px; }
+.cv-qr-mini { width: 22px; height: 22px; background: #fff; border-radius: 3px; padding: 1px; display: inline-block; }
+.cv-qr-mini:empty { display: none; }
+.cv-qr-mini svg { width: 100%; height: 100%; display: block; }
+.cv-repere span { cursor: pointer; }
+.cv-repere-liste details { margin: 8px 0; }
+.cv-repere-liste summary { cursor: pointer; padding: 6px 0; }
+.cv-plongee { display: flex; gap: 10px; width: 100%; text-align: left; padding: 8px 10px; margin: 4px 0;
+  border-radius: 10px; border: 1px solid var(--line); background: transparent; color: inherit; font: inherit; cursor: pointer; }
+.cv-plongee:hover { background: rgba(127,127,127,.08); }
+.cv-plongee-num { flex: none; min-width: 42px; font-weight: 700; color: var(--accent); }
+/* Les cartes gardent leurs calques chez elles : jamais au-dessus d'un pop-up. */
+.leaflet-container { isolation: isolate; z-index: 0; }

@@ -7,7 +7,7 @@
 //  Rien de privé ici : ni adresse, ni contact d'urgence.
 // ============================================================
 
-import { el, toast } from '../lib.js';
+import { el, toast, openModal } from '../lib.js';
 import { store } from '../store.js';
 import { estBapteme, libelleMateriel, valeursMateriel } from '../model.js';
 import { paysDe } from '../secours.js';
@@ -218,7 +218,13 @@ export async function cvView() {
   const diverId = await store.getActiveDiverId();
   if (!diverId) return { title: 'Qui je suis', node: el('div.empty', { text: 'Crée d’abord ton profil.' }) };
   const diver = await store.getDiver(diverId);
-  const p = profilPublic(diver, await store.listDives(diverId), await store.listCertifications(diverId));
+  const toutes = await store.listDives(diverId);
+  const p = profilPublic(diver, toutes, await store.listCertifications(diverId));
+  const parId = new Map(toutes.map(d => [d.id, d]));
+  // Le lien à mettre en QR code : celui de la page (visiteur) ou mon lien de partage.
+  const enPartage = document.documentElement.classList.contains('partage');
+  const monPartage = enPartage ? null : (await store.getSettings()).partage;
+  const lienQr = enPartage ? location.href.split('#')[0] : null;
   let carte = null;
   const wrap = el('div.cv');
   let langue = lireLangue();
@@ -299,19 +305,21 @@ export async function cvView() {
         el('a.cv-urgence-tel', { href: `tel:${String(diver.urgTel).replace(/[^\d+]/g, '')}` },
           `🆘 ${[diver.urgPrenom, diver.urgNom].filter(Boolean).join(' ')}${diver.urgLien ? ` (${diver.urgLien})` : ''} · `, el('b', { text: diver.urgTel }))) : null);
 
-    // Sur le lien partagé : le QR code, pour que d'autres retrouvent le carnet.
-    const qr = document.documentElement.classList.contains('partage')
-      ? el('button.btn.sm.ghost', { type: 'button', text: '📱 QR code', onclick: async () => {
-          const { qrSvg } = await import('../partage.js');
-          const url = location.href.split('#')[0];
-          const svg = await qrSvg(url);
-          const { openModal } = await import('../lib.js');
-          openModal(close => el('div', { style: { textAlign: 'center' } },
-            el('h3', { text: langue === 'en' ? 'Scan to open this logbook' : 'Scanne pour ouvrir ce carnet' }),
-            el('div.partage-qr', { html: svg, style: { margin: '10px auto' } }),
-            el('div.hint', { text: url }),
-            el('button.btn.primary', { type: 'button', text: 'OK', onclick: close })));
-        } }) : null;
+    // Le QR code du carnet, toujours là : un petit aperçu, en grand au toucher.
+    const vignette = el('span.cv-qr-mini');
+    const qr = el('button.btn.sm.ghost.cv-qr', { type: 'button', title: langue === 'en' ? 'QR code of this logbook' : 'QR code du carnet', onclick: async () => {
+      if (!enPartage) return (await import('./qr-partage.js')).ouvrirQrPartage();
+      const { qrSvg } = await import('../partage.js');
+      const svg = await qrSvg(lienQr);
+      openModal(close => el('div', { style: { textAlign: 'center' } },
+        el('h3', { text: langue === 'en' ? 'Scan to open this logbook' : 'Scanne pour ouvrir ce carnet' }),
+        el('div.partage-qr.grand', { html: svg }),
+        el('div.hint', { text: lienQr }),
+        el('button.btn.primary', { type: 'button', text: 'OK', onclick: close })));
+    } }, vignette, 'QR code');
+    if (lienQr || monPartage?.siteId || monPartage?.gistId) {
+      import('../partage.js').then(async m => { vignette.innerHTML = await m.qrSvg(lienQr || m.lienPartage(monPartage)); }).catch(() => {});
+    }
     wrap.replaceChildren(
       el('div.cv-barre', {}, langues, copier, qr),
       el('div.cv-carte', {}, infos, boiteCarte || el('div.cv-monde.vide')));
@@ -351,9 +359,8 @@ export async function cvView() {
         const taille = 24 + Math.min(16, n);
         L.marker([a.lat, a.lng], { icon: L.divIcon({ className: 'cv-repere', html: `<span>${n}</span>`, iconSize: [taille, taille] }) })
           .bindTooltip(`${code ? drapeau(code) + ' ' : ''}${noms.slice(0, 3).join(' · ')}${noms.length > 3 ? '…' : ''}` || String(n), { direction: 'top' })
-          .on('click', () => {
-            if (a.lieux.length > 1) carte.flyToBounds(a.lieux.map(l => [l.lat, l.lng]), { padding: [40, 40], maxZoom: 12, duration: 0.5 });
-          })
+          // Au toucher : la liste des plongées faites là.
+          .on('click', () => listeDuRepere(a))
           .addTo(couche);
       });
     };
@@ -361,6 +368,38 @@ export async function cvView() {
     carte.on('zoomend', placer);
     placer();
     setTimeout(() => carte && carte.invalidateSize(), 120);
+  }
+
+  /** Les plongées d'un repère de la carte, par lieu ; une plongée s'ouvre au toucher. */
+  function listeDuRepere(a) {
+    const en = langue === 'en';
+    const loc = LOCALES[langue] || 'fr-FR';
+    const jour = iso => (iso ? new Date(`${iso}T12:00:00`).toLocaleDateString(loc, { day: 'numeric', month: 'short', year: 'numeric' }) : '?');
+    // Un même lieu noté à quelques mètres près : une seule entrée.
+    const parNom = new Map();
+    for (const l of a.lieux) {
+      const cle = (l.nom || '').trim().toLowerCase() || `${l.lat},${l.lng}`;
+      const g = parNom.get(cle) || parNom.set(cle, { ...l, plongees: [] }).get(cle);
+      g.plongees.push(...l.plongees);
+    }
+    const lieux = [...parNom.values()].map(l => ({ ...l, dives: l.plongees.map(id => parId.get(id)).filter(Boolean)
+      .sort((x, y) => String(y.date).localeCompare(String(x.date))) }))
+      .sort((x, y) => y.dives.length - x.dives.length);
+    openModal(close => el('div.cv-repere-liste', {},
+      el('h3', { text: `${[...new Set(lieux.map(l => l.pays).filter(Boolean))].slice(0, 6).map(drapeau).join('')} ${a.n} ${en ? (a.n > 1 ? 'dives' : 'dive') : (a.n > 1 ? 'plongées' : 'plongée')}`
+        + `${lieux.length > 1 ? ` · ${lieux.length} ${en ? 'spots' : 'lieux'}` : ` · ${lieux[0].nom || ''}`}` }),
+      ...lieux.map(l => el('details', { open: lieux.length === 1 || lieux.length <= 3 },
+        el('summary', {}, l.pays ? `${drapeau(l.pays)} ` : '', el('b', { text: l.nom || (en ? 'Unnamed spot' : 'Lieu sans nom') }), ` · ${l.dives.length}`),
+        ...l.dives.map(d => el('button.cv-plongee', { type: 'button', onclick: async () => {
+          close(); (await import('../apercu.js')).apercuPlongee(d.id);
+        } },
+          el('span.cv-plongee-num', { text: d.numero != null ? `n°${d.numero}` : '' }),
+          el('span', { text: [jour(d.date), d.site, d.profMax ? `${d.profMax} m` : '', d.dureeMin ? `${d.dureeMin} min` : ''].filter(Boolean).join(' · ') }))))),
+      el('div.btn-row', {},
+        lieux.length > 1 ? el('button.btn.sm.ghost', { type: 'button', text: en ? '🔍 Zoom in' : '🔍 Zoomer', onclick: () => {
+          close(); carte?.flyToBounds(lieux.map(l => [l.lat, l.lng]), { padding: [40, 40], maxZoom: 12, duration: 0.5 });
+        } }) : null,
+        el('button.btn.sm.primary', { type: 'button', text: en ? 'Close' : 'Fermer', onclick: close }))));
   }
 
   const rendreTout = () => { rendre(); requestAnimationFrame(poserCarte); };
