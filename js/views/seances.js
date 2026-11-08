@@ -462,7 +462,12 @@ export async function seanceFormView({ id } = {}) {
 
   if (s.samples?.length) wrap.append(el('div.card', {}, el('div.lbl', { text: 'Profil (montre)' }), graphiquePlongee(s.samples, { dive: s })));
   // Les vidéos de la séance (pCloud) : une fosse, un test caméra en piscine…
-  if (!nouvelle) wrap.append(sectionVideos(s, [], { sauver: async x => { const f = await store.getSeance(x.id); await store.saveSeance({ ...(f || x), videoDossier: x.videoDossier ?? null }); } }));
+  if (!nouvelle) wrap.append(sectionVideos(s, [], { sauver: async x => {
+    // Seulement les liens vidéo : le reste du formulaire part avec « Enregistrer ».
+    const f = { ...(await store.getSeance(x.id) || x) };
+    for (const k of ['videoDossier', 'videoDossiers', 'videoSans', 'videosRetirees']) { if (x[k] === undefined) delete f[k]; else f[k] = x[k]; }
+    await store.saveSeance(f);
+  } }));
   if (s.source === 'plongee') wrap.append(el('div.hint', { text: 'Rangée ici depuis le carnet de plongées.' }));
   else if (s.source === 'bluetooth') wrap.append(el('div.hint', { text: 'Importée de la montre en Bluetooth.' }));
 

@@ -61,6 +61,20 @@ check('pas de dossier ce jour-là', V.videosDePlongee({ date: '2020-01-01' }, do
   check('… sauf si on le relie à la main', V.videosDePlongee({ ...plongee, videoDossier: 10 }, dossiers, [], { autres: { 10: 'Test caméra' } })?.dossier.folderid === 10);
 }
 
+// Plusieurs dossiers, retrait, vidéos retirées une à une
+{
+  const p = { id: 'p', date: '2026-08-30', heureImmersion: '12:38' };
+  const deux = { ...p, ...V.avecDossier(p, 20) };
+  const v2 = V.videosDePlongee({ ...deux, ...V.avecDossier(deux, 10) }, dossiers, []);
+  check('plusieurs dossiers sur une plongée', v2.dossiers.map(x => x.folderid).join() === '20,10' && v2.fichiers.length === 4 && !v2.auto);
+  const sans = { ...p, ...V.sansDossier(p, 10) };
+  check('retirer le dossier trouvé à la date', V.videosDePlongee(sans, dossiers, []) === null && sans.videoSans.includes('10'));
+  check('le relier de nouveau efface le retrait', V.videosDePlongee({ ...sans, ...V.avecDossier(sans, 10) }, dossiers, [])?.dossier.folderid === 10);
+  const r = V.videosDePlongee({ ...p, videosRetirees: ['101'] }, dossiers, []);
+  check('vidéo retirée une à une', r.fichiers.map(f => f.fileid).join() === '102' && r.retirees === 1);
+  check('ancien format (un seul dossier) toujours lu', V.dossiersLies({ videoDossier: 10 }).join() === '10');
+}
+
 // API simulée : le lien est en fait américain, le serveur européen répond 7001.
 const appels = [];
 const http = async url => {

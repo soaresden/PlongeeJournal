@@ -119,30 +119,55 @@ export function dossiersDates(racine) {
 
 /** L'heure de début d'une plongée (heureImmersion) ou d'une séance (heure). */
 const heureDe = d => d?.heureImmersion || d?.heure || '';
+const meme = (a, b) => String(a) === String(b);
+
+/** Les dossiers reliés à la main à une plongée ou une séance (ancien format : un seul). */
+export const dossiersLies = d => (d?.videoDossiers?.length ? d.videoDossiers
+  : d?.videoDossier != null && d.videoDossier !== '' ? [d.videoDossier] : []);
+
+/** Relier un dossier de plus (patch à appliquer). */
+export function avecDossier(d, folderid) {
+  return { videoDossiers: [...new Set([...dossiersLies(d).map(String), String(folderid)])],
+    videoDossier: undefined, videoSans: (d.videoSans || []).filter(x => !meme(x, folderid)) };
+}
+
+/** Retirer un dossier, qu'il ait été relié à la main ou trouvé à la date. */
+export function sansDossier(d, folderid) {
+  return { videoDossiers: dossiersLies(d).filter(x => !meme(x, folderid)), videoDossier: undefined,
+    videoSans: [...new Set([...(d.videoSans || []).map(String), String(folderid)])] };
+}
 
 /**
- * Les vidéos d'une plongée ou d'une séance : le dossier lié à la main,
- * sinon celui de sa date (sauf un dossier mis de côté : test caméra…).
+ * Les vidéos d'une plongée ou d'une séance : les dossiers reliés à la
+ * main, sinon celui de sa date (sauf un dossier mis de côté — test
+ * caméra… —, retiré de cette sortie, ou relié à la main à une autre).
  * Deux sorties le même jour : si les noms des fichiers donnent l'heure,
- * chacune ne garde que les siens.
+ * chacune ne garde que les siens. Les vidéos retirées une à une
+ * (`videosRetirees`) ne s'affichent pas.
  * @param {object} dive  plongée ou séance
  * @param {Array} toutes plongées et séances (pour le partage d'un même jour)
  * @param {{autres?:object}} options  dossiers mis de côté : { folderid: libellé }
- * @returns {{dossier, fichiers, parHeure:boolean}|null}
+ * @returns {{dossier, dossiers, fichiers, retirees, parHeure:boolean, auto:boolean}|null}
  */
 export function videosDePlongee(dive, dossiers, toutes = [], { autres = {} } = {}) {
   if (!dive || !dossiers?.length) return null;
-  const dossier = dive.videoDossier
-    ? dossiers.find(x => String(x.folderid) === String(dive.videoDossier))
-    : dossiers.find(x => x.date === dive.date && !(String(x.folderid) in (autres || {}))
-      && !toutes.some(d => d.id !== dive.id && String(d.videoDossier) === String(x.folderid)));
-  if (!dossier) return null;
-  let fichiers = dossier.fichiers;
+  const lies = dossiersLies(dive);
+  const sans = (dive.videoSans || []).map(String);
+  let choisis = lies.map(id => dossiers.find(x => meme(x.folderid, id))).filter(Boolean);
+  const auto = !lies.length;
+  if (auto) {
+    const x = dossiers.find(y => y.date === dive.date && !(String(y.folderid) in (autres || {}))
+      && !sans.includes(String(y.folderid))
+      && !toutes.some(d => d.id !== dive.id && dossiersLies(d).some(id => meme(id, y.folderid))));
+    choisis = x ? [x] : [];
+  }
+  if (!choisis.length) return null;
+  let fichiers = choisis.flatMap(x => x.fichiers);
   let parHeure = false;
-  const memeJour = toutes.filter(d => d.date === dive.date && d.id !== dive.id && !d.videoDossier && /^\d\d:\d\d/.test(heureDe(d)));
+  const memeJour = toutes.filter(d => d.date === dive.date && d.id !== dive.id && !dossiersLies(d).length && /^\d\d:\d\d/.test(heureDe(d)));
   const h = s => (/^\d\d:\d\d/.test(s || '') ? Number(s.slice(0, 2)) * 60 + Number(s.slice(3, 5)) : null);
   const debut = h(heureDe(dive));
-  if (!dive.videoDossier && memeJour.length && debut != null) {
+  if (auto && memeJour.length && debut != null) {
     const dates = fichiers.map(f => heureDuNom(f.nom));
     if (dates.filter(Boolean).length >= fichiers.length / 2) {
       const fin = debut + (Number(dive.dureeMin) || 60);
@@ -150,7 +175,10 @@ export function videosDePlongee(dive, dossiers, toutes = [], { autres = {} } = {
       if (garde.length) { fichiers = garde; parHeure = true; }
     }
   }
-  return { dossier, fichiers, parHeure };
+  const retirees = (dive.videosRetirees || []).map(String);
+  const avant = fichiers.length;
+  fichiers = fichiers.filter(f => !retirees.includes(String(f.fileid)));
+  return { dossier: choisis[0], dossiers: choisis, fichiers, retirees: avant - fichiers.length, parHeure, auto };
 }
 
 // --- API publique pCloud ------------------------------------------

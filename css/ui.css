@@ -714,3 +714,19 @@ html.partage .donnees-bandeau, html.partage .donnees-recup, html.partage .donnee
 .video-plongee .lien-texte { color: inherit; }
 .apercu .section > h2 { margin-top: 4px; }
 .fiche > .carnet-videos { column-span: all; }
+/* Choisir plusieurs (appui long) */
+.video-choix-ligne.on { border-color: var(--accent); background: rgba(var(--accent-rgb), .12); }
+.choix-coche { grid-row: span 2; align-self: center; font-size: 18px; }
+.choix-coche:empty { display: none; }
+.video-choix-ligne:has(.choix-coche:not(:empty)) { grid-template-columns: auto auto 1fr; }
+.video-choix-ligne:has(.choix-coche:not(:empty)) small { grid-column: 3; }
+.video-vignette .video-coche { position: absolute; inset: 6px auto auto 6px; width: 24px; height: 24px; border-radius: 50%; display: none;
+  place-items: center; background: var(--accent); color: var(--on-accent, #fff); font-weight: 800; font-size: 13px; }
+.video-vignette.choisie { outline: 3px solid var(--accent); outline-offset: -3px; }
+.video-vignette.choisie .video-coche { display: grid; }
+.video-vignette, .video-dossier { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+.video-selection { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 10px; padding: 8px 10px;
+  border-radius: 12px; background: rgba(var(--accent-rgb), .12); border: 1px solid var(--accent); }
+.video-selection.flottante { position: sticky; bottom: calc(var(--tabbar-h, 64px) + 8px); z-index: 5; background: var(--surface); box-shadow: var(--shadow); }
+.video-dossier.choisie { border-color: var(--accent); background: rgba(var(--accent-rgb), .08); }
+.video-dossiers { display: flex; flex-wrap: wrap; gap: 6px; }
