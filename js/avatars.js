@@ -43,16 +43,15 @@ const enveloppe = (fond, contenu) =>
 const defsMii = `
   <defs>
     <radialGradient id="mPeau" cx=".42" cy=".38" r=".75"><stop offset="0" stop-color="#ffd9bd"/><stop offset=".7" stop-color="#f6bf98"/><stop offset="1" stop-color="#e9a57c"/></radialGradient>
-    <linearGradient id="mCheveux" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4a3122"/><stop offset="1" stop-color="#2a1a11"/></linearGradient>
-    <radialGradient id="mBarbe" cx=".5" cy=".2" r=".9"><stop offset="0" stop-color="#5a3f2e" stop-opacity=".25"/><stop offset=".6" stop-color="#4a3122" stop-opacity=".75"/><stop offset="1" stop-color="#3a2619" stop-opacity=".9"/></radialGradient>
+    <linearGradient id="mCheveux" gradientUnits="userSpaceOnUse" x1="0" y1="12" x2="0" y2="90"><stop offset="0" stop-color="#4a3122"/><stop offset="1" stop-color="#2a1a11"/></linearGradient>
+    <linearGradient id="mBarbe" gradientUnits="userSpaceOnUse" x1="0" y1="104" x2="0" y2="160"><stop offset="0" stop-color="#5a3f2e" stop-opacity=".35"/><stop offset=".45" stop-color="#4a3122" stop-opacity=".85"/><stop offset="1" stop-color="#3a2619"/></linearGradient>
   </defs>`;
 
 function teteMii({ cheveux = true, lunettesFront = false, cagoule = false } = {}) {
   return `
-  <path d="M84 150 h32 v18 h-32 z" fill="#e9a57c"/>
   <ellipse cx="48" cy="104" rx="10" ry="14" fill="#efb38b"/><ellipse cx="152" cy="104" rx="10" ry="14" fill="#efb38b"/>
   <path d="M50 78 C50 44 72 30 100 30 C128 30 150 44 150 78 L150 110 C150 142 128 160 100 160 C72 160 50 142 50 110 Z" fill="url(#mPeau)"/>
-  <path d="M52 108 C54 140 76 160 100 160 C124 160 146 140 148 108 C146 124 134 134 122 133 C114 141 86 141 78 133 C66 134 54 124 52 108 Z" fill="url(#mBarbe)"/>
+  <path d="M50 104 L50 110 C50 142 72 160 100 160 C128 160 150 142 150 110 L150 104 C147 122 135 133 122 132 C114 141 86 141 78 132 C65 133 53 122 50 104 Z" fill="url(#mBarbe)"/>
   <path d="M82 128 C90 122 110 122 118 128 C110 126 90 126 82 128 Z" fill="#3a2619" opacity=".8"/>
   <path d="M85 134 Q100 147 116 134" fill="#fff" stroke="#1d120c" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
   <path d="M101 100 Q95 113 99 117 Q104 119 108 116" fill="none" stroke="#1d120c" stroke-width="3" stroke-linecap="round"/>
@@ -76,6 +75,7 @@ function teteMii({ cheveux = true, lunettesFront = false, cagoule = false } = {}
 }
 
 const corps = (couleur, col = 'rgba(255,255,255,.18)') => `
+  <path d="M86 140 h28 v24 h-28 z" fill="#d9946c"/>
   <path d="M26 200 C30 166 62 156 100 156 C138 156 170 166 174 200 Z" fill="${couleur}"/>
   <path d="M84 158 Q100 170 116 158" fill="none" stroke="${col}" stroke-width="3.5"/>`;
 
