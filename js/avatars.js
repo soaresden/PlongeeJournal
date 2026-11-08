@@ -53,8 +53,10 @@ function teteMii({ cheveux = true, lunettesFront = false, cagoule = false } = {}
   <path d="M50 78 C50 44 72 30 100 30 C128 30 150 44 150 78 L150 110 C150 142 128 160 100 160 C72 160 50 142 50 110 Z" fill="url(#mPeau)"/>
   <path d="M50 104 L50 110 C50 142 72 160 100 160 C128 160 150 142 150 110 L150 104 C147 122 135 131 122 130 L78 130 C65 131 53 122 50 104 Z" fill="url(#mBarbe)"/>
   <path d="M78 133 C80 121 92 118 100 122 C108 118 120 121 122 133 C114 128 106 127 100 128 C94 127 86 128 78 133 Z" fill="#3a2619" opacity=".9"/>
-  <path d="M90 140 Q100 147 110 140" fill="#b9705a"/>
-  <path d="M86 137 Q100 146 114 137" fill="none" stroke="#1d120c" stroke-width="3.4" stroke-linecap="round"/>
+  <path d="M83 133 Q100 155 117 133 Q100 139 83 133 Z" fill="#e7967f"/>
+  <path d="M86 134 Q100 151 114 134 Q100 139 86 134 Z" fill="#5b1a14"/>
+  <path d="M88 135 Q100 139 112 135 L111 138.5 Q100 142 89 138.5 Z" fill="#fff"/>
+  <path d="M93 146 Q100 149 107 146 Q100 144 93 146 Z" fill="#e0747a"/>
   <path d="M101 100 Q95 113 99 117 Q104 119 108 116" fill="none" stroke="#1d120c" stroke-width="3" stroke-linecap="round"/>
   <ellipse cx="80" cy="96" rx="11" ry="9" fill="#fff" stroke="#1d120c" stroke-width="3"/><circle cx="80" cy="96" r="5.5" fill="#1d120c"/><circle cx="82" cy="94" r="1.8" fill="#fff"/>
   <ellipse cx="120" cy="96" rx="11" ry="9" fill="#fff" stroke="#1d120c" stroke-width="3"/><circle cx="120" cy="96" r="5.5" fill="#1d120c"/><circle cx="122" cy="94" r="1.8" fill="#fff"/>
