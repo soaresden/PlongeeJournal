@@ -15,7 +15,7 @@
 // ============================================================
 
 import { el, toast, fmtDuration, uid } from '../lib.js';
-import { store, emptyDive } from '../store.js';
+import { store, emptyDive, repriseDePrecedente } from '../store.js';
 import { navigate } from '../router.js';
 import { fitToDive, mergeDives, profileSvg } from '../fit.js';
 import { paliersDuProfil } from '../profil-analyse.js';
@@ -257,6 +257,15 @@ export async function creerPlongeeImportee(diverId, fusion, { cles, suunto = nul
     if (!dive.type && matin.type) dive.type = matin.type;
     dive.repriseDe = matin.id;
   }
+  // Jour ou nuit, d'après l'heure et le coucher du soleil.
+  if (!dive.type) {
+    const { typeSelonHeure } = await import('../soleil.js');
+    const t = typeSelonHeure(dive);
+    if (t) { dive.type = t.type; dive.typeAuto = true; }
+  }
+  // Sinon (et pour le reste) : les réglages de la plongée précédente.
+  const { patch: reprise, depuis } = repriseDePrecedente(dive, autres);
+  if (depuis) { Object.assign(dive, reprise); dive.repriseDe ||= depuis.id; }
 
   await store.saveDive(dive);
   return dive;

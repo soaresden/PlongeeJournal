@@ -282,8 +282,6 @@ export async function apercuPlongee(id, { retour = null, onClose = null } = {}) 
     el('div.apercu-bloc', {}, el('div.apercu-lbl', { text: 'Palanquée' }), palanquee),
     el('div.apercu-grille', {},
       el('div.apercu-champ.large', {}, el('span', { text: 'Centre de plongée' }), centre),
-      champ('Ce que j’ai fait', saisie('textarea', d.fait, v => maj({ fait: v })), { large: true }),
-      champ('Ce que j’ai vu', saisie('textarea', d.vu, v => maj({ vu: v })), { large: true }),
       champ('Notes', saisie('textarea', d.observations, v => maj({ observations: v })), { large: true })),
     blocAgenda(d.date, lieuDive, v => { maj({ lieuNom: v }); texteSeul = true; majTete(); chercherLieu(); }, {
       cible: d, buddies, exclure: moi ? [fullName(moi)] : [],

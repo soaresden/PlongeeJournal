@@ -463,6 +463,37 @@ export function numerotationAuto(dives) {
   return out;
 }
 
+/** Ce qui se reprend d'une plongée à la suivante (même équipement, en général). */
+export const REPRIS_PRECEDENTE = ['lestage', 'combiType', 'combiMm', 'blocType', 'blocMatiere', 'blocLitres',
+  'materielIds', 'equipement'];
+
+/** La plongée juste avant celle-ci (date, puis heure). */
+export function plongeePrecedente(dive, dives) {
+  const cle = d => `${d.date || ''}T${/^\d\d:\d\d/.test(d.heureImmersion || '') ? d.heureImmersion.slice(0, 5) : '99:99'}`;
+  const moi = cle(dive);
+  let meilleure = null;
+  for (const d of dives) {
+    if (d.id === dive.id || !d.date || cle(d) >= moi) continue;
+    if (!meilleure || cle(d) > cle(meilleure)) meilleure = d;
+  }
+  return meilleure;
+}
+
+/**
+ * Les réglages de la plongée précédente, pour ce qui est vide ici.
+ * @returns {{patch:object, depuis:object|null, cles:string[]}}
+ */
+export function repriseDePrecedente(dive, dives) {
+  const avant = plongeePrecedente(dive, dives);
+  const patch = {}, cles = [];
+  if (!avant) return { patch, depuis: null, cles };
+  const vide = v => v == null || v === '' || (Array.isArray(v) && !v.length) || (typeof v === 'object' && !Array.isArray(v) && !Object.keys(v).length);
+  for (const k of REPRIS_PRECEDENTE) {
+    if (vide(dive[k]) && !vide(avant[k])) { patch[k] = structuredClone(avant[k]); cles.push(k); }
+  }
+  return { patch, depuis: avant, cles };
+}
+
 /** Statistiques d'un carnet — le nombre de plongées n'est jamais saisi. */
 export function computeStats(list, certifications = []) {
   const totalMin = list.reduce((s, d) => s + (Number(d.dureeMin) || 0), 0);

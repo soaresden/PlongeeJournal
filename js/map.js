@@ -166,7 +166,7 @@ export async function resolveResult(r) {
  * @param {Function} onChange  reçoit le patch { lieuNom?, lieuDetail?, lat?, lng?, eau? }
  * @returns {HTMLElement}
  */
-export function locationPicker(value, onChange) {
+export function locationPicker(value, onChange, { aCote = null } = {}) {
   const state = {
     lieuNom:    value.lieuNom || '',
     lieuDetail: value.lieuDetail || '',
@@ -434,9 +434,10 @@ export function locationPicker(value, onChange) {
   };
 
   searchWrap.append(
-    el('label.lbl', { text: 'Lieu de plongée' }),
-    input,
-    results,
+    // Un champ à côté (le site) : sur la même ligne que le lieu.
+    ...(aCote
+      ? [el('div.row.lieu-ligne', {}, el('div.field', {}, el('label.lbl', { text: 'Lieu de plongée' }), input, results), aCote)]
+      : [el('label.lbl', { text: 'Lieu de plongée' }), input, results]),
     el('div.inline', { style: { marginTop: '8px' } }, gpsBtn, clearBtn),
     el('div', { style: { marginTop: '10px' } }, mapBox),
     infoStructures,

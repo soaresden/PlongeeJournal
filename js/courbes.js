@@ -33,6 +33,14 @@ function svg(tag, attrs = {}, ...enfants) {
 
 const fmtMin = s => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`;
 
+/** « 07:50 » + s secondes → « 08:03 ». */
+function heurePlus(hhmm, s) {
+  const m = /^(\d\d):(\d\d)/.exec(hhmm || '');
+  if (!m) return null;
+  const tot = (Number(m[1]) * 60 + Number(m[2]) + Math.round(s / 60)) % 1440;
+  return `${String(Math.floor(tot / 60)).padStart(2, '0')}:${String(tot % 60).padStart(2, '0')}`;
+}
+
 /** Les valeurs d'une série, par instant (null si absente). */
 function valeursSerie(id, pts, conso) {
   if (id === 'sac') return conso.map(c => ({ t: c.t, v: c.sac }));
@@ -66,6 +74,9 @@ export function seriesDisponibles(samples, analyse) {
  * @returns {HTMLElement|null}
  */
 export function graphiquePlongee(samples, { dive = {}, hauteur = 210, choix = null } = {}) {
+  // L'heure d'immersion : l'axe du temps est donné en heures de la journée.
+  const heure = /^\d\d:\d\d/.test(dive?.heureImmersion || '') ? dive.heureImmersion.slice(0, 5)
+    : /^\d\d:\d\d/.test(dive?.heure || '') ? dive.heure.slice(0, 5) : null;
   const pts = pointsValables(samples);
   if (pts.length < 3) return null;
   const analyse = analyserProfil(pts, dive);
@@ -90,7 +101,7 @@ export function graphiquePlongee(samples, { dive = {}, hauteur = 210, choix = nu
   function dessiner() {
     largeur = Math.max(260, Math.round(zone.clientWidth || wrap.clientWidth || 340));
     const W = largeur, H = hauteur;
-    const pad = { l: 34, r: active ? 40 : 10, t: 10, b: 22 };
+    const pad = { l: 34, r: active ? 40 : 10, t: 10, b: heure ? 26 : 22 };
     const w = W - pad.l - pad.r, h = H - pad.t - pad.b;
     const t0 = pts[0].t, t1 = pts.at(-1).t || 1;
     const maxD = Math.max(...pts.map(p => p.d)) || 1;
@@ -110,8 +121,27 @@ export function graphiquePlongee(samples, { dive = {}, hauteur = 210, choix = nu
     const pas = total > 90 ? 20 : total > 40 ? 10 : 5;
     for (let m = pas; m < total; m += pas) {
       const xx = x(t0 + m * 60).toFixed(1);
-      racine.append(svg('line', { x1: xx, y1: pad.t, x2: xx, y2: H - pad.b, class: 'courbe-grille fine' }),
-        svg('text', { x: xx, y: H - 6, class: 'courbe-axe', 'text-anchor': 'middle' }, document.createTextNode(`${m}′`)));
+      racine.append(svg('line', { x1: xx, y1: pad.t, x2: xx, y2: H - pad.b, class: 'courbe-grille fine' }));
+      // Avec l'heure de début, les repères intermédiaires restent en minutes
+      // (les heures de début et de fin sont écrites aux deux bouts).
+      const dureeS = Number(dive?.dureeMin) * 60;
+      const xSortie = x(dureeS > 0 && dureeS < (t1 - t0) ? t0 + dureeS : t1);
+      if (!heure || (x(t0 + m * 60) - pad.l > 44 && Math.abs(xSortie - x(t0 + m * 60)) > 34)) {
+        racine.append(svg('text', { x: xx, y: H - 6, class: 'courbe-axe', 'text-anchor': 'middle' }, document.createTextNode(`${m}′`)));
+      }
+    }
+    if (heure) {
+      // Début et fin de la plongée, en heures, aux deux bouts de l'axe.
+      // La fin : l'heure de sortie, à l'endroit de la sortie (le profil
+      // continue parfois quelques minutes en surface).
+      const duree = Number(dive?.dureeMin) * 60;
+      const tFin = duree > 0 && duree < (t1 - t0) ? t0 + duree : t1;
+      const fin = /^\d\d:\d\d/.test(dive?.heureSortie || '') && tFin !== t1 ? dive.heureSortie.slice(0, 5) : heurePlus(heure, tFin - t0);
+      const xFin = x(tFin);
+      racine.append(
+        svg('text', { x: pad.l, y: H - 6, class: 'courbe-axe courbe-heure', 'text-anchor': 'start' }, document.createTextNode(heure)),
+        svg('line', { x1: xFin, y1: pad.t, x2: xFin, y2: H - pad.b, class: 'courbe-grille courbe-sortie' }),
+        svg('text', { x: Math.min(xFin, W - pad.r), y: H - 6, class: 'courbe-axe courbe-heure', 'text-anchor': xFin > W - pad.r - 20 ? 'end' : 'middle' }, document.createTextNode(fin)));
     }
 
     const ligne = pts.map(p => `${x(p.t).toFixed(1)},${y(p.d).toFixed(1)}`).join(' ');
@@ -169,7 +199,7 @@ export function graphiquePlongee(samples, { dive = {}, hauteur = 210, choix = nu
         pointSerie.setAttribute('cx', x(sv.t)); pointSerie.setAttribute('cy', vy(sv.v)); pointSerie.setAttribute('visibility', 'visible');
       } else pointSerie.setAttribute('visibility', 'hidden');
       const bouts = [
-        el('b', { text: `${fmtMin(p.t - t0)}` }),
+        el('b', { text: heure ? `${heurePlus(heure, p.t - t0)} (${fmtMin(p.t - t0)})` : `${fmtMin(p.t - t0)}` }),
         `${p.d.toFixed(1)} m`,
         Number.isFinite(p.temp) ? `${p.temp.toFixed(1)} °C` : null,
         Number.isFinite(p.pression) ? `${Math.round(p.pression)} bar` : null,

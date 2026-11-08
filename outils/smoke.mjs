@@ -476,7 +476,7 @@ check('fiche : libellé du lieu conservé', detail.includes('Lac de Beaumont-sur
 check('fiche : paliers', detail.includes('3′ à 3 m'), '');
 check('fiche : coordonnées', detail.includes('49.14210'), '');
 check('fiche : chef de palanquée marqué', detail.includes('Jean Moniteur ★'), '');
-check('fiche : comptes-rendus', detail.includes('Remontée assistée') && detail.includes('Brochet'), '');
+check('fiche : « ce que j’ai fait / vu » n’est plus affiché', !detail.includes('Remontée assistée') && !detail.includes('Brochet'), '');
 check('fiche : plus de tampon (la page du carnet suffit)', !document.querySelector('#view .stamp'), '');
 
 // Les actions se lisent en haut de fiche, pas au bout d'un long défilement.
@@ -809,14 +809,25 @@ check('formulaire : numéro automatique, non saisi', !!document.querySelector('#
     puces.some(t => /Paul Martin/.test(t)) && !puces.some(t => /Jean/.test(t)), puces.join(' | '));
   document.querySelector('#modalRoot').innerHTML = '';
 }
-check('formulaire : section Bouteille',
-  [...document.querySelectorAll('#view .sec-titre')].some(x => /Bouteille/.test(x.textContent)),
+check('formulaire : la bouteille est dans « Mon matériel », avec le plongeur dessiné',
+  [...document.querySelectorAll('#view .lbl')].some(x => /Bouteille/.test(x.textContent))
+    && !!document.querySelector('#view .schema-plongeur svg [data-piece="bloc"]'),
   '');
+{
+  // Un toucher sur une pièce du schéma l'ajoute (pastille et dessin).
+  const pastille = [...document.querySelectorAll('#view .schema-pieces .chip')].find(c => /Phare/.test(c.textContent));
+  const avant = pastille?.classList.contains('on');
+  pastille?.click();
+  await tick(20);
+  const apres = [...document.querySelectorAll('#view .schema-pieces .chip')].find(c => /Phare/.test(c.textContent));
+  check('schéma : le phare se coche d’un toucher', apres && apres.classList.contains('on') !== avant
+    && document.querySelector('#view [data-piece="phare"]')?.getAttribute('class') === (avant ? 'absent' : ''), String(avant));
+}
 check('formulaire : gaz par défaut sur Air',
   [...document.querySelectorAll('#view .seg button.on')].some(b => b.textContent === 'Air'),
   [...document.querySelectorAll('#view .seg button.on')].map(b => b.textContent).join(','));
-check('formulaire : chips objectifs cochées',
-  [...document.querySelectorAll('#view .chip.on')].some(c => c.textContent === 'Épaves'), '');
+check('formulaire : plus de « ce que j’ai fait » (programme, exercices)',
+  ![...document.querySelectorAll('#view .lbl')].some(x => /Au programme|Exercices/.test(x.textContent)), '');
 
 // --- Page du carnet papier ---------------------------------
 check('formulaire : section « Page du carnet papier »',

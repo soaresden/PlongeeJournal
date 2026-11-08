@@ -765,3 +765,15 @@ html.partage .donnees-bandeau, html.partage .donnees-recup, html.partage .donnee
   .import-montre #import-progres { position: static; box-shadow: none; }
   .import-montre .ip-journal { max-height: 14em; }
 }
+.courbe-heure { font-weight: 700; fill: var(--text-dim); font-size: 11px; }
+.courbe-sortie { stroke: var(--text-dim); stroke-dasharray: 4 3; opacity: .6; }
+/* Le plongeur dessiné (Mon matériel) */
+.schema-plongeur { display: grid; grid-template-columns: minmax(130px, 190px) 1fr; gap: 12px; align-items: center; margin-bottom: 12px; }
+.schema-dessin { background: radial-gradient(circle at 50% 30%, rgba(var(--accent-rgb), .14), transparent 70%); border-radius: 16px; }
+.schema-svg { width: 100%; height: auto; display: block; cursor: pointer; }
+.schema-svg .absent { opacity: .06; }
+.schema-svg { color: var(--text); }
+.schema-svg [data-piece]:hover { filter: brightness(1.15); }
+.schema-legende { margin-top: 0; font-weight: 600; color: var(--text-dim); }
+.schema-pieces { margin-top: 8px; }
+@media (max-width: 380px) { .schema-plongeur { grid-template-columns: 120px 1fr; } }

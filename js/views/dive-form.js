@@ -7,8 +7,9 @@ import { el, toast, num, fullName, openModal, fileToDataURL, confirmBox, todayIS
 import { editeurPalanquee, champCentre, propositionsTexte } from '../palanquee.js';
 import { store, emptyDive, emptyBuddy, reconcileTimes, validerPlongee,
          appliquerOptionsAuto, niveauCourant, niveauALaDate, libelleGaz, pmuNitrox,
-         libelleMateriel, consommation } from '../store.js';
+         libelleMateriel, consommation, repriseDePrecedente } from '../store.js';
 import { editerMateriel, ligneMateriel } from './materiel.js';
+import { schemaPlongeur } from './schema-plongeur.js';
 import { idsEquipes, combiEquipee } from '../equipement.js';
 import { DIVE_TYPES, DIVE_OPTIONS, DIVE_GOALS, PALANQUEE_MODES,
          OPTIONS_AUTO, VISIBILITES, COMBI_TYPES, COMBI_MM, NIVEAUX,
@@ -506,6 +507,22 @@ function ajoutManuel(dive, cat, onChange) {
   });
 }
 
+/** Le lestage : une liste, de 0 à 30 kg (une valeur ancienne en texte libre reste proposée). */
+function choixLestage(valeur, surChoix) {
+  const sel = el('select');
+  sel.append(el('option', { value: '', text: '— non noté —' }));
+  const valeurs = [];
+  for (let k = 0; k <= 20; k++) valeurs.push(String(k));
+  for (let k = 22; k <= 30; k += 2) valeurs.push(String(k));
+  const actuelle = String(valeur ?? '').trim();
+  const nombre = /^\d+([.,]\d+)?(\s*kg)?$/i.test(actuelle) ? String(parseFloat(actuelle.replace(',', '.'))) : null;
+  if (actuelle && !valeurs.includes(nombre || actuelle)) sel.append(el('option', { value: actuelle, text: actuelle }));
+  valeurs.forEach(v => sel.append(el('option', { value: v, text: `${v} kg` })));
+  sel.value = nombre ?? actuelle;
+  sel.onchange = () => surChoix(sel.value);
+  return sel;
+}
+
 function debounceLocal(fn, ms) {
   let t;
   return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); };
@@ -566,10 +583,17 @@ export async function diveFormView({ id, ancienne = false }) {
 
   let buddies = await store.listBuddies();
   const profil = await store.getDiver(diverId);       // pour le matériel personnel
-  const set = patch => Object.assign(dive, patch);
+  // Le schéma du plongeur suit chaque changement (combinaison, plombs, bloc…).
+  let majSchema = null;
+  const set = patch => { Object.assign(dive, patch); majSchema?.(); };
 
   // Nouvelle plongée : ce que je porte (l'« équipé » du profil) est
   // repris tel quel, combinaison comprise. Ajustable ensuite.
+  // Par défaut, les réglages de la plongée précédente (lestage,
+  // combinaison, bloc, matériel) pour ce qui est encore vide.
+  const repriseMat = repriseDePrecedente(dive, await store.listDives(diverId));
+  Object.assign(dive, repriseMat.patch);
+
   if (isNew && profil) {
     if (dive.materielIds == null) dive.materielIds = idsEquipes(profil);
     const combi = combiEquipee(profil);
@@ -663,6 +687,18 @@ export async function diveFormView({ id, ancienne = false }) {
   niveauSel.onchange = () => set({ niveau: niveauSel.value });
   dateInput.addEventListener('change', majAuto);
 
+  // Jour ou nuit : d'après l'heure et le coucher du soleil au lieu de la
+  // plongée, tant que le type n'a pas été choisi à la main.
+  const typeHint = el('div.hint');
+  if (!dive.type || dive.typeAuto) {
+    const { typeSelonHeure } = await import('../soleil.js');
+    const t = typeSelonHeure(dive);
+    if (t) {
+      dive.type = t.type; dive.typeAuto = true;
+      typeHint.textContent = `✨ D’après l’heure : ${t.raison}. Touche un autre type pour le changer.`;
+    }
+  }
+
   form.append(section('La plongée', { icone: '🤿', ouvert: true },
     el('div.row', {},
       field('N° (automatique)', numeroInput),
@@ -670,7 +706,8 @@ export async function diveFormView({ id, ancienne = false }) {
     ),
     field('Type de plongée',
       segmented(DIVE_TYPES.map(t => ({ id: t, label: t.replace('Exploration de ', 'Explo ') })),
-                dive.type, v => { set({ type: v }); majExercices(); })),
+                dive.type, v => { set({ type: v, typeAuto: false }); typeHint.textContent = ''; majExercices(); }),
+      typeHint),
     field('Mon niveau ce jour-là', niveauSel, 'À changer seulement pour une plongée en formation.'),
   ));
 
@@ -743,6 +780,7 @@ export async function diveFormView({ id, ancienne = false }) {
     }
   }
 
+  const champSite = input('text', dive.site, v => set({ site: v }), { placeholder: 'Banana Reef, épave du Thistlegorm…' });
   const picker = locationPicker(dive, patch => {
     const avait = dive.eau;
     set(patch);
@@ -752,12 +790,11 @@ export async function diveFormView({ id, ancienne = false }) {
     if (patch.lat != null) reconnaitreLePoint();
     else if ('lat' in patch) renderWater();
     majOptionsAuto();
-  });
+  }, { aCote: field('Site', champSite) });
 
   // Le nom deviné d'après le GPS de la montre : on le dit, et un nom
   // tapé à la main le remplace.
   const lieuOrigine = el('div.hint.lieu-auto', { hidden: true });
-  const champSite = input('text', dive.site, v => set({ site: v }), { placeholder: 'Banana Reef, épave du Thistlegorm…' });
   function majOrigine() {
     lieuOrigine.hidden = !dive.lieuAuto || !dive.lieuNom;
     lieuOrigine.textContent = dive.lieuAuto === 'carnet'
@@ -780,7 +817,6 @@ export async function diveFormView({ id, ancienne = false }) {
   const blocLieu = section('Lieu', { icone: '📍', ouvert: true },
     lieuOrigine,
     picker,
-    field('Site (facultatif)', champSite),
     el('div', { style: { marginTop: '10px' } },
       field('Nature de l’eau', waterSeg, waterInfo)),
   );
@@ -839,11 +875,12 @@ export async function diveFormView({ id, ancienne = false }) {
   const resumeChiffres = [dive.dureeMin ? `${dive.dureeMin} min` : null, dive.profMax ? `${dive.profMax} m` : null,
     dive.heureImmersion || null].filter(Boolean).join(' · ');
   const secProfil = section('Les chiffres', { icone: '📉', ouvert: !importee, resume: resumeChiffres },
-    el('div.row', {}, champDuree, champProfMax),
-    el('div.row', { style: { marginTop: '4px' } },
-      field('Immersion (si connue)', inTime),
-      field('Sortie (si connue)', outTime),
+    el('div.row-3', {},
+      field('Immersion', inTime),
+      champDuree,
+      field('Fin de plongée', outTime),
     ),
+    el('div.row', { style: { marginTop: '4px' } }, champProfMax, el('div')),
     el('div.hint', { text: 'Si tu donnes les deux horaires, la durée se calcule. '
       + 'Sinon la durée seule suffit — et l’heure de sortie se déduit si tu connais l’immersion.' }),
   );
@@ -991,31 +1028,17 @@ export async function diveFormView({ id, ancienne = false }) {
     ressentis.append(b);
   });
 
-  // Les exercices ne servent qu'en formation : affichés pour une plongée
-  // d'enseignement, ou s'il y en a déjà de cochés.
-  const zoneExercices = field('Exercices',
-    chipGroup(EXERCICES, dive.exercices, (item, on) => {
-      dive.exercices = on ? [...dive.exercices, item] : dive.exercices.filter(x => x !== item);
-    }));
-  function majExercices() {
-    zoneExercices.hidden = !(dive.type === 'Enseignement' || dive.exercices?.length);
-  }
-  majExercices();
+  // « Ce que j'ai fait / vu » n'est plus demandé : seulement des notes.
+  // (Ce qui avait été saisi reste dans les données, intact.)
+  function majExercices() { /* plus d'exercices à afficher */ }
 
-  const unMot = textarea(dive.observations, v => set({ observations: v }), 'Un mot si tu veux : ce qui t’a marqué, à retenir…');
-  unMot.rows = 2;
+  const unMot = textarea(dive.observations, v => set({ observations: v }), 'Ce qui t’a marqué, à retenir…');
+  unMot.rows = 3;
 
   form.append(section('Ma plongée', { icone: '✨', ouvert: true },
     field('Ma note', etoiles),
     field('Comment c’était', ressentis),
-    field('Au programme',
-      chipGroup(DIVE_GOALS, dive.objectifs, (item, on) => {
-        dive.objectifs = on ? [...dive.objectifs, item] : dive.objectifs.filter(x => x !== item);
-      })),
-    zoneExercices,
-    field('Un mot', unMot),
-    // L'ancien texte libre « ce que j'ai fait » reste modifiable s'il existe.
-    dive.fait ? field('Ce que j’ai fait (texte)', textarea(dive.fait, v => set({ fait: v }))) : null,
+    field('Notes', unMot),
   ));
 
   form.append(blocConditions, secProfil);
@@ -1198,9 +1221,8 @@ export async function diveFormView({ id, ancienne = false }) {
 
   majConso();
 
-  form.append(section('Bouteille', { icone: '🛢', ouvert: false,
-    resume: [libelleGaz(dive), dive.blocLitres ? `${dive.blocLitres} L` : null,
-      dive.pressionDepart && dive.pressionFin ? `${dive.pressionDepart}→${dive.pressionFin} bar` : null].filter(Boolean).join(' · ') },
+  const blocBouteille = el('div', {},
+    el('div.lbl', { style: { marginTop: '18px' }, text: '🛢 Bouteille' }),
     field('Gaz respiré', gazZone),
     el('div.row-3', { style: { marginTop: '14px' } },
       field('Type', blocTypeSel),
@@ -1214,7 +1236,7 @@ export async function diveFormView({ id, ancienne = false }) {
         numInput(dive.pressionFin, v => { set({ pressionFin: v }); majConso(); })),
     ),
     zoneConso,
-  ));
+  );
 
   // --- Matériel personnel, repris du profil ---
   //
@@ -1229,6 +1251,7 @@ export async function diveFormView({ id, ancienne = false }) {
    * créer une à la volée — elle rejoint alors aussi la fiche plongeur.
    */
   function rendreEquipement() {
+    queueMicrotask(() => majSchema?.());
     equipZone.innerHTML = '';
     dive.materielIds ||= [];
 
@@ -1318,22 +1341,41 @@ export async function diveFormView({ id, ancienne = false }) {
 
   rendreEquipement();
 
-  form.append(section('Mon matériel', { icone: '🎽', ouvert: false,
+  // Le plongeur dessiné : il suit les choix, et un toucher sur une pièce
+  // (phare, palmes, stab…) l'ajoute ou la retire.
+  const schema = schemaPlongeur(dive, materielProfil, (piece, on) => {
+    const duType = materielProfil.filter(m => m.type === piece);
+    dive.materielIds ||= [];
+    dive.equipement = { ...(dive.equipement || {}) };
+    if (duType.length) {
+      // Une pièce du profil : on l'emporte ou non.
+      dive.materielIds = on ? [...new Set([...dive.materielIds, duType[0].id])]
+        : dive.materielIds.filter(id => !duType.some(m => m.id === id));
+      delete dive.equipement[piece];
+    } else {
+      dive.equipement[piece] = on;
+    }
+    rendreEquipement();
+    schema.maj();
+  });
+  majSchema = schema.maj;
+
+  form.append(section('Mon matériel', { icone: '🎽', ouvert: true,
     resume: [dive.lestage ? `${String(dive.lestage).replace(/\s*kg$/i, '')} kg` : null, dive.combiType,
-      dive.combiMm ? `${dive.combiMm} mm` : null].filter(Boolean).join(' · ') },
-    field('Lestage', input('text', dive.lestage, v => set({ lestage: v }),
-      { placeholder: '6 kg ceinture + 2 kg poches' })),
-    field('Combinaison', combiSeg),
-    field('Épaisseur', mmSel),
-    el('div.lbl', { style: { marginTop: '18px' }, text: 'Équipement emporté' }),
+      dive.combiMm ? `${dive.combiMm} mm` : null, libelleGaz(dive), dive.blocLitres ? `${dive.blocLitres} L` : null].filter(Boolean).join(' · ') },
+    schema.node,
+    field('Lestage', choixLestage(dive.lestage, v => { set({ lestage: v }); majSchema?.(); })),
+    repriseMat.cles.length ? el('div.hint', { style: { marginTop: '-6px' },
+      text: `Repris de la n°${repriseMat.depuis.numero ?? '?'} (${repriseMat.cles.map(k => ({ lestage: 'lestage', combiType: 'combinaison',
+        combiMm: 'épaisseur', blocType: 'bloc', blocMatiere: 'bloc', blocLitres: 'bloc', materielIds: 'matériel', equipement: 'matériel' }[k]))
+        .filter((x, i, t) => t.indexOf(x) === i).join(', ')}) : change ce qui ne colle pas.` }) : null,
+    el('div.row', {}, field('Combinaison', combiSeg), field('Épaisseur', mmSel)),
+    blocBouteille,
+    el('div.lbl', { style: { marginTop: '18px' }, text: 'Équipement emporté (détail)' }),
     equipZone,
   ));
 
 
-  // ---------- 9. Ce que j'ai vu ----------
-  const nbVus = ['vuFaune', 'vuFlore', 'vuEpaves'].reduce((n, k) => n + (dive[k]?.length || 0), 0);
-  form.append(section('Ce que j’ai vu', { icone: '🐟', ouvert: false, resume: nbVus ? `${nbVus}` : '' },
-    observationsPicker(dive)));
 
   // ---------- Actions ----------
   const alerte = el('div.card.alerte', { hidden: true });

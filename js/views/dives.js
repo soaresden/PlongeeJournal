@@ -545,7 +545,7 @@ export async function diveView({ id }) {
 
   // ---------- Ma plongée : ce qui a été coché ----------
   const ressentis = (d.ressenti || []).map(id => RESSENTIS.find(r => r.id === id)).filter(Boolean);
-  const coches = [...(d.objectifs || []), ...(d.exercices || []), d.objectifAutre].filter(Boolean);
+  const coches = [];   // « ce que j'ai fait » n'est plus affiché : seulement les notes
   const options = d.options || [];
   if (d.note || ressentis.length || coches.length || options.length || d.observations) {
     wrap.append(el('div.section', {},
@@ -636,41 +636,6 @@ export async function diveView({ id }) {
   );
   if (matCard.children.length) {
     wrap.append(el('div.section', {}, el('h2', { text: 'Matériel' }), matCard));
-  }
-
-  // Ce que j'ai vu
-  const categories = [
-    ['🐟 Faune', d.vuFaune], ['🌿 Flore', d.vuFlore], ['⚓ Épaves', d.vuEpaves],
-  ].filter(([, v]) => v?.length);
-
-  if (categories.length) {
-    wrap.append(el('div.section', {},
-      el('h2', { text: 'Ce que j’ai vu' }),
-      ...categories.map(([titre, liste]) => el('div.card', {},
-        el('div.lbl', { text: `${titre} · ${liste.length}` }),
-        el('div.obs-grid', {}, liste.map(o => el('div.obs', {},
-          o.photo
-            ? el('img', { src: o.photo, alt: o.nom, loading: 'lazy' })
-            : el('div.obs-noimg', { text: titre.split(' ')[0] }),
-          el('div.obs-nom', { text: o.nom }),
-          o.sci && o.sci !== o.nom ? el('div.obs-sci', { text: o.sci }) : null,
-        ))),
-      )),
-    ));
-  }
-
-  // Comptes-rendus
-  const notes = [
-    ['Ce que j’ai fait', d.fait],
-    ['Note', d.vu],           // ancien champ libre, conservé s'il est rempli
-  ].filter(([, v]) => v);
-  if (notes.length) {
-    wrap.append(el('div.section', {},
-      el('h2', { text: 'Comptes-rendus' }),
-      ...notes.map(([k, v]) => el('div.card', {},
-        el('div.lbl', { text: k }),
-        el('div.prose', { text: v }))),
-    ));
   }
 
   return { title: `Plongée n°${d.numero ?? ''}`, node: wrap, back: true };

@@ -61,6 +61,18 @@ export async function entretenir({ analyser = null, nommer = null } = {}) {
   }
   if (chefs.length) await store.savePlongees(chefs).catch(() => {});
 
+  // Jour ou nuit, pour les plongées sans type (d'après l'heure et le soleil).
+  {
+    const { typeSelonHeure } = await import('./soleil.js');
+    const typees = [];
+    for (const d of await store.listDives(diverId)) {
+      if (d.type || d.typeAuto === false) continue;
+      const t = typeSelonHeure(d);
+      if (t) typees.push({ ...d, type: t.type, typeAuto: true });
+    }
+    if (typees.length) await store.savePlongees(typees).catch(() => {});
+  }
+
   const paliers = paliersACorriger(await store.listDives(diverId));
   if (paliers.length) await store.savePlongees(paliers).catch(() => {});
 
