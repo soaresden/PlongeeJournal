@@ -86,6 +86,14 @@ export function badgeDonnees(b) {
   return el(`span.donnees.${b.niveau}`, { title: b.manque.length ? `Manque : ${b.manque.join(', ')}` : 'Tout y est' }, ...bouts);
 }
 
+/** Le gaz d'un coup d'œil : « Air », « EAN 32 » (nitrox), « TX 21/35 ». */
+export function badgeGaz(d) {
+  if (d.gazType === 'nitrox') return el('span.badge.gaz.nitrox', { title: `Nitrox ${d.gazO2 || ''} % d’oxygène`, text: `EAN ${d.gazO2 || '?'}` });
+  if (d.gazType === 'trimix') return el('span.badge.gaz.trimix', { title: 'Trimix', text: `TX ${d.gazO2 || '?'}/${d.gazHe || '?'}` });
+  if (d.gazType === 'recycleur') return el('span.badge.gaz.trimix', { text: 'CCR' });
+  return el('span.badge.gaz.air', { title: 'Air', text: 'Air' });
+}
+
 function typeBadge(type = '') {
   const t = type.toLowerCase();
   const cls = t.includes('nuit') ? 'nuit' : t.includes('enseign') ? 'ens' : t.includes('explo') ? 'jour' : 'tek';
@@ -231,6 +239,7 @@ export async function divesView() {
     const hay = [
       d.lieuNom, d.lieuDetail, d.site, d.lieu, d.type, d.fait, d.vu, d.observations, d.notes,
       d.objectifAutre, ...(d.options || []), ...(d.objectifs || []),
+      d.gazType === 'nitrox' ? `nitrox ean${d.gazO2 || ''} ean ${d.gazO2 || ''}` : d.gazType === 'trimix' ? 'trimix' : 'air',
       ...(d.buddyIds || []).map(buddyName), String(d.numero ?? ''),
     ].join(' ').toLowerCase();
     return hay.includes(q);
@@ -281,7 +290,7 @@ export async function divesView() {
       el('div.dive-main', {},
         el('div.dive-title', { text: d.lieuNom || d.site || 'Lieu non précisé' }),
         el('div.dive-sub', {}, fmtDate(d.date), d.heureImmersion ? ` · ${d.heureImmersion}` : ''),
-        el('div.dive-tags', {}, etiquetteAmbiance(d), d.type ? typeBadge(d.type) : null,
+        el('div.dive-tags', {}, etiquetteAmbiance(d), d.type ? typeBadge(d.type) : null, badgeGaz(d),
           bilans.get(d.id) ? badgeDonnees(bilans.get(d.id)) : null,
           aDesVideos(d) ? el('span.donnees', { title: 'Vidéos dans pCloud', text: '🎬' }) : null,
           verif.ids.has(d.id) ? el('span.donnees.a-verifier', { title: 'À vérifier', text: '⚠' }) : null),
@@ -486,7 +495,7 @@ export async function diveView({ id }) {
     el('div.fiche-tete-texte', {},
       el('div.fiche-lieu', { text: d.lieuNom || d.site || 'Lieu non précisé' }),
       el('div.fiche-date', { text: fmtDateLong(d.date) }),
-      el('div.dive-tags', {}, etiquetteAmbiance(d), d.type ? typeBadge(d.type) : null),
+      el('div.dive-tags', {}, etiquetteAmbiance(d), d.type ? typeBadge(d.type) : null, badgeGaz(d)),
       el('div.fiche-chiffres', {},
         d.profMax ? el('span', {}, el('b', { text: `${d.profMax} m` }), 'prof. max') : null,
         d.dureeMin ? el('span', {}, el('b', { text: fmtDuration(d.dureeMin) }), 'au fond') : null,

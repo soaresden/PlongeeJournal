@@ -47,6 +47,12 @@ import('./splash.js')
   .then(m => m.ouvrirSplash(PARTAGE_ID ? { signature: () => signatureVisite } : {}))
   .catch(() => document.getElementById('splash-pre')?.remove());
 
+// ---------- Langue : français ou anglais (interrupteur dans la barre du haut) ----------
+import('./langue.js').then(m => {
+  document.getElementById('topbar')?.insertBefore(m.boutonLangue(), document.getElementById('topActions'));
+  m.appliquerLangue();
+}).catch(() => {});
+
 // ---------- Routes ----------
 route('dives',            divesView);
 route('stats',            statsView);
@@ -244,12 +250,16 @@ async function ouvrirPartage() {
   try { cle = sessionStorage.getItem(`plongee-journal:partage:${PARTAGE_ID}`) || ''; } catch { /* privé */ }
   try {
     const { lirePartage } = await import('./partage.js');
-    activerPartage(await lirePartage(PARTAGE_ID, cle));
+    const donnees = await lirePartage(PARTAGE_ID, cle);
+    activerPartage(donnees);
     await initStore();
     booted = true;
     const { store } = await import('./store.js');
     const moi = await store.getDiver(await store.getActiveDiverId());
     signatureVisite = moi?.prenom || '';
+    // « Qui es-tu ? » : prénom, et une plongée faite ensemble (le mot de passe).
+    const { accueilVisiteur } = await import('./views/accueil-visiteur.js');
+    await accueilVisiteur({ id: PARTAGE_ID, proprio: moi?.prenom || 'moi', dives: donnees.dives || [], canal: donnees.partage?.canal || '' });
     afficherBandeau({ classe: 'partage', icone: 'i-carte', duree: 7000,
       titre: `Carnet de ${moi?.prenom || 'plongée'}`, texte: 'Partagé en lecture seule : tu peux tout regarder, rien n’est modifiable.' });
   } catch (e) {
@@ -266,6 +276,15 @@ function entretienDeFond() {
     .then(m => m.entretenir())
     .then(r => {
       if ((r.numeros || r.lieux) && ['dives', 'stats'].includes(currentPath())) navigate(currentPath(), true);
+      // Qui a regardé mon carnet partagé depuis la dernière fois.
+      const vues = (r.visites || []).filter(v => v.ok);
+      if (vues.length) {
+        const noms = [...new Set(vues.map(v => v.prenom).filter(Boolean))];
+        afficherBandeau({ classe: 'ok', icone: 'i-buddies', duree: 12000,
+          titre: `👀 ${noms.slice(0, 3).join(', ')}${noms.length > 3 ? '…' : ''} ${noms.length > 1 ? 'ont' : 'a'} regardé ton carnet`,
+          texte: 'Toutes les visites : Réglages → Partager mon carnet.',
+          action: { label: 'Voir', onclick: () => navigate('reglages') } });
+      }
     })
     .catch(() => {});
 }

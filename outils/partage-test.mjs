@@ -25,9 +25,15 @@ const carnet = {
 
 const inst = P.instantane(carnet, { auteur: 'Denis' });
 const texte = JSON.stringify(inst);
-check('rien de privé : adresse, groupe sanguin, urgence, licences, notes, photos, n° de carte',
-  !['B-', '76 avenue', '0600000000', 'Maman', 'A-20-1', 'L-9', 'secret', 'photos/p.jpg', 'CARTE-123', '"partage":{"gistId"'].some(m => texte.includes(m)),
-  ['B-', '76 avenue', '0600000000', 'Maman', 'A-20-1', 'L-9', 'secret', 'photos/p.jpg', 'CARTE-123'].filter(m => texte.includes(m)).join());
+check('rien de privé : adresse, groupe sanguin, licences, notes, photos, n° de carte',
+  !['B-', '76 avenue', 'A-20-1', 'L-9', 'secret', 'photos/p.jpg', 'CARTE-123', '"partage":{"gistId"'].some(m => texte.includes(m)),
+  ['B-', '76 avenue', 'A-20-1', 'L-9', 'secret', 'photos/p.jpg', 'CARTE-123'].filter(m => texte.includes(m)).join());
+// Demandé exprès : le contact à appeler en cas d'urgence est montré.
+check('le contact d’urgence est montré (demandé)', texte.includes('0600000000') && texte.includes('Maman'));
+{
+  const avecCanal = JSON.stringify(P.instantane(carnet, { auteur: 'Denis', canal: 'pj-abc' }));
+  check('le canal des visites est dans la copie', avecCanal.includes('"canal":"pj-abc"'));
+}
 check('le carnet, lui, est là : plongée, courbe, palanquée, séance, brevet, matériel porté',
   inst.dives.length === 1 && inst.dives[0].samples.length === 1 && inst.buddies[0].prenom === 'Alison' && inst.seances.length === 1
   && inst.certifs[0].nom === 'N3' && inst.divers[0].equipe[0] === 'm' && inst.divers[0].materiel.length === 1);

@@ -259,19 +259,51 @@ async function sectionPartage() {
         el('div', { style: { fontWeight: '650' }, text: '🔗 Un lien en lecture seule' }),
         el('div.hint', { text: 'La personne voit tes plongées, stats, carte, plongeurs et « Qui je suis », sur son téléphone, '
           + 'sans rien installer ni pouvoir modifier. La copie est déposée sur ton site, sous un numéro tiré au hasard. '
-          + 'Restent cachés : les numéros de licence (les tiens et ceux des autres), ton adresse, ton groupe sanguin, '
-          + 'ton contact d’urgence, les notes sur les plongeurs, les photos.' }),
+          + 'Pour entrer, la personne donne son prénom et une plongée faite avec toi (date et lieu) : tu sais qui regarde. '
+          + 'Ton contact d’urgence est montré ; restent cachés : les numéros de licence (les tiens et ceux des autres), '
+          + 'ton adresse, ton groupe sanguin, les notes sur les plongeurs, les photos.' }),
         el('button.btn.primary.sm', { type: 'button', text: 'Créer le lien', onclick: e => publier(e.currentTarget, null) }));
       return;
     }
-    const { lienPartage } = await import('../partage.js');
+    const { lienPartage, qrSvg } = await import('../partage.js');
     const lien = lienPartage(p);
+    // Le QR code du lien : à montrer sur le bateau, ou à imprimer.
+    const qr = el('div.partage-qr');
+    qrSvg(lien).then(svg => { qr.innerHTML = svg; }).catch(() => {});
+    // Les visites : qui est entré (prénom, plongée faite ensemble).
+    const visites = el('div.partage-visites');
+    const rendreVisites = () => {
+      const liste = (reglages.visites || []).slice(0, 30);
+      const fmt = iso => new Date(iso).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+      visites.replaceChildren(
+        el('div', { style: { fontWeight: '650', marginTop: '14px' }, text: `👀 Visites${liste.length ? ` (${(reglages.visites || []).length})` : ''}` }),
+        liste.length
+          ? el('div.histo-liste', {}, ...liste.map(v => el('div.histo-ligne', {},
+              el('div', {}, el('b', { text: `${v.ok ? '✓' : '✗'} ${v.prenom || '?'}` }),
+                el('div.hint', { style: { margin: 0 }, text: v.ok
+                  ? `a plongé avec toi : ${v.plongee || `${v.lieu} le ${v.date?.split('-').reverse().join('/')}`}`
+                  : `n’a pas trouvé : ${v.lieu} le ${v.date?.split('-').reverse().join('/')}` })),
+              el('span.hint', { style: { margin: 0, whiteSpace: 'nowrap' }, text: fmt(v.at) }))))
+          : el('div.hint', { text: 'Personne pour l’instant.' }),
+        p.canal ? el('div.hint', { text: `Pour être prévenu tout de suite (et ne rien perdre) : installe l’appli « ntfy » et abonne-toi au canal « ${p.canal} ». `
+          + 'Sinon, les visites des 12 dernières heures sont relues à chaque ouverture du carnet.' }) : null,
+        el('button.btn.sm.ghost', { type: 'button', text: '↻ Relire les visites', onclick: async e => {
+          e.currentTarget.disabled = true;
+          try {
+            const { relireLesVisites } = await import('../entretien.js');
+            const n = await relireLesVisites();
+            toast(n.length ? `${n.length} nouvelle(s) visite(s)` : 'Rien de nouveau');
+            rendre();
+          } catch (err) { toast(err.message, true); }
+        } }));
+    };
+    rendreVisites();
     const champ = el('input', { type: 'text', readOnly: true, value: lien, class: 'partage-lien' });
     champ.onclick = () => champ.select();
     carte.append(
       el('div', { style: { fontWeight: '650' }, text: '🔗 Ton lien de partage (lecture seule)' }),
       p.gistId && !p.siteId ? el('div.hint', { text: 'Ancien lien (gist) : « Mettre à jour » en crée un nouveau, sur le site.' }) : null,
-      champ,
+      champ, qr,
       el('div.hint', { text: `Mis à jour le ${new Date(p.majLe).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}. `
         + 'Il se met à jour tout seul quand tu ouvres l’appli après des changements.' }),
       el('div.btn-row', {},
@@ -290,7 +322,8 @@ async function sectionPartage() {
             toast('Partage arrêté');
             rendre();
           } catch (err) { toast(err.message, true); }
-        } })));
+        } })),
+      visites);
   };
   async function publier(bouton, actuel) {
     bouton.disabled = true;
@@ -300,7 +333,7 @@ async function sectionPartage() {
       const { publierPartage } = await import('../partage.js');
       const moi = await store.getDiver(await store.getActiveDiverId());
       const p = await publierPartage(await store.raw(), actuel || {}, { auteur: moi?.prenom || '' });
-      await store.saveSettings({ partage: { siteId: p.siteId, majLe: p.majLe } });
+      await store.saveSettings({ partage: { ...(actuel || {}), siteId: p.siteId, majLe: p.majLe, canal: p.canal } });
       toast(actuel ? 'Lien mis à jour' : 'Lien créé : copie-le et envoie-le');
       rendre();
     } catch (e) {

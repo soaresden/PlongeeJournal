@@ -3,7 +3,7 @@
 
 // À incrémenter à chaque livraison : un vieux cache sert un vieux
 // index.html, et les changements d'icônes ou de menu ne se voient pas.
-const CACHE = 'plongee-journal-v78';
+const CACHE = 'plongee-journal-v80';
 
 const ASSETS = [
   './',
@@ -59,6 +59,10 @@ const ASSETS = [
   './js/views/schema-plongeur.js',
   './js/soleil.js',
   './js/historique.js',
+  './js/langue.js',
+  './js/visites.js',
+  './js/vendor/qrcode.js',
+  './js/views/accueil-visiteur.js',
   './js/views/historique.js',
   './js/volet-theme.js',
   './js/tags.js',

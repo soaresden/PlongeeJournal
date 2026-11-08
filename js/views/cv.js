@@ -293,10 +293,27 @@ export async function cvView() {
             el('span.cv-drapeau', { text: '🌍' }), el('span', { text: TXT_TOUT[langue] || TXT_TOUT.fr })) : null)) : null,
       p.equipe.length ? el('div.cv-ligne', {}, el('h3', { text: TXT_PORTE[langue] || TXT_PORTE.fr }),
         el('div.cv-puces.cv-mat', {}, ...p.equipe.map(m => el('span.cv-mat-puce', { title: nomMat(m.type) },
-          `${typeMateriel(m.type).icone} `, el('b', { text: libelle(m) }))))) : null);
+          `${typeMateriel(m.type).icone} `, el('b', { text: libelle(m) }))))) : null,
+      // Le contact à appeler en cas d'urgence (montré aussi sur le lien partagé).
+      diver.urgTel ? el('div.cv-ligne.cv-urgence', {}, el('h3', { text: langue === 'en' ? 'In an emergency, call' : 'En cas d’urgence, appeler' }),
+        el('a.cv-urgence-tel', { href: `tel:${String(diver.urgTel).replace(/[^\d+]/g, '')}` },
+          `🆘 ${[diver.urgPrenom, diver.urgNom].filter(Boolean).join(' ')}${diver.urgLien ? ` (${diver.urgLien})` : ''} · `, el('b', { text: diver.urgTel }))) : null);
 
+    // Sur le lien partagé : le QR code, pour que d'autres retrouvent le carnet.
+    const qr = document.documentElement.classList.contains('partage')
+      ? el('button.btn.sm.ghost', { type: 'button', text: '📱 QR code', onclick: async () => {
+          const { qrSvg } = await import('../partage.js');
+          const url = location.href.split('#')[0];
+          const svg = await qrSvg(url);
+          const { openModal } = await import('../lib.js');
+          openModal(close => el('div', { style: { textAlign: 'center' } },
+            el('h3', { text: langue === 'en' ? 'Scan to open this logbook' : 'Scanne pour ouvrir ce carnet' }),
+            el('div.partage-qr', { html: svg, style: { margin: '10px auto' } }),
+            el('div.hint', { text: url }),
+            el('button.btn.primary', { type: 'button', text: 'OK', onclick: close })));
+        } }) : null;
     wrap.replaceChildren(
-      el('div.cv-barre', {}, langues, copier),
+      el('div.cv-barre', {}, langues, copier, qr),
       el('div.cv-carte', {}, infos, boiteCarte || el('div.cv-monde.vide')));
     requestAnimationFrame(ajusterHauteur);
   }

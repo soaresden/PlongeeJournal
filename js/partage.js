@@ -33,18 +33,21 @@ const API = 'https://api.github.com';
 //  L'instantané : ce qu'on montre, et seulement ça
 // ------------------------------------------------------------
 
-const GARDER_PLONGEUR = ['id', 'prenom', 'nom', 'niveau', 'materiel', 'equipe', 'combiType', 'combiMm', 'createdAt', 'updatedAt'];
+// Le contact à appeler en cas d'urgence est montré (demandé exprès) ;
+// l'adresse, le groupe sanguin et la licence restent privés.
+const GARDER_PLONGEUR = ['id', 'prenom', 'nom', 'niveau', 'materiel', 'equipe', 'combiType', 'combiMm',
+  'urgPrenom', 'urgNom', 'urgTel', 'urgLien', 'createdAt', 'updatedAt'];
 const GARDER_COMPAGNON = ['id', 'prenom', 'nom', 'club', 'moniteur', 'structure', 'categories', 'genre', 'createdAt', 'updatedAt'];
 const GARDER_BREVET = ['id', 'diverId', 'nom', 'organisme', 'dateObtention', 'createdAt', 'updatedAt'];
 const garder = (o, cles) => Object.fromEntries(cles.filter(k => o[k] !== undefined).map(k => [k, o[k]]));
 
 /** Le carnet, débarrassé de tout ce qui est privé. */
-export function instantane(carnet, { auteur = '' } = {}) {
+export function instantane(carnet, { auteur = '', canal = '' } = {}) {
   const moi = carnet.settings?.activeDiverId || carnet.divers?.[0]?.id || null;
   const sansPhoto = d => { const { photoCarnet, stampImage, ...reste } = d; return reste; };
   return {
     version: 1,
-    partage: { le: new Date().toISOString(), auteur },
+    partage: { le: new Date().toISOString(), auteur, ...(canal ? { canal } : {}) },
     divers: (carnet.divers || []).filter(d => d.id === moi).map(d => garder(d, GARDER_PLONGEUR)),
     buddies: (carnet.buddies || []).map(b => garder(b, GARDER_COMPAGNON)),
     dives: (carnet.dives || []).filter(d => d.diverId === moi).map(sansPhoto),
@@ -154,7 +157,9 @@ export const AIDE_JETON = 'Ton jeton GitHub n’a pas encore accès au dépôt d
 export async function publierPartage(carnet, actuel = {}, { auteur = '' } = {}) {
   if (!gh.estConfigure()) throw new Error('Branche d’abord ton dépôt GitHub (Réglages).');
   const siteId = actuel.siteId || nouveauNumero();
-  const contenu = await emballer(instantane(carnet, { auteur }));
+  // Le canal des visites : créé une fois, gardé ensuite.
+  const canal = actuel.canal || (await import('./visites.js')).nouveauCanal();
+  const contenu = await emballer(instantane(carnet, { auteur, canal }));
   const cfg = { ...gh.configGitHub(), ...DEPOT_SITE };
   try {
     await gh.ecrireFichierBase64(cheminPartage(siteId), enB64(contenu), 'Partage du carnet : mise à jour', cfg);
@@ -162,7 +167,7 @@ export async function publierPartage(carnet, actuel = {}, { auteur = '' } = {}) 
     if ([403, 404].includes(e.status) || /introuvable|droit/i.test(e.message)) throw new Error(AIDE_JETON);
     throw e;
   }
-  const p = { siteId, majLe: new Date().toISOString() };
+  const p = { siteId, majLe: new Date().toISOString(), canal };
   return { ...p, lien: lienPartage(p) };
 }
 
@@ -176,6 +181,15 @@ export async function arreterPartage(p = {}) {
 }
 
 export const lienPartage = ({ siteId, gistId }) => `${SITE}?voir=${encodeURIComponent(siteId || gistId)}`;
+
+/** Le QR code d'un lien, en SVG (pour le scanner avec un téléphone). */
+export async function qrSvg(texte, { taille = 200 } = {}) {
+  const { default: qrcode } = await import('./vendor/qrcode.js');
+  const q = qrcode(0, 'M');
+  q.addData(texte);
+  q.make();
+  return q.createSvgTag({ cellSize: Math.max(2, Math.floor(taille / (q.getModuleCount() + 8))), margin: 4, scalable: true });
+}
 
 /**
  * Côté visiteur : récupère et déchiffre. Le gist est public pour qui a

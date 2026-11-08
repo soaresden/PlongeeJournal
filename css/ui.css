@@ -799,3 +799,21 @@ html.partage .donnees-bandeau, html.partage .donnees-recup, html.partage .donnee
 .histo-ligne { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--line); }
 .histo-ligne > div { min-width: 0; }
 .histo-fiche { margin-top: 8px; font-size: 13px; }
+/* Le gaz d'un coup d'œil */
+.badge.gaz { font-weight: 700; letter-spacing: .2px; }
+.badge.gaz.nitrox { background: linear-gradient(90deg, #16a34a 0 60%, #facc15 60% 100%); color: #fff; text-shadow: 0 1px 1px #0006; }
+.badge.gaz.trimix { background: #7c3aed; color: #fff; }
+.badge.gaz.air { background: rgba(148,163,184,.2); color: var(--text-dim); }
+/* L'entrée du carnet partagé */
+#accueil-visiteur { position: fixed; inset: 0; z-index: 900; display: grid; place-items: center; padding: 16px;
+  background: radial-gradient(circle at 50% 20%, color-mix(in srgb, var(--accent) 30%, var(--bg)), var(--bg) 70%); transition: opacity .35s; }
+#accueil-visiteur.part { opacity: 0; }
+.accueil-carte { width: min(420px, 100%); display: flex; flex-direction: column; gap: 6px; }
+.accueil-carte input { width: 100%; }
+.accueil-titre { font-size: 20px; font-weight: 750; margin-bottom: 2px; }
+.accueil-message { min-height: 1.2em; color: var(--warn); font-size: 13px; margin: 4px 0; }
+.partage-qr { width: 190px; max-width: 70vw; background: #fff; padding: 8px; border-radius: 14px; margin: 10px 0; }
+.partage-qr svg { width: 100%; height: auto; display: block; }
+.cv-urgence-tel { color: var(--danger); text-decoration: none; font-size: 15px; }
+html.partage .partage-visites { display: none; }
+.btn-langue { font-size: 20px; padding: 4px 6px; }

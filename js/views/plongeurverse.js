@@ -31,7 +31,8 @@ const BLOCS = ['#facc15', '#cbd5e1', '#f97316', '#e2e8f0'];
 export const MOI = { combi: '#1d4ed8', bande: '#60a5fa', bloc: '#facc15', peau: '#f8c9a2', cheveux: '#5a3216',
   pics: true, sourcils: true, barbe: false, chauve: false, genre: 'h' };
 
-const EMOJIS = { garde: '🫡', bulles: '🫧', saut: '🤸', danse: '💃', chute: '😵', coucou: '👋', tope: '✋', nage: '🐠', attrape: '😱', vol: '🌀' };
+const EMOJIS = { garde: '🫡', bulles: '🫧', saut: '🤸', danse: '💃', chute: '😵', coucou: '👋', tope: '✋', nage: '🐠', attrape: '😱', vol: '🌀',
+  ok: '👌', photo: '📸', montre: '👉🐢' };
 
 // ---------- dessin d'un plongeur (regardant vers la droite) ----------
 // Utilisé aussi par l'écran d'ouverture. p : x, y (les pieds), s (taille),
@@ -166,7 +167,7 @@ export function plongeurCartoon(graine, extra = {}) {
  * @param {{buddies:object[], compte:(b)=>number, onTap:(b)=>void, moi?:{prenom:string}, onMoi?:Function}} options
  * @returns {HTMLElement}
  */
-export function plongeurverse({ buddies, compte = () => 0, onTap = () => {}, moi = null, onMoi = () => {} }) {
+export function plongeurverse({ buddies, compte = () => 0, onTap = () => {}, moi = null, onMoi = () => {}, dives = [] }) {
   const tries = [...buddies].filter(b => !b.structure)
     .sort((a, b) => compte(b) - compte(a)).slice(0, MAX);
   const maxN = Math.max(1, ...tries.map(compte));
@@ -179,7 +180,8 @@ export function plongeurverse({ buddies, compte = () => 0, onTap = () => {}, moi
   const outils = el('div.pverse-outils', {},
     bouton('+', 'Zoomer', () => zoomerVers(cam.z * 1.35, W / 2, H / 2)),
     bouton('−', 'Dézoomer', () => zoomerVers(cam.z / 1.35, W / 2, H / 2)),
-    bouton('⤢', 'Tout voir', () => cadrer()));
+    bouton('⤢', 'Tout voir', () => cadrer()),
+    moi ? bouton('⭐', 'Où suis-je ?', () => surMoi()) : null);
   const boite = el('div.pverse', {}, canvas, info, outils);
   const ctx = canvas.getContext?.('2d');
   if (!ctx) { info.textContent = 'Le dessin n’est pas disponible sur cet appareil.'; return boite; }
@@ -226,6 +228,30 @@ export function plongeurverse({ buddies, compte = () => 0, onTap = () => {}, moi
       s0: 1.5, s: 1, x: 0, y: 0, etat: 'marche', t: 2, salto: false, cool: 0, salut: 0, vitesse: 22, slot: null, cache: false,
     });
   }
+  // Les binômes : chacun nage souvent avec celui avec qui il a le plus
+  // plongé (d'après le carnet) ; moi, avec mes plus fidèles.
+  {
+    const parId = new Map(plongeurs.map(p => [p.b.id, p]));
+    const ensemble = new Map();
+    for (const d of dives || []) {
+      const ids = (d.buddyIds || []).filter(id => parId.has(id));
+      for (const a of ids) for (const b of ids) if (a !== b) ensemble.set(`${a}|${b}`, (ensemble.get(`${a}|${b}`) || 0) + 1);
+    }
+    for (const p of plongeurs) {
+      if (p.estMoi) continue;
+      let meilleur = null, n = 0;
+      for (const q of plongeurs) {
+        if (q === p || q.estMoi) continue;
+        const k = ensemble.get(`${p.b.id}|${q.b.id}`) || 0;
+        if (k > n) { n = k; meilleur = q; }
+      }
+      // Un seul suiveur par « chef » de binôme, pour éviter les chenilles.
+      if (meilleur && !meilleur.binome && !plongeurs.some(x => x.binome === p)) { p.binome = meilleur; p.ecart = hasard(14, 22); }
+    }
+    // Moi : au centre du monde.
+    const m = plongeurs.find(p => p.estMoi);
+    if (m) { m.wx = L / 2; m.wy = L / 2; }
+  }
   plongeurs.forEach(viser);
 
   // Le décor, posé dans le monde (rochers, coraux, algues)
@@ -265,12 +291,18 @@ export function plongeurverse({ buddies, compte = () => 0, onTap = () => {}, moi
     canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
     canvas.style.height = `${H}px`;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    if (premier || !cam.ox) cadrer(false);
+    if (premier || !cam.ox) { if (moi) surMoi(false); else cadrer(false); }
+  }
+  /** La caméra sur moi (zoomée), pour me retrouver parmi tout le monde. */
+  function surMoi(anime = true) {
+    const m = plongeurs.find(p => p.estMoi);
+    if (!m) return cadrer(anime);
+    viserZone(m.wx - 70, m.wy - 70, m.wx + 70, m.wy + 70, { anime });
   }
 
   // ---------- la petite armée ----------
   let rangs = null;
-  const LIBRES = ['marche', 'pause', 'bulles', 'danse', 'coucou', 'tope'];
+  const LIBRES = ['marche', 'pause', 'bulles', 'danse', 'coucou', 'tope', 'suivre'];
 
   function placerRangs() {
     if (!rangs) return;
@@ -333,16 +365,46 @@ export function plongeurverse({ buddies, compte = () => 0, onTap = () => {}, moi
     if (etat === 'marche') viser(p);
   }
 
+  /**
+   * Ce que fait un plongeur ensuite : surtout nager (avec son binôme
+   * quand il en a un), se faire des signes, prendre des photos, montrer
+   * une bestiole. Les acrobaties restent rares.
+   */
   function bêtise(p) {
     const r = Math.random();
-    if (r < 0.38) return changer(p, 'marche', hasard(2, 6));
-    if (r < 0.5) return changer(p, 'bulles', 1.6);
-    if (r < 0.6) return changer(p, 'saut', 9);
-    if (r < 0.7) return changer(p, 'nage', hasard(3, 6));
-    if (r < 0.78) return changer(p, 'danse', 2.2);
-    if (r < 0.86) return changer(p, 'coucou', 1.6);
-    if (r < 0.93) { p.rot = p.dir * Math.PI / 2; return changer(p, 'chute', 1.4); }
-    changer(p, 'pause', hasard(1, 2.5));
+    if (p.binome && !p.binome.cache && r < 0.45) return changer(p, 'suivre', hasard(5, 10));
+    if (r < 0.40) return changer(p, 'marche', hasard(3, 7));
+    if (r < 0.52) return changer(p, 'pause', hasard(1.5, 3));
+    if (r < 0.62) return changer(p, 'bulles', 1.8);
+    if (r < 0.72) return signe(p, 'ok');
+    if (r < 0.80) return signe(p, 'photo');
+    if (r < 0.88) return signe(p, 'montre');
+    if (r < 0.93) return changer(p, 'nage', hasard(3, 6));
+    if (r < 0.96) return changer(p, 'coucou', 1.6);
+    if (r < 0.98) return changer(p, 'danse', 2.2);
+    changer(p, 'saut', 9);
+  }
+
+  /** Un signe à un voisin (son binôme de préférence), qui répond. */
+  function signe(p, quoi) {
+    let voisin = p.binome && !p.binome.cache ? p.binome : null;
+    if (!voisin) {
+      let d0 = 60;
+      for (const q of plongeurs) {
+        if (q === p || q.cache || !LIBRES.includes(q.etat)) continue;
+        const d = Math.hypot(q.wx - p.wx, q.wy - p.wy);
+        if (d < d0) { d0 = d; voisin = q; }
+      }
+    }
+    if (!voisin) return changer(p, 'pause', 1.5);
+    p.dir = (p.wx - p.wy) < (voisin.wx - voisin.wy) ? 1 : -1;
+    changer(p, 'pause', 1.8);
+    textes.push({ wx: p.wx, wy: p.wy, wz: 95 * p.s0, txt: EMOJIS[quoi], vie: 1.6 });
+    if (quoi === 'ok' && LIBRES.includes(voisin.etat)) {
+      voisin.dir = -p.dir; changer(voisin, 'pause', 1.6);
+      textes.push({ wx: voisin.wx, wy: voisin.wy, wz: 95 * voisin.s0, txt: '👌', vie: 1.4 });
+    }
+    if (quoi === 'photo' && LIBRES.includes(voisin.etat)) { voisin.dir = -p.dir; changer(voisin, 'coucou', 1.4); }
   }
 
   /** Avance vers (cx, cy) ; renvoie vrai une fois arrivé. */
@@ -374,8 +436,18 @@ export function plongeurverse({ buddies, compte = () => 0, onTap = () => {}, moi
         if (p.wx < -30 || p.wx > L + 30 || p.wy < -30 || p.wy > L + 30) p.cache = true;
         return;
       case 'marche':
-        if (allerVers(p, p.vitesse, dt)) viser(p);
+        if (allerVers(p, p.vitesse * 0.8, dt)) viser(p);
         break;
+      case 'suivre': {
+        // À côté de son binôme, un peu en retrait.
+        const b = p.binome;
+        if (!b || b.cache) { changer(p, 'marche', 2); break; }
+        p.cx = borne(b.wx - p.ecart * 0.7); p.cy = borne(b.wy + p.ecart * 0.7);
+        if (!allerVers(p, Math.max(p.vitesse, 26), dt) && Math.random() < dt * 0.4) {
+          const e = proj(p.wx, p.wy, 56 * p.s0); bulles.push({ x: e.x, y: e.y, r: hasard(1.5, 3), v: hasard(30, 50) });
+        }
+        break;
+      }
       case 'bulles':
         if (Math.random() < dt * 9) { const e = proj(p.wx, p.wy, 56 * p.s0); bulles.push({ x: e.x + p.dir * 8 * p.s, y: e.y, r: hasard(2, 5), v: hasard(30, 60) }); }
         break;
@@ -423,7 +495,7 @@ export function plongeurverse({ buddies, compte = () => 0, onTap = () => {}, moi
       for (let j = i + 1; j < plongeurs.length; j++) {
         const b = plongeurs[j];
         if (b.etat !== 'marche' || b.cool > 0 || b.cache) continue;
-        if (Math.hypot(a.wx - b.wx, a.wy - b.wy) < 16 && Math.random() < 0.5) {
+        if (Math.hypot(a.wx - b.wx, a.wy - b.wy) < 16 && Math.random() < (a.estMoi || b.estMoi ? 0.6 : 0.25)) {
           a.dir = (a.wx - a.wy) < (b.wx - b.wy) ? 1 : -1; b.dir = -a.dir;
           changer(a, 'tope', 0.9); b.etat = 'tope'; b.t = 0.9;
           a.cool = b.cool = 6;

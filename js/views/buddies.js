@@ -30,6 +30,7 @@ export async function buddiesView() {
   const diverId = await store.getActiveDiverId();
   let st = diverId ? await store.stats(diverId) : { buddyCount: {} };
   const moi = diverId ? await store.getDiver(diverId) : null;     // dans le Plongeurverse aussi
+  const plongeesMoi = diverId ? await store.listDives(diverId) : [];   // pour les binômes du Plongeurverse
   const wrap = el('div');
 
   if (!buddies.length) {
@@ -172,7 +173,7 @@ export async function buddiesView() {
     if (vue === 'verse') {
       // Une seule scène pour tout le monde : un filtre ou une recherche
       // met les élus en rangs (une petite armée), les autres sortent.
-      if (!scene) scene = plongeurverse({ buddies, compte: n, moi, onMoi: () => navigate('cv'),
+      if (!scene) scene = plongeurverse({ buddies, compte: n, moi, dives: plongeesMoi, onMoi: () => navigate('cv'),
         onTap: b => apercuPlongeur(b.id, { onClose: recharger }) });
       scene.ranger?.(!filtre && !q ? null : new Set(filtres.map(b => b.id)));
       // Les genres pas encore notés : on peut enregistrer ce que le prénom suggère.

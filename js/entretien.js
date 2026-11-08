@@ -134,7 +134,26 @@ export async function entretenir({ analyser = null, nommer = null } = {}) {
   if (modifiees.length) await store.savePlongees(modifiees);
   eaux = modifiees.filter(d => d.eau).length;
   const partage = await majPartage().catch(() => false);
-  return { numeros, eaux, chefs: chefs.length, lieux, partage };
+  const visites = await relireLesVisites().catch(() => []);
+  return { numeros, eaux, chefs: chefs.length, lieux, partage, visites };
+}
+
+/**
+ * Les visites du carnet partagé (prénom, date et lieu donnés à l'entrée),
+ * relues sur le canal et gardées dans le carnet.
+ * @returns {Promise<Array>} les nouvelles visites
+ */
+export async function relireLesVisites({ relire = null } = {}) {
+  const reglages = await store.getSettings();
+  const canal = reglages.partage?.canal;
+  if (!canal) return [];
+  const v = await import('./visites.js');
+  const lues = await (relire || v.relireVisites)(canal);
+  const avant = reglages.visites || [];
+  const connues = new Set(avant.map(x => x.id));
+  const nouvelles = lues.filter(x => !connues.has(x.id));
+  if (nouvelles.length) await store.saveSettings({ visites: v.fusionnerVisites(avant, nouvelles) });
+  return nouvelles;
 }
 
 /**
@@ -149,10 +168,11 @@ export async function majPartage() {
   const derniere = ['dives', 'buddies', 'seances', 'certifs', 'divers']
     .flatMap(t => (carnet[t] || []).map(x => x.updatedAt || ''))
     .reduce((a, b) => (b > a ? b : a), '');
-  if (!derniere || derniere <= p.majLe) return false;
+  // Un ancien partage sans canal de visites : republié une fois pour l'avoir.
+  if (!derniere || (derniere <= p.majLe && p.canal)) return false;
   const { publierPartage } = await import('./partage.js');
   const moi = (carnet.divers || []).find(d => d.id === carnet.settings?.activeDiverId);
   const nouveau = await publierPartage(carnet, p, { auteur: moi?.prenom || '' });
-  await store.saveSettings({ partage: { siteId: nouveau.siteId, majLe: nouveau.majLe } });
+  await store.saveSettings({ partage: { ...p, siteId: nouveau.siteId, majLe: nouveau.majLe, canal: nouveau.canal } });
   return true;
 }
