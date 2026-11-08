@@ -747,3 +747,12 @@ html.partage .donnees-bandeau, html.partage .donnees-recup, html.partage .donnee
 #import-progres { position: sticky; bottom: calc(var(--tabbar-h, 64px) + 10px); z-index: 20; box-shadow: var(--shadow);
   border-color: var(--accent); margin-top: 10px; }
 .attente-montre { border-color: var(--accent); }
+/* Panneau d'import : la barre, et le journal en direct à côté (en dessous en portrait) */
+.ip-grille { display: grid; gap: 10px; }
+.ip-gauche { min-width: 0; }
+.ip-journal { margin: 0; max-height: 9.5em; overflow: auto; font-size: 10.5px; line-height: 1.4; white-space: pre; text-overflow: ellipsis;
+  background: var(--bg-2, rgba(0,0,0,.25)); border-radius: 8px; padding: 6px 8px; color: var(--text-dim); }
+@media (min-width: 720px) {
+  .ip-grille { grid-template-columns: minmax(240px, 1fr) 1.4fr; align-items: start; }
+  .ip-journal { max-height: 11em; }
+}

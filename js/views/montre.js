@@ -109,9 +109,38 @@ export async function montreView() {
   const pTitre = el('div.maj-etat');
   const pRempli = el('div.maj-rempli');
   const pDetail = el('div.hint.maj-detail');
+  // Le journal en direct, à côté de la barre (en dessous en portrait).
+  const pJournal = el('pre.ip-journal');
+  const pBarre = el('div.maj-barre', {}, pRempli);
   const barre = el('div#import-progres.card', { hidden: true },
-    pTitre, el('div.maj-barre', {}, pRempli), pDetail,
-    el('button.btn.sm', { type: 'button', style: { marginTop: '6px' }, text: '⏹ Arrêter', onclick: () => etat.abort?.abort() }));
+    el('div.ip-grille', {},
+      el('div.ip-gauche', {},
+        pTitre, pBarre, pDetail,
+        el('button.btn.sm', { type: 'button', style: { marginTop: '6px' }, text: '⏹ Arrêter', onclick: () => etat.abort?.abort() })),
+      pJournal));
+  const LIGNES_DIRECT = 8;
+  const majJournalDirect = () => {
+    if (barre.hidden) return;
+    // Sans l'heure (le « +16.8s » suffit) : plus de place pour le texte.
+    pJournal.textContent = journalBle.dernieres(LIGNES_DIRECT)
+      .map(l => l.replace(/^\d\d:\d\d:\d\d\.\d+\s+\+\s*([\d.]+s)\s+/, '$1 ')).join('\n');
+    pJournal.scrollTop = pJournal.scrollHeight;
+  };
+  let journalEnAttente = false;
+  journalBle.abonner(() => {
+    if (journalEnAttente) return;
+    journalEnAttente = true;
+    setTimeout(() => { journalEnAttente = false; majJournalDirect(); }, 200);
+  });
+  /** Le panneau pendant une étape sans pourcentage (connexion, lecture de la liste). */
+  const panneau = titre => {
+    barre.hidden = !titre;
+    if (!titre) return;
+    pTitre.textContent = titre;
+    pDetail.textContent = '';
+    pBarre.classList.add('indetermine');
+    majJournalDirect();
+  };
   const zoneMontre = el('div');
   const liste = el('div');
   const actions = el('div');
@@ -130,6 +159,8 @@ export async function montreView() {
   const progres = (v, max, info = {}) => {
     barre.hidden = !max;
     if (!max) return;
+    pBarre.classList.remove('indetermine');
+    majJournalDirect();
     const fait = Math.min(v, max);
     const pourcent = Math.round(100 * fait / max);
     pRempli.style.width = `${pourcent}%`;
@@ -189,6 +220,7 @@ export async function montreView() {
     etat.abort = new AbortController();
     try {
       dire('Recherche de la montre…');
+      panneau('Connexion à la montre…');
       const lien = await ouvrirLienOcean({ journal: log, choisirAutre, signal: etat.abort.signal, surAttente: montrerAttente });
       montrerAttente(null);
       etat.lien = lien;
@@ -200,6 +232,7 @@ export async function montreView() {
       await session.bonjour();
       etat.info = await session.infos();
       dire('Lecture de la liste des plongées…');
+      panneau('Lecture de la liste des plongées…');
       etat.fiches = await session.lister();
       memoriserListeMontre(etat.fiches.map(f => f.id));
       for (const f of etat.fiches) {
@@ -210,6 +243,7 @@ export async function montreView() {
       erreur(e, 'Connexion impossible');
       await deconnecter();
     } finally {
+      panneau(null);
       etat.occupe = false;
       rendre();
     }
