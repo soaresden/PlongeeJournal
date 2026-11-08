@@ -850,17 +850,54 @@ html.partage .btn-visites { display: none !important; }
 .partage-qr.grand { width: 280px; max-width: 80vw; margin: 12px auto; }
 .qr-lien { word-break: break-all; font-size: 12px; }
 
-/* --- Qui je suis : QR toujours visible, plongées d'un repère -------- */
+/* --- Qui je suis : QR toujours visible, carte + volet des plongées --- */
 .cv-qr { display: inline-flex; align-items: center; gap: 6px; }
 .cv-qr-mini { width: 22px; height: 22px; background: #fff; border-radius: 3px; padding: 1px; display: inline-block; }
 .cv-qr-mini:empty { display: none; }
 .cv-qr-mini svg { width: 100%; height: 100%; display: block; }
-.cv-repere span { cursor: pointer; }
-.cv-repere-liste details { margin: 8px 0; }
-.cv-repere-liste summary { cursor: pointer; padding: 6px 0; }
-.cv-plongee { display: flex; gap: 10px; width: 100%; text-align: left; padding: 8px 10px; margin: 4px 0;
-  border-radius: 10px; border: 1px solid var(--line); background: transparent; color: inherit; font: inherit; cursor: pointer; }
-.cv-plongee:hover { background: rgba(127,127,127,.08); }
-.cv-plongee-num { flex: none; min-width: 42px; font-weight: 700; color: var(--accent); }
+.cv-repere span { cursor: pointer; transition: transform .15s; }
+.cv-repere.on span { background: #fff; color: var(--accent); border-color: var(--accent); transform: scale(1.2); }
+.cv-geo { flex: 1; min-height: 190px; display: flex; gap: 8px; min-width: 0; }
+.cv .cv-geo .cv-monde { flex: 1.25 1 0; min-width: 0; min-height: 0; height: auto; }
+.cv-volet { flex: 1 1 0; max-width: 340px; min-width: 0; display: flex; flex-direction: column; border: 1px solid var(--line);
+  border-radius: 16px; background: var(--surface-2); overflow: hidden; }
+.cv-volet-tete { display: flex; align-items: baseline; flex-wrap: wrap; gap: 2px 4px; padding: 8px 10px 6px; font-size: 13px;
+  border-bottom: 1px solid var(--line); }
+.cv-volet-tete > span { color: var(--text-mute); font-size: 12px; }
+.cv-volet-tout { margin-left: auto; border: 0; background: none; color: var(--accent); font: inherit; font-size: 12px; cursor: pointer; padding: 0; }
+.cv-volet-aide { font-size: 11px; color: var(--text-mute); padding: 4px 10px 0; }
+.cv-volet-liste { flex: 1; overflow-y: auto; padding: 4px 6px 8px; overscroll-behavior: contain; }
+.cv-plongee { display: flex; gap: 8px; align-items: flex-start; width: 100%; text-align: left; padding: 6px 8px; margin: 3px 0;
+  border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: inherit; font: inherit; cursor: pointer; }
+.cv-plongee:hover { border-color: var(--accent); }
+.cv-plongee-num { flex: none; min-width: 34px; font-weight: 700; font-size: 12.5px; color: var(--accent); }
+.cv-plongee-txt { display: flex; flex-direction: column; min-width: 0; }
+.cv-plongee-txt b { font-size: 12.5px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cv-plongee-txt small { font-size: 11px; color: var(--text-mute); }
+@media (max-width: 520px) {
+  .cv-geo { min-height: 220px; }
+  .cv-plongee { padding: 5px 6px; gap: 6px; }
+  .cv-plongee-num { min-width: 28px; font-size: 11.5px; }
+}
 /* Les cartes gardent leurs calques chez elles : jamais au-dessus d'un pop-up. */
 .leaflet-container { isolation: isolate; z-index: 0; }
+/* Téléphone : l'essentiel en haut, puis la carte et le volet en dessous,
+   à pleine hauteur (la page défile jusqu'à eux). */
+@media (max-width: 520px) {
+  .cv { overflow: visible; }
+  .cv .cv-carte { flex: none; }
+  .cv-geo { flex: none; flex-direction: column; height: calc(100svh - 170px); min-height: 440px; }
+  .cv .cv-geo .cv-monde { flex: 0 0 42%; }
+  .cv-volet { flex: 1; max-width: none; }
+}
+
+/* --- Photo de profil ------------------------------------------------- */
+img.profil-av.photo { object-fit: cover; padding: 0; border-radius: 50%; }
+.photo-profil { display: flex; align-items: center; gap: 14px; margin-bottom: 12px; }
+.photo-profil > img, .photo-profil > span { width: 72px; height: 72px; border-radius: 50%; object-fit: cover; flex: none;
+  display: grid; place-items: center; background: var(--surface-2); font-size: 24px; font-weight: 800; border: 2px solid var(--line); }
+.photo-profil .btn-row { margin: 0; }
+.cv-photo { position: relative; width: 64px; height: 64px; flex: 0 0 64px; }
+.cv-photo img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; border: 2px solid var(--accent); display: block; }
+.cv-photo-niv { position: absolute; right: -6px; bottom: -4px; background: linear-gradient(135deg, var(--accent), var(--accent-2, var(--accent)));
+  color: var(--on-accent, #fff); font-size: 11px; font-weight: 800; padding: 2px 6px; border-radius: 8px; border: 2px solid var(--surface); }

@@ -11,6 +11,7 @@ export function emptyDiver() {
     id: uid(), prenom: '', nom: '', licence: '', nationalite: 'Française',
     rue: '', cp: '', ville: '', pays: 'France', groupeSanguin: '',
     urgPrenom: '', urgNom: '', urgTel: '', urgLien: '',
+    photoProfil: null,          // petite photo (JPEG 256 px, en data URL)
     niveau: '',
     // Matériel personnel : une ligne par pièce, ajoutée au besoin.
     // [{ id, type, marque, modele, note }]

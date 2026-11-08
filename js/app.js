@@ -35,7 +35,7 @@ const PARTAGE_ID = new URLSearchParams(location.search).get('voir');
 if (PARTAGE_ID) {
   const k = /(?:^#|&)k=([A-Za-z0-9_-]+)/.exec(location.hash)?.[1];
   try { if (k) sessionStorage.setItem(`plongee-journal:partage:${PARTAGE_ID}`, k); } catch { /* privé */ }
-  if (k || !location.hash.startsWith('#/')) history.replaceState(null, '', `${location.pathname}${location.search}#/dives`);
+  if (k || !location.hash.startsWith('#/')) history.replaceState(null, '', `${location.pathname}${location.search}#/cv`);
   document.documentElement.classList.add('partage');
 }
 
@@ -472,7 +472,7 @@ $$('#tabbar .tab').forEach(tab => tab.addEventListener('click', async () => {
 
 backBtn.addEventListener('click', () => {
   if (history.length > 1) history.back();
-  else navigate('dives', true);
+  else navigate('cv', true);
 });
 
 // ------------------------------------------------------------

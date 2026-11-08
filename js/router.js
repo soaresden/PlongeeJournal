@@ -15,8 +15,8 @@ export function route(pattern, handler) {
 
 /** Chemin courant, sans la chaîne de requête. */
 export function currentPath() {
-  const raw = location.hash.replace(/^#\/?/, '') || 'dives';
-  return raw.split('?')[0].replace(/\/$/, '') || 'dives';
+  const raw = location.hash.replace(/^#\/?/, '') || 'cv';
+  return raw.split('?')[0].replace(/\/$/, '') || 'cv';
 }
 
 /** Navigue vers un chemin. `replace` évite d'empiler dans l'historique. */
@@ -54,6 +54,6 @@ export function render() {
 
 export function startRouter() {
   window.addEventListener('hashchange', () => render());
-  if (!location.hash) history.replaceState(null, '', '#/dives');
+  if (!location.hash) history.replaceState(null, '', '#/cv');
   render();
 }

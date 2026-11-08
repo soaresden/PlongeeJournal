@@ -134,6 +134,10 @@ const MAT = {
   pl: { combinaison: 'Pianka', detendeur: 'Automat', masque: 'Maska', palmes: 'Płetwy', phare: 'Latarka', camera: 'Aparat', ordinateur: 'Komputer',
     gilet: 'Jacket (BCD)', lestage: 'Balast', parachute: 'Boja (SMB)', couteau: 'Nóż', autre: 'Inne', Humide: 'Mokra', 'Semi-étanche': 'Półsucha', 'Étanche': 'Sucha' },
 };
+const TXT_VOLET = {
+  fr: { toutes: 'Toutes mes plongées', une: 'plongée', plus: 'plongées', toucher: 'Touche un point de la carte pour ses plongées', revoir: 'Toutes' },
+  en: { toutes: 'All my dives', une: 'dive', plus: 'dives', toucher: 'Tap a spot on the map to see its dives', revoir: 'All' },
+};
 const TXT_TOUT = { fr: 'Tout', en: 'All', es: 'Todo', it: 'Tutto', de: 'Alle', pt: 'Tudo', pl: 'Wszystko' };
 const TXT_PAYS = { fr: 'Pays', en: 'Countries', es: 'Países', it: 'Paesi', de: 'Länder', pt: 'Países', pl: 'Kraje' };
 const TXT_PORTE = { fr: 'Ce que je porte', en: 'What I dive with', es: 'Con qué buceo', it: 'Con cosa mi immergo',
@@ -227,6 +231,10 @@ export async function cvView() {
   const lienQr = enPartage ? location.href.split('#')[0] : null;
   let carte = null;
   const wrap = el('div.cv');
+  // Le volet à côté de la carte : toutes mes plongées, ou celles du point touché.
+  const vraies = toutes.filter(d => !estBapteme(d));
+  let selection = null;      // { titre, ids:Set } ou null (= toutes)
+  let volet = null;
   let langue = lireLangue();
 
   function rendre() {
@@ -256,6 +264,9 @@ export async function cvView() {
       : m.libelle);
     const boiteCarte = p.lieux.length ? el('div.cv-monde') : null;
     const zoomPays = code => {
+      // Le volet suit : les plongées de ce pays (ou toutes).
+      selection = code ? { titre: `${drapeau(code)} ${nomPays(code)}`, ids: new Set(vraies.filter(d => paysPlongee(d) === code).map(d => d.id)) } : null;
+      remplirVolet();
       if (!carte) return;
       const pts = p.lieux.filter(l => !code || l.pays === code).map(l => [l.lat, l.lng]);
       if (pts.length) carte.flyToBounds(pts, { padding: [30, 30], maxZoom: code ? 10 : 6, duration: 0.6 });
@@ -275,7 +286,9 @@ export async function cvView() {
       onclick: async () => { try { await navigator.clipboard.writeText(texte); toast(t.copie); } catch { toast(texte); } } });
     const infos = el('div.cv-infos', {},
       el('div.cv-tete', {},
-        el('div.cv-badge', { text: p.niveau || '🤿' }),
+        diver.photoProfil
+          ? el('div.cv-photo', {}, el('img', { src: diver.photoProfil, alt: p.prenom }), p.niveau ? el('span.cv-photo-niv', { text: p.niveau }) : null)
+          : el('div.cv-badge', { text: p.niveau || '🤿' }),
         el('div.cv-ident', {},
           el('div.cv-nom', { text: `${p.prenom} ${p.nom}`.trim() }),
           el('div.cv-niveau', { text: [p.niveau ? `${t.plongeur} ${p.niveau}` : t.plongeur, CMAS[p.niveau]].filter(Boolean).join(' · ') }),
@@ -322,7 +335,8 @@ export async function cvView() {
     }
     wrap.replaceChildren(
       el('div.cv-barre', {}, langues, copier, qr),
-      el('div.cv-carte', {}, infos, boiteCarte || el('div.cv-monde.vide')));
+      el('div.cv-carte', {}, infos, el('div.cv-geo', {}, boiteCarte || el('div.cv-monde.vide'), volet = el('div.cv-volet'))));
+    remplirVolet();
     requestAnimationFrame(ajusterHauteur);
   }
 
@@ -332,7 +346,8 @@ export async function cvView() {
     if (!vue || !wrap.isConnected) return;
     const cs = getComputedStyle(vue);
     const h = vue.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
-    wrap.style.height = `${Math.max(420, Math.floor(h))}px`;
+    // Téléphone : la page défile (la carte et le volet ont besoin de place).
+    wrap.style.height = window.matchMedia('(max-width: 520px)').matches ? '' : `${Math.max(420, Math.floor(h))}px`;
     carte?.invalidateSize();
   }
   // La hauteur change aussi quand le bandeau du haut apparaît ou part.
@@ -352,57 +367,77 @@ export async function cvView() {
     const couche = L.layerGroup().addTo(carte);
     const placer = () => {
       couche.clearLayers();
+      marqueurs = [];
       cumulerALEcran(p.lieux, l => carte.project([l.lat, l.lng]), 34).forEach(a => {
         const n = a.n;
         const noms = a.lieux.map(l => l.nom).filter(Boolean);
         const code = a.lieux[0].pays;
         const taille = 24 + Math.min(16, n);
-        L.marker([a.lat, a.lng], { icon: L.divIcon({ className: 'cv-repere', html: `<span>${n}</span>`, iconSize: [taille, taille] }) })
+        const m = L.marker([a.lat, a.lng], { icon: L.divIcon({ className: 'cv-repere', html: `<span>${n}</span>`, iconSize: [taille, taille] }) })
           .bindTooltip(`${code ? drapeau(code) + ' ' : ''}${noms.slice(0, 3).join(' · ')}${noms.length > 3 ? '…' : ''}` || String(n), { direction: 'top' })
-          // Au toucher : la liste des plongées faites là.
-          .on('click', () => listeDuRepere(a))
+          // Au toucher : ses plongées dans le volet.
+          .on('click', () => choisirRepere(a))
           .addTo(couche);
+        marqueurs.push({ m, a });
       });
+      marquer();
     };
     carte.fitBounds(p.lieux.map(l => [l.lat, l.lng]), { padding: [24, 24], maxZoom: 6 });
     carte.on('zoomend', placer);
+    // Toucher la carte ailleurs que sur un point : de nouveau toutes les plongées.
+    carte.on('click', () => { if (selection) { selection = null; marquer(); remplirVolet(); } });
     placer();
     setTimeout(() => carte && carte.invalidateSize(), 120);
   }
 
-  /** Les plongées d'un repère de la carte, par lieu ; une plongée s'ouvre au toucher. */
-  function listeDuRepere(a) {
-    const en = langue === 'en';
+  /** Le volet : les plongées choisies (ou toutes), les plus récentes d'abord. */
+  function remplirVolet() {
+    if (!volet) return;
+    const tv = TXT_VOLET[langue] || TXT_VOLET.en;
     const loc = LOCALES[langue] || 'fr-FR';
     const jour = iso => (iso ? new Date(`${iso}T12:00:00`).toLocaleDateString(loc, { day: 'numeric', month: 'short', year: 'numeric' }) : '?');
-    // Un même lieu noté à quelques mètres près : une seule entrée.
-    const parNom = new Map();
-    for (const l of a.lieux) {
-      const cle = (l.nom || '').trim().toLowerCase() || `${l.lat},${l.lng}`;
-      const g = parNom.get(cle) || parNom.set(cle, { ...l, plongees: [] }).get(cle);
-      g.plongees.push(...l.plongees);
+    const liste = (selection ? vraies.filter(d => selection.ids.has(d.id)) : vraies)
+      .slice().sort((x, y) => `${y.date || ''}${y.heure || ''}`.localeCompare(`${x.date || ''}${x.heure || ''}`));
+    volet.replaceChildren(
+      el('div.cv-volet-tete', {},
+        el('b', { text: selection ? selection.titre : tv.toutes }),
+        el('span', { text: ` · ${liste.length} ${liste.length > 1 ? tv.plus : tv.une}` }),
+        selection ? el('button.cv-volet-tout', { type: 'button', text: `✕ ${tv.revoir}`, onclick: () => { selection = null; marquer(); remplirVolet(); } }) : null),
+      selection ? null : el('div.cv-volet-aide', { text: tv.toucher }),
+      el('div.cv-volet-liste', {}, ...liste.map(d => {
+        const c = paysPlongee(d);
+        return el('button.cv-plongee', { type: 'button', onclick: async () => (await import('../apercu.js')).apercuPlongee(d.id) },
+          el('span.cv-plongee-num', { text: d.numero != null ? `n°${d.numero}` : '·' }),
+          el('span.cv-plongee-txt', {},
+            el('b', { text: `${c ? `${drapeau(c)} ` : ''}${d.lieuNom || d.site || '?'}` }),
+            el('small', { text: [jour(d.date), d.site && d.site !== d.lieuNom ? d.site : '', d.profMax ? `${d.profMax} m` : '', d.dureeMin ? `${d.dureeMin} min` : '']
+              .filter(Boolean).join(' · ') })));
+      })));
+    volet.scrollTop = 0;
+  }
+
+  /** Le point touché ressort sur la carte. */
+  let marqueurs = [];
+  function marquer() {
+    for (const { m, a } of marqueurs) {
+      const dedans = !!selection && a.lieux.every(l => l.plongees.every(id => selection.ids.has(id)));
+      m.getElement?.()?.classList.toggle('on', dedans);
     }
-    const lieux = [...parNom.values()].map(l => ({ ...l, dives: l.plongees.map(id => parId.get(id)).filter(Boolean)
-      .sort((x, y) => String(y.date).localeCompare(String(x.date))) }))
-      .sort((x, y) => y.dives.length - x.dives.length);
-    openModal(close => el('div.cv-repere-liste', {},
-      el('h3', { text: `${[...new Set(lieux.map(l => l.pays).filter(Boolean))].slice(0, 6).map(drapeau).join('')} ${a.n} ${en ? (a.n > 1 ? 'dives' : 'dive') : (a.n > 1 ? 'plongées' : 'plongée')}`
-        + `${lieux.length > 1 ? ` · ${lieux.length} ${en ? 'spots' : 'lieux'}` : ` · ${lieux[0].nom || ''}`}` }),
-      ...lieux.map(l => el('details', { open: lieux.length === 1 || lieux.length <= 3 },
-        el('summary', {}, l.pays ? `${drapeau(l.pays)} ` : '', el('b', { text: l.nom || (en ? 'Unnamed spot' : 'Lieu sans nom') }), ` · ${l.dives.length}`),
-        ...l.dives.map(d => el('button.cv-plongee', { type: 'button', onclick: async () => {
-          close(); (await import('../apercu.js')).apercuPlongee(d.id);
-        } },
-          el('span.cv-plongee-num', { text: d.numero != null ? `n°${d.numero}` : '' }),
-          el('span', { text: [jour(d.date), d.site, d.profMax ? `${d.profMax} m` : '', d.dureeMin ? `${d.dureeMin} min` : ''].filter(Boolean).join(' · ') }))))),
-      el('div.btn-row', {},
-        lieux.length > 1 ? el('button.btn.sm.ghost', { type: 'button', text: en ? '🔍 Zoom in' : '🔍 Zoomer', onclick: () => {
-          close(); carte?.flyToBounds(lieux.map(l => [l.lat, l.lng]), { padding: [40, 40], maxZoom: 12, duration: 0.5 });
-        } }) : null,
-        el('button.btn.sm.primary', { type: 'button', text: en ? 'Close' : 'Fermer', onclick: close }))));
+  }
+
+  /** Un point de la carte touché : ses plongées dans le volet (et on s'en approche s'il en regroupe plusieurs). */
+  function choisirRepere(a) {
+    const noms = [...new Set(a.lieux.map(l => l.nom).filter(Boolean))];
+    const codes = [...new Set(a.lieux.map(l => l.pays).filter(Boolean))];
+    selection = { titre: `${codes.slice(0, 5).map(drapeau).join('')} ${noms.slice(0, 2).join(', ')}${noms.length > 2 ? '…' : ''}`.trim(),
+      ids: new Set(a.lieux.flatMap(l => l.plongees)) };
+    marquer();
+    remplirVolet();
+    if (a.lieux.length > 1 && carte) carte.flyToBounds(a.lieux.map(l => [l.lat, l.lng]), { padding: [40, 40], maxZoom: 12, duration: 0.5 });
   }
 
   const rendreTout = () => { rendre(); requestAnimationFrame(poserCarte); };
   rendreTout();
-  return { title: 'Qui je suis', back: true, node: wrap };
+  // Le premier écran (de l'appli comme du carnet partagé) : pas de retour.
+  return { title: 'Qui je suis', back: false, node: wrap };
 }

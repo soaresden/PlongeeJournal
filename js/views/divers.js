@@ -54,7 +54,8 @@ export async function diversView() {
 
   tb.append(el('div.tb-carte.plein', {},
     el('div.profil-tete', {},
-      el('div.profil-av', { text: ((moi.prenom?.[0] || '') + (moi.nom?.[0] || '')).toUpperCase() || '?' }),
+      moi.photoProfil ? el('img.profil-av.photo', { src: moi.photoProfil, alt: '' })
+        : el('div.profil-av', { text: ((moi.prenom?.[0] || '') + (moi.nom?.[0] || '')).toUpperCase() || '?' }),
       el('div', { style: { flex: 1, minWidth: 0 } },
         el('div.profil-nom', { text: fullName(moi) || 'Sans nom' }),
         el('div.profil-sous', { text: [st.niveau, moi.licence && `licence ${moi.licence}`].filter(Boolean).join(' · ') || 'Profil incomplet' }),
@@ -153,6 +154,26 @@ export async function diversView() {
 //  Fiche / formulaire d'une identité
 // ------------------------------------------------------------
 
+/** Une photo choisie → un petit carré JPEG (256 px), centré. */
+export function reduirePhoto(fichier, cote = 256) {
+  return new Promise((ok, ko) => {
+    const url = URL.createObjectURL(fichier);
+    const img = new Image();
+    img.onload = () => {
+      const c = document.createElement('canvas');
+      c.width = c.height = cote;
+      const s = Math.min(img.naturalWidth, img.naturalHeight);
+      const g = c.getContext('2d');
+      g.fillStyle = '#1b2233'; g.fillRect(0, 0, cote, cote);
+      g.drawImage(img, (img.naturalWidth - s) / 2, (img.naturalHeight - s) / 2, s, s, 0, 0, cote, cote);
+      URL.revokeObjectURL(url);
+      ok(c.toDataURL('image/jpeg', 0.85));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); ko(new Error('image')); };
+    img.src = url;
+  });
+}
+
 export async function diverFormView({ id }) {
   const isNew = !id || id === 'new';
   let d = isNew ? emptyDiver() : structuredClone(await store.getDiver(id));
@@ -203,9 +224,26 @@ export async function diverFormView({ id }) {
   }
   form.append(buttons);
 
+  // La photo de profil (petite, montrée aussi sur « Qui je suis » et au carnet partagé).
+  const apercuPhoto = el('div.photo-profil');
+  const choixPhoto = el('input', { type: 'file', accept: 'image/*', hidden: true, onchange: async () => {
+    const f = choixPhoto.files?.[0];
+    if (!f) return;
+    try { d.photoProfil = await reduirePhoto(f); rendrePhoto(); toast('Photo prête : pense à Enregistrer'); }
+    catch { toast('Image illisible', true); }
+    choixPhoto.value = '';
+  } });
+  const rendrePhoto = () => apercuPhoto.replaceChildren(
+    d.photoProfil ? el('img', { src: d.photoProfil, alt: '' }) : el('span', { text: ((d.prenom?.[0] || '') + (d.nom?.[0] || '')).toUpperCase() || '🤿' }),
+    el('div.btn-row', {},
+      el('button.btn.sm', { type: 'button', text: d.photoProfil ? '📷 Changer la photo' : '📷 Ajouter une photo', onclick: () => choixPhoto.click() }),
+      d.photoProfil ? el('button.btn.sm.ghost', { type: 'button', text: 'Retirer', onclick: () => { d.photoProfil = null; rendrePhoto(); } }) : null));
+  rendrePhoto();
+
   form.append(el('div.section', {},
     el('h2', { text: 'Identité' }),
     el('div.card', {},
+      apercuPhoto, choixPhoto,
       el('div.row', {},
         field('Prénom', input('text', d.prenom, v => set({ prenom: v }), { autocomplete: 'given-name' })),
         field('Nom', input('text', d.nom, v => set({ nom: v }), { autocomplete: 'family-name' })),

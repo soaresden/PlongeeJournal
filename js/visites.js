@@ -177,7 +177,7 @@ export function suivreParcours({ canal, prenom, sid, nommer }) {
       else fetch(url, { method: 'POST', body: m.corps, keepalive: true }).catch(() => {});
     } catch { /* tant pis */ }
   };
-  const surChemin = () => noter(nommer(location.hash.replace(/^#\/?/, '') || 'dives'));
+  const surChemin = () => noter(nommer(location.hash.replace(/^#\/?/, '') || 'cv'));
   const surVue = e => noter(e.detail);
   window.addEventListener('hashchange', surChemin);
   window.addEventListener('pj-vue', surVue);
