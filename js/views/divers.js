@@ -240,9 +240,7 @@ export async function diverFormView({ id }) {
       d.photoProfil ? el('button.btn.sm.ghost', { type: 'button', text: 'Retirer', onclick: () => { d.photoProfil = null; rendrePhoto(); } }) : null));
   rendrePhoto();
 
-  // L'avatar (montré par défaut ; la photo vient au toucher) : un des
-  // dessins proposés, ou une image à moi.
-  const { AVATARS, enImage } = await import('../avatars.js');
+  // L'avatar (montré par défaut ; la photo vient au toucher) : une image à moi (mon Mii).
   const apercuAvatar = el('div.photo-profil');
   const choixAvatar = el('input', { type: 'file', accept: 'image/*', hidden: true, onchange: async () => {
     const f = choixAvatar.files?.[0];
@@ -252,10 +250,7 @@ export async function diverFormView({ id }) {
     choixAvatar.value = '';
   } });
   const rendreAvatar = () => {
-    const options = [
-      ...(d.avatarImporte ? [{ nom: 'Le mien', src: d.avatarImporte }] : []),
-      ...AVATARS.map(a => ({ nom: a.nom, src: enImage(a.svg) })),
-    ];
+    const options = d.avatarImporte ? [{ nom: 'Mon avatar', src: d.avatarImporte }] : [];
     apercuAvatar.replaceChildren(
       d.avatar ? el('img', { src: d.avatar, alt: '' }) : el('span', { text: '🙂' }),
       el('div', { style: { minWidth: 0 } },
