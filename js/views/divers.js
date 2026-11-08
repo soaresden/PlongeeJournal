@@ -54,7 +54,7 @@ export async function diversView() {
 
   tb.append(el('div.tb-carte.plein', {},
     el('div.profil-tete', {},
-      moi.avatar || moi.photoProfil ? el('img.profil-av.photo', { src: moi.avatar || moi.photoProfil, alt: '' })
+      moi.photoProfil || moi.avatar ? el('img.profil-av.photo', { src: moi.photoProfil || moi.avatar, alt: '' })
         : el('div.profil-av', { text: ((moi.prenom?.[0] || '') + (moi.nom?.[0] || '')).toUpperCase() || '?' }),
       el('div', { style: { flex: 1, minWidth: 0 } },
         el('div.profil-nom', { text: fullName(moi) || 'Sans nom' }),
@@ -240,7 +240,7 @@ export async function diverFormView({ id }) {
       d.photoProfil ? el('button.btn.sm.ghost', { type: 'button', text: 'Retirer', onclick: () => { d.photoProfil = null; rendrePhoto(); } }) : null));
   rendrePhoto();
 
-  // L'avatar (montré par défaut ; la photo vient au toucher) : une image à moi (mon Mii).
+  // L'avatar (mon Mii) : il vient quand on touche la photo.
   const apercuAvatar = el('div.photo-profil');
   const choixAvatar = el('input', { type: 'file', accept: 'image/*', hidden: true, onchange: async () => {
     const f = choixAvatar.files?.[0];
@@ -254,7 +254,7 @@ export async function diverFormView({ id }) {
     apercuAvatar.replaceChildren(
       d.avatar ? el('img', { src: d.avatar, alt: '' }) : el('span', { text: '🙂' }),
       el('div', { style: { minWidth: 0 } },
-        el('div.hint', { style: { margin: '0 0 6px' }, text: 'Avatar : montré par défaut, ta photo vient quand on le touche.' }),
+        el('div.hint', { style: { margin: '0 0 6px' }, text: 'Avatar : ta photo est montrée d’abord, l’avatar vient quand on la touche.' }),
         el('div.avatar-choix', {},
           ...options.map(o => el(`button.avatar-option${d.avatar === o.src ? '.on' : ''}`, { type: 'button', title: o.nom,
             onclick: () => { d.avatar = o.src; rendreAvatar(); } }, el('img', { src: o.src, alt: o.nom }))),

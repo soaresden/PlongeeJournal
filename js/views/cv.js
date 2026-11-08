@@ -390,16 +390,16 @@ export async function cvView() {
   }
 
   /**
-   * Le portrait : l'avatar d'abord, la photo au toucher (et retour).
+   * Le portrait : la photo d'abord, l'avatar au toucher (et retour).
    * Sans l'un ni l'autre : le niveau en grand.
    */
   let vuePhoto = false;
   function portrait() {
-    const images = [diver.avatar, diver.photoProfil].filter(Boolean);
+    const images = [diver.photoProfil, diver.avatar].filter(Boolean);
     if (!images.length) return el('div.cv-badge', { text: p.niveau || '🤿' });
     const img = el('img', { src: images[vuePhoto && images.length > 1 ? 1 : 0], alt: p.prenom });
     const boite = el(`div.cv-photo${images.length > 1 ? '.bascule' : ''}`, {
-      title: images.length > 1 ? (langue === 'fr' ? 'Toucher : avatar ou photo' : 'Tap: avatar or photo') : '',
+      title: images.length > 1 ? (langue === 'fr' ? 'Toucher : photo ou avatar' : 'Tap: photo or avatar') : '',
       onclick: () => {
         if (images.length < 2) return;
         vuePhoto = !vuePhoto;
