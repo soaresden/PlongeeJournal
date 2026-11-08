@@ -99,6 +99,33 @@ jobs:
           grep -n "permission\|uses-feature" "$MANIFEST"
           grep -n "versionCode\|versionName" android/app/build.gradle
 
+      # Gradle (~150 Mo) se télécharge depuis GitHub / gradle.org, qui
+      # tombent parfois (504, délais dépassés). La version « bin », plus
+      # légère, gardée en cache d'une construction à l'autre ; et plusieurs
+      # essais plutôt qu'un échec au premier hoquet du serveur.
+      - name: Gradle allégé
+        run: sed -i 's/-all\.zip/-bin.zip/' android/gradle/wrapper/gradle-wrapper.properties && cat android/gradle/wrapper/gradle-wrapper.properties
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/wrapper/dists
+            ~/.gradle/caches
+          key: gradle-${{ runner.os }}-${{ hashFiles('android/gradle/wrapper/gradle-wrapper.properties', 'android/**/*.gradle') }}
+          restore-keys: gradle-${{ runner.os }}-
+
+      - name: Téléchargement de Gradle (avec nouveaux essais)
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          for i in 1 2 3 4 5 6; do
+            ./gradlew --no-daemon --version && exit 0
+            echo "::warning::Gradle indisponible (essai $i/6), nouvel essai dans $((i * 30)) s"
+            sleep $((i * 30))
+          done
+          echo "::error::Gradle introuvable après 6 essais : serveurs de GitHub ou de gradle.org en panne"
+          exit 1
+
       - name: Compilation
         working-directory: android
         run: |
