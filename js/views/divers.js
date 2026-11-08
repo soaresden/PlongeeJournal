@@ -81,6 +81,8 @@ export async function diversView() {
       lien('⌚', 'Ma montre', 'Importer les plongées de la Suunto', () => navigate('montre')),
       lien('☁', 'Compte Suunto', 'Récupérer l’historique en ligne', () => navigate('suunto-cloud')),
       lien('🎬', 'Mes vidéos', 'Quel dossier pCloud va avec quelle plongée', () => navigate('videos')),
+      lien('📱', 'QR code de mon carnet', 'À scanner sur le bateau pour voir mes plongées',
+        async () => (await import('./qr-partage.js')).ouvrirQrPartage()),
       lien('👀', 'Historique des visites', 'Qui a regardé mon carnet partagé, et quoi', () => navigate('visites')),
       lien('🎒', 'Mon matériel', 'Combinaison, détendeur, bloc…', () => navigate(`diver/${moi.id}`)),
       lien('🆘', 'Fiche d’urgence', 'Groupe sanguin, contact à prévenir', () => navigate('urgence')),

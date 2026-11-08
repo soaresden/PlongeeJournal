@@ -843,3 +843,9 @@ html.partage .btn-visites { display: none !important; }
   font-size: 13px; font-weight: 700; background: var(--accent); color: #fff; }
 .feuille-script { width: 100%; margin-top: 6px; font: 11px/1.4 ui-monospace, monospace; white-space: pre; }
 .feuille-guide a { color: var(--accent); }
+
+/* --- QR code du carnet, en grand ------------------------------------ */
+.qr-modal { text-align: center; }
+.qr-modal .btn-row { justify-content: center; }
+.partage-qr.grand { width: 280px; max-width: 80vw; margin: 12px auto; }
+.qr-lien { word-break: break-all; font-size: 12px; }

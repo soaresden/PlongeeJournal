@@ -82,6 +82,7 @@ export async function visitesView() {
         e.currentTarget.disabled = false;
         await rendre();
       } }),
+      el('button.btn.sm', { type: 'button', text: '📱 QR code', onclick: async () => (await import('./qr-partage.js')).ouvrirQrPartage() }),
       el('button.btn.sm.ghost', { type: 'button', text: '🔗 Mon lien de partage', onclick: () => navigate('reglages') })),
     liste);
   await rendre();
