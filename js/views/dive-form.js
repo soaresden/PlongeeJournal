@@ -513,7 +513,29 @@ function debounceLocal(fn, ms) {
 
 // ============================================================
 
-export async function diveFormView({ id }) {
+/**
+ * Depuis que les plongées sont enregistrées par un ordinateur, une
+ * nouvelle plongée vient de lui (montre, compte Suunto, fichier .fit) :
+ * plus de saisie à la main, sauf pour une plongée d'avant l'ordinateur.
+ */
+function choixImport(debut) {
+  const carte = (icone, titre, texte, route, primaire = false) => el('button.card.choix-import', {
+    type: 'button', class: primaire ? 'primaire' : null, onclick: () => navigate(route) },
+    el('span.choix-import-ico', { text: icone }),
+    el('span', {}, el('b', { text: titre }), el('div.hint', { style: { margin: '2px 0 0' }, text: texte })),
+    el('span.choix-import-fleche', { text: '›' }));
+  return el('div', {},
+    el('div.hint', { style: { marginTop: 0 }, text: 'Une plongée vient de l’ordinateur : rien à recopier, et c’est la seule façon '
+      + 'd’avoir la courbe, la sonde et les vrais chiffres.' }),
+    carte('⌚', 'Depuis la montre (Bluetooth)', 'Le plus complet : profil, sonde du bloc, cœur, GPS, gaz.', 'montre', true),
+    carte('☁️', 'Depuis mon compte Suunto', 'Ce que l’appli Suunto a synchronisé : profil, températures, GPS.', 'suunto-cloud'),
+    carte('📄', 'Depuis un fichier .fit', 'Exporté de Suunto App, Garmin Connect, Shearwater…', 'suunto'),
+    el('button.lien-texte.choix-ancienne', { type: 'button', onclick: () => navigate('dive/ancienne'),
+      text: `✍️ Une plongée d’avant l’ordinateur (avant le ${fmtJour(debut)}) : la saisir à la main` }));
+}
+const fmtJour = iso => iso.split('-').reverse().join('/');
+
+export async function diveFormView({ id, ancienne = false }) {
   const diverId = await store.getActiveDiverId();
   if (!diverId) {
     return {
@@ -528,13 +550,19 @@ export async function diveFormView({ id }) {
   }
 
   const isNew = !id;
+  // Une nouvelle plongée vient de l'ordinateur ; à la main, seulement avant lui.
+  const { debutOrdinateur } = await import('../donnees.js');
+  const debutOrdi = debutOrdinateur(await store.listDives(diverId));
+  if (isNew && debutOrdi && !ancienne) {
+    return { title: 'Nouvelle plongée', node: choixImport(debutOrdi), back: true };
+  }
   let dive = isNew
     ? emptyDive(diverId, await store.nextNumber(diverId))
     : structuredClone(await store.getDive(id));
 
   if (!dive) return { title: 'Introuvable', node: el('div.empty', { text: 'Plongée introuvable.' }) };
 
-  if (isNew && !dive.date) dive.date = todayISO();
+  if (isNew && !dive.date && !ancienne) dive.date = todayISO();
 
   let buddies = await store.listBuddies();
   const profil = await store.getDiver(diverId);       // pour le matériel personnel
@@ -607,7 +635,12 @@ export async function diveFormView({ id }) {
     value: isNew ? 'auto' : (dive.numero ?? 'auto'), class: 'lecture-seule' });
   const dateInput   = input('date', dive.date, v => set({ date: v }));
 
-  const champDate = field('Date', dateInput, null, true);
+  if (isNew && ancienne && debutOrdi) {
+    const veille = new Date(`${debutOrdi}T12:00:00`); veille.setDate(veille.getDate() - 1);
+    dateInput.max = veille.toISOString().slice(0, 10);
+  }
+  const champDate = field('Date', dateInput,
+    isNew && ancienne && debutOrdi ? `Avant le ${fmtJour(debutOrdi)} : après, les plongées viennent de l’ordinateur.` : null, true);
   champDate.id = 'champ-date';
 
   // Niveau au moment de la plongée : déduit des diplômes et de la date.
@@ -1311,6 +1344,9 @@ export async function diveFormView({ id }) {
   saveBtn.onclick = async () => {
     reconcileTimes(dive);
     const manque = validerPlongee(dive);
+    if (isNew && debutOrdi && dive.date && dive.date >= debutOrdi && !(dive.suuntoKeys || []).length) {
+      manque.unshift({ champ: 'date', texte: `une date d’avant le ${fmtJour(debutOrdi)} (après, importe la plongée depuis la montre ou Suunto)` });
+    }
 
     form.querySelectorAll('.field.manquant, .section.manquant')
         .forEach(n => n.classList.remove('manquant'));

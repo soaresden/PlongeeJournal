@@ -51,6 +51,7 @@ import('./splash.js')
 route('dives',            divesView);
 route('stats',            statsView);
 route('dive/new',         diveFormView);
+route('dive/ancienne',    () => diveFormView({ ancienne: true }));
 route('dive/:id',         diveView);
 route('dive/:id/edit',    diveFormView);
 route('divers',           diversView);

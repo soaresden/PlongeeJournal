@@ -696,3 +696,9 @@ html.partage .donnees-bandeau, html.partage .donnees-recup, html.partage .donnee
 .fusion-carte b { display: block; margin-bottom: 4px; }
 .fusion-candidat { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--line); }
 .fusion-candidat > div { min-width: 0; }
+/* Nouvelle plongée : depuis l'ordinateur */
+.choix-import { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; cursor: pointer; font: inherit; color: var(--text); }
+.choix-import.primaire { border-color: var(--accent); }
+.choix-import-ico { font-size: 26px; }
+.choix-import-fleche { margin-left: auto; opacity: .5; font-size: 20px; }
+.choix-ancienne { display: block; margin: 14px auto 0; font-size: 13px; }
