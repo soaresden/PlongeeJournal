@@ -86,7 +86,9 @@ const avecDelai = (p, ms, quoi) => Promise.race([
 
 /** Le message quand la montre ne répond vraiment pas : quoi faire, concrètement. */
 export const MONTRE_MUETTE = 'La montre ne répond pas. Réveille-la (écran allumé, sur le cadran), vérifie que son Bluetooth '
-  + 'est actif (pas en mode avion), garde-la près du téléphone, puis réessaie. Si ça ne passe toujours pas : ouvre '
+  + 'est actif (pas en mode avion), garde-la près du téléphone, puis réessaie. Encore mieux : sur la montre, ouvre le menu '
+  + 'des appareils appairés (là où l’on voit « MobileApp ») et mets-la en mode appairage pendant que le carnet la cherche. '
+  + 'Si ça ne passe toujours pas : ouvre '
   + 'l’appli Suunto pour qu’elle se connecte à la montre, reviens ici et relance (le carnet passera par sa connexion). '
   + 'Autre chemin, sans Bluetooth : Plongées → Importer → « Récupérer depuis mon compte Suunto » (ce que l’appli Suunto a synchronisé).';
 

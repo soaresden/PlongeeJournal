@@ -56,6 +56,8 @@ export async function montreAideView() {
     bloc('En cas de souci',
       liste(
         'Montre introuvable : réveille-la, rapproche-la, vérifie que le Bluetooth du téléphone est allumé. Puis « Choisir une autre montre ».',
+        'Toujours rien : sur la montre, ouvre le menu des appareils appairés (là où l’appli Suunto apparaît sous le nom « MobileApp ») et mets-la en mode appairage : elle s’annonce alors et le carnet la trouve. Pas besoin d’une entrée à part pour le carnet : l’appairage appartient au téléphone, et « MobileApp » sert aux deux applis. N’efface pas « MobileApp ».',
+        'Ferme l’appli Suunto avant l’import si elle est en train de synchroniser : la montre ne parle qu’à une appli à la fois.',
         'Ouvre « Journal Bluetooth (diagnostic) » en bas de l’écran d’import, puis « Copier le journal » et envoie-le. Il ne contient ni ton carnet ni tes identifiants.',
         '« Données brutes » enregistre les octets reçus de la montre : de quoi rejouer le décodage sans la montre.',
       )),
