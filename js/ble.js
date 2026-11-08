@@ -286,9 +286,23 @@ async function ouvrirNatif({ journal, choisirAutre, surAttente = null, signal = 
   // cherche d'abord (voir connecterNatif).
   const id = await connecterNatif(ble, appareil, journal, {
     chercherAvant: dejaConnectee ? 0 : 8000, attente: dejaConnectee ? 0 : 90000, surAttente, signal });
+  // Android annonce parfois une déconnexion qui n'en est pas une (une
+  // connexion d'essai qui se ferme) : on vérifie avant d'y croire, et on
+  // ne prévient qu'une fois.
+  let coupee = false, verif = null;
   ble.addListener(`disconnected|${id}`, () => {
-    journal('⚠ montre déconnectée');
-    coupures.forEach(cb => cb());
+    if (coupee || verif) return;
+    verif = setTimeout(async () => {
+      verif = null;
+      try {
+        const { devices = [] } = await ble.getConnectedDevices({ services: [OCEAN_SERVICE] });
+        if (devices.some(d => d.deviceId === id)) { journal('(annonce de déconnexion ignorée : la montre est toujours là)'); return; }
+      } catch { /* on ne sait pas : on y croit */ }
+      if (coupee) return;
+      coupee = true;
+      journal('⚠ montre déconnectée');
+      coupures.forEach(cb => cb());
+    }, 1500);
   });
   journal('connecté');
   try { await ble.requestConnectionPriority({ deviceId: id, connectionPriority: 1 }); } catch { /* facultatif */ }
