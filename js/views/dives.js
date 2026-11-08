@@ -14,6 +14,8 @@ import { analyserProfil } from '../profil-analyse.js';
 import { ambianceDe, stylesAmbiance, vignetteLieu, etiquetteAmbiance } from '../ambiance.js';
 import { plongeesARanger } from '../seances.js';
 import { bilanDonnees, debutOrdinateur, listeMontre, LIBELLE_SOURCE } from '../donnees.js';
+import { configVideos, sectionVideos } from './videos.js';
+import { dossiersEnCache, videosDePlongee, chargerDossiers } from '../videos.js';
 import { photoCarnetFiche } from './carnet-photo.js';
 
 // ------------------------------------------------------------
@@ -182,6 +184,12 @@ export async function divesView() {
   }
 
   // Des « plongées » importées qui étaient des piscines ou des fosses.
+  // Les vidéos pCloud : d'après la liste en cache (elle se rafraîchit en fond).
+  const cfgVideos = await configVideos().catch(() => null);
+  const dossiersVideos = cfgVideos ? dossiersEnCache(cfgVideos) : null;
+  if (cfgVideos) chargerDossiers(cfgVideos).catch(() => {});
+  const aDesVideos = d => !!(dossiersVideos && videosDePlongee(d, dossiersVideos)?.fichiers.length);
+
   // Ce qui manque, et ce qu'on peut aller chercher.
   const liste = listeMontre();
   const debutMontre = debutOrdinateur(dives);
@@ -262,7 +270,8 @@ export async function divesView() {
         el('div.dive-title', { text: d.lieuNom || d.site || 'Lieu non précisé' }),
         el('div.dive-sub', {}, fmtDate(d.date), d.heureImmersion ? ` · ${d.heureImmersion}` : ''),
         el('div.dive-tags', {}, etiquetteAmbiance(d), d.type ? typeBadge(d.type) : null,
-          bilans.get(d.id) ? badgeDonnees(bilans.get(d.id)) : null),
+          bilans.get(d.id) ? badgeDonnees(bilans.get(d.id)) : null,
+          aDesVideos(d) ? el('span.donnees', { title: 'Vidéos dans pCloud', text: '🎬' }) : null),
         el('div.dive-bas', {},
           el('div.dive-metrics', {},
             chiffre('prof', prof ? `${prof} m` : '—', 'Profondeur max'),
@@ -481,9 +490,13 @@ export async function diveView({ id }) {
     ));
   }
 
+  // ---------- Vidéos (pCloud) ----------
+  const toutesPlongees = await store.listDives(d.diverId);
+  wrap.append(sectionVideos(d, toutesPlongees, { lecture: document.documentElement.classList.contains('partage') }));
+
   // ---------- Les données : ce qu'on a, ce qui manque, où le trouver ----------
   {
-    const toutes = await store.listDives(d.diverId);
+    const toutes = toutesPlongees;
     const b = bilanDonnees(d, { debutMontre: debutOrdinateur(toutes) });
     const ligne = (ok, texte, detail = '') => el('div.donnee', { class: ok === true ? 'ok' : ok === 'moyen' ? 'moyen' : 'non' },
       el('span.donnee-ico', { text: ok === true ? '✓' : ok === 'moyen' ? '◐' : '✗' }),

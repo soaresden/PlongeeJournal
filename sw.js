@@ -3,7 +3,7 @@
 
 // À incrémenter à chaque livraison : un vieux cache sert un vieux
 // index.html, et les changements d'icônes ou de menu ne se voient pas.
-const CACHE = 'plongee-journal-v60';
+const CACHE = 'plongee-journal-v61';
 
 const ASSETS = [
   './',
@@ -51,6 +51,8 @@ const ASSETS = [
   './js/courbes.js',
   './js/lieu-auto.js',
   './js/donnees.js',
+  './js/videos.js',
+  './js/views/videos.js',
   './js/volet-theme.js',
   './js/tags.js',
   './js/genre.js',
@@ -107,6 +109,11 @@ self.addEventListener('fetch', e => {
   // Le carnet, l'API locale, les cartes et les recherches de lieux ne
   // passent jamais par le cache : servir un carnet périmé serait pire
   // que ne rien servir du tout.
+  // Les autres sites (pCloud, OpenStreetMap, iNaturalist…) ne passent pas
+  // par ici : une vidéo ou une réponse d'API n'a rien à faire dans le cache,
+  // et une erreur ne doit pas devenir la page de l'appli. Seules les
+  // bibliothèques des CDN sont gardées pour le hors-ligne.
+  if (url.origin !== self.location.origin && !/^(unpkg\.com|cdnjs\.cloudflare\.com|cdn\.jsdelivr\.net)$/.test(url.hostname)) return;
   if (/^\/api\//.test(url.pathname) || /\/donnees\//.test(url.pathname)) return;
   if (/tile|nominatim|arcgisonline|googleapis|suunto|api\.github\.com/.test(url.hostname + url.pathname)) return;
 

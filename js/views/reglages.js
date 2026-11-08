@@ -64,6 +64,10 @@ export async function reglagesView() {
 
   wrap.append(sectionApparence());
   wrap.append(await sectionPartage());
+  {
+    const { carteVideosReglages } = await import('./videos.js');
+    wrap.append(el('div.section', {}, el('h2', { text: 'Vidéos' }), await carteVideosReglages()));
+  }
   wrap.append(sectionDonnees());
 
   const appli = el('div.section', {}, el('h2', { text: 'Application' }));

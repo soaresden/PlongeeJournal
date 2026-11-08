@@ -671,3 +671,17 @@ html.partage .apercu input:not([type="search"])::placeholder, html.partage .aper
 .donnee.non { color: var(--text-dim); }
 .donnee.non .donnee-ico { color: var(--danger); }
 html.partage .donnees-bandeau, html.partage .donnees-recup, html.partage .donnees-fiche .btn { display: none !important; }
+/* Vidéos pCloud */
+.video-tete { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; margin-bottom: 10px; }
+.video-grille { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 6px; }
+.video-vignette { position: relative; aspect-ratio: 4 / 3; border: 0; padding: 0; border-radius: 10px; overflow: hidden;
+  background: rgba(var(--accent-rgb), .1); cursor: pointer; }
+.video-vignette img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.video-sans { display: grid; place-items: center; width: 100%; height: 100%; font-size: 26px; }
+.video-play { position: absolute; inset: auto 6px 6px auto; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center;
+  background: rgba(0,0,0,.6); color: #fff; font-size: 12px; }
+.video-zone video, .video-zone img { width: 100%; max-height: 70vh; border-radius: 12px; background: #000; display: block; }
+.video-choix { display: flex; flex-direction: column; gap: 6px; max-height: 60vh; overflow: auto; }
+.video-choix-ligne { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; text-align: left; padding: 8px 10px; border-radius: 10px;
+  border: 1px solid var(--line); background: var(--surface); color: var(--text); cursor: pointer; font: inherit; }
+.video-choix-ligne small { grid-column: 2; color: var(--text-mute); }
