@@ -74,9 +74,10 @@ export function message({ prenom, date, lieu, plongee, ok, sid = null }) {
 
 /** Prévient le propriétaire (ne lève jamais : une visite ne doit pas échouer pour ça). */
 export async function annoncerVisite(canal, visite, f = fetch) {
-  if (!canal) return false;
   const m = message(visite);
-  posterFeuille(FEUILLE, m);
+  // La feuille Google branchée : elle suffit (ntfy ne sert plus à rien)
+  if (FEUILLE) return posterFeuille(FEUILLE, m);
+  if (!canal) return false;
   try {
     const r = await f(`${NTFY}/${encodeURIComponent(canal)}?title=${encodeURIComponent(m.titre)}&tags=${encodeURIComponent(m.tags.join(','))}`, {
       // Le titre et les étiquettes en paramètres d'URL (un en-tête ne prend
@@ -121,7 +122,9 @@ export async function relireVisites(canal, f = fetch) {
  * (tout l'historique), sans doublon. Lève seulement si rien n'a pu être lu.
  */
 export async function relireToutesVisites({ canal = '', feuille = '', cle = '' } = {}, f = fetch) {
-  const sources = [canal ? relireVisites(canal, f) : null, feuille && cle ? lireFeuille(feuille, cle, f).then(l => l.map(lireMessage)) : null].filter(Boolean);
+  // La feuille garde tout : quand elle est branchée, plus besoin de ntfy
+  const avecFeuille = !!(feuille && cle);
+  const sources = [canal && !avecFeuille ? relireVisites(canal, f) : null, avecFeuille ? lireFeuille(feuille, cle, f).then(l => l.map(lireMessage)) : null].filter(Boolean);
   const res = await Promise.allSettled(sources);
   const lues = res.filter(r => r.status === 'fulfilled').flatMap(r => r.value);
   if (sources.length && !res.some(r => r.status === 'fulfilled')) throw res[0].reason;
@@ -158,7 +161,7 @@ export function messageParcours({ prenom, sid, pages }) {
  * @param {{canal, prenom, sid, nommer:(chemin)=>string}} o
  */
 export function suivreParcours({ canal, prenom, sid, nommer }) {
-  if (!canal || typeof window === 'undefined') return () => {};
+  if ((!canal && !FEUILLE) || typeof window === 'undefined') return () => {};
   const pages = [];
   let envoyees = 0;
   const noter = libelle => {
@@ -170,7 +173,7 @@ export function suivreParcours({ canal, prenom, sid, nommer }) {
     if (pages.length === envoyees) return;
     envoyees = pages.length;
     const m = messageParcours({ prenom, sid, pages });
-    posterFeuille(FEUILLE, m, { fin: aLaFin });
+    if (FEUILLE) { posterFeuille(FEUILLE, m, { fin: aLaFin }); return; }
     const url = `${NTFY}/${encodeURIComponent(canal)}?title=${encodeURIComponent(m.titre)}&tags=${encodeURIComponent(m.tags.join(','))}`;
     try {
       if (aLaFin && navigator.sendBeacon) navigator.sendBeacon(url, m.corps);

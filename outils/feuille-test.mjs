@@ -60,7 +60,7 @@ const faux = async url => (url.startsWith(V.NTFY)
   ? reponse(JSON.stringify({ id: 'ntfy1', event: 'message', time: 1700000000, tags: m.tags, message: m.corps }))
   : reponse(JSON.stringify(lus)));
 const tout = await V.relireToutesVisites({ canal: 'pj-x', feuille: URL_OK, cle }, faux);
-check('ntfy + feuille : pas de doublon', tout.filter(v => v.prenom === 'Alison').length === 1, JSON.stringify(tout));
+check('feuille relue : chaque visite une seule fois', tout.filter(v => v.prenom === 'Alison').length === 1, JSON.stringify(tout));
 const sansNtfy = await V.relireToutesVisites({ canal: 'pj-x', feuille: URL_OK, cle },
   async url => (url.startsWith(V.NTFY) ? Promise.reject(new Error('hors ligne')) : reponse(JSON.stringify(lus))));
 check('ntfy injoignable : la feuille suffit', sansNtfy.length === 2);
@@ -78,7 +78,13 @@ V.brancherFeuille(URL_OK);
 await V.annoncerVisite('pj-x', { prenom: 'Léa', date: '2025-03-29', lieu: 'Egypte', ok: true, sid: 's2' }, globalThis.fetch);
 const versFeuille = envois.find(([u]) => u.startsWith(URL_OK));
 check('visite écrite dans la feuille (sans clé, sans lire la réponse)', versFeuille && versFeuille[1].mode === 'no-cors' && !versFeuille[0].includes('cle='), JSON.stringify(envois));
-check('et sur ntfy', envois.some(([u]) => u.startsWith(V.NTFY)));
+check('feuille branchée : plus rien sur ntfy (superflu)', !envois.some(([u]) => u.startsWith(V.NTFY)), JSON.stringify(envois));
+const lus2 = []; await V.relireToutesVisites({ canal: 'pj-x', feuille: URL_OK, cle }, async u => { lus2.push(u); return reponse('[]'); });
+check('feuille branchée : on ne relit que la feuille', lus2.length === 1 && lus2[0].startsWith(URL_OK), JSON.stringify(lus2));
+V.brancherFeuille('');
+envois.length = 0;
+await V.annoncerVisite('pj-x', { prenom: 'Léa', date: '2025-03-29', lieu: 'Egypte', ok: true, sid: 's3' }, globalThis.fetch);
+check('sans feuille : ntfy prend le relais', envois.some(([u]) => u.startsWith(V.NTFY)));
 V.brancherFeuille('');
 check('adresse invalide : rien n’est envoyé', F.posterFeuille('https://pirate.example/exec', m) === false);
 
