@@ -831,3 +831,15 @@ html.partage .btn-visites { display: none !important; }
 .visite-qui.inconnu { color: var(--text-mute); font-weight: 400; }
 .visite-ligne { font-size: 13px; margin-top: 6px; color: var(--text-dim); overflow-wrap: anywhere; }
 .visites-popup { max-height: 60vh; overflow: auto; }
+
+/* --- Registre des visites dans une feuille Google ------------------- */
+.feuille-bloc { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line, rgba(255,255,255,.08)); }
+.feuille-guide h3 { margin: 0 0 6px; }
+.feuille-etape { display: flex; gap: 10px; align-items: flex-start; margin: 12px 0; line-height: 1.45; }
+.feuille-etape > div { flex: 1; min-width: 0; }
+.feuille-etape .btn-row { margin-top: 6px; }
+.feuille-etape input { width: 100%; margin-top: 6px; }
+.feuille-num { flex: none; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center;
+  font-size: 13px; font-weight: 700; background: var(--accent); color: #fff; }
+.feuille-script { width: 100%; margin-top: 6px; font: 11px/1.4 ui-monospace, monospace; white-space: pre; }
+.feuille-guide a { color: var(--accent); }

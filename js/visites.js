@@ -13,7 +13,17 @@
 //  ntfy abonnée au canal, je suis prévenu tout de suite et rien ne se perd.
 // ============================================================
 
+import { posterFeuille, lireFeuille } from './feuille.js';
+
 export const NTFY = 'https://ntfy.sh';
+
+// La feuille Google où chaque visite est aussi écrite (voir feuille.js) :
+// donnée par le carnet partagé, côté visiteur.
+let FEUILLE = '';
+export const brancherFeuille = url => { FEUILLE = url || ''; };
+
+/** Un numéro de message (le même sur ntfy et dans la feuille : pas de doublon). */
+const numeroMessage = () => Math.random().toString(36).slice(2, 12);
 
 const sansAccent = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 const mots = s => sansAccent(s).split(/[^a-z0-9]+/).filter(m => m.length >= 3);
@@ -57,7 +67,8 @@ export function message({ prenom, date, lieu, plongee, ok, sid = null }) {
   return {
     titre: ok ? `👀 ${prenom} regarde ton carnet` : `❓ ${prenom || 'Quelqu’un'} n’a pas trouvé la plongée`,
     corps: [prenom || '?', fmt(date), lieu || '?', plongee ? `n°${plongee.numero ?? '?'} ${plongee.lieuNom || ''}`.trim() : ''].filter(Boolean).join(' · '),
-    tags: [ok ? 'eyes' : 'question', ok ? 'pj-ok' : 'pj-ko', ...(plongee ? [`pj-plongee-${plongee.id}`] : []), ...(sid ? [`pj-s-${sid}`] : [])],
+    tags: [ok ? 'eyes' : 'question', ok ? 'pj-ok' : 'pj-ko', ...(plongee ? [`pj-plongee-${plongee.id}`] : []), ...(sid ? [`pj-s-${sid}`] : []),
+      `pj-m-${numeroMessage()}`],
   };
 }
 
@@ -65,6 +76,7 @@ export function message({ prenom, date, lieu, plongee, ok, sid = null }) {
 export async function annoncerVisite(canal, visite, f = fetch) {
   if (!canal) return false;
   const m = message(visite);
+  posterFeuille(FEUILLE, m);
   try {
     const r = await f(`${NTFY}/${encodeURIComponent(canal)}?title=${encodeURIComponent(m.titre)}&tags=${encodeURIComponent(m.tags.join(','))}`, {
       // Le titre et les étiquettes en paramètres d'URL (un en-tête ne prend
@@ -79,14 +91,15 @@ export async function annoncerVisite(canal, visite, f = fetch) {
 export function lireMessage(m) {
   const tags = m.tags || [];
   const s = tags.find(t => t.startsWith('pj-s-'))?.slice(5) || null;
+  const id = tags.find(t => t.startsWith('pj-m-'))?.slice(5) || m.id;
   if (tags.includes('pj-parcours')) {
     const [prenom = '', , pages = ''] = String(m.message || '').split(' · ');
-    return { id: m.id, at: new Date((m.time || 0) * 1000).toISOString(), genre: 'parcours', prenom, sid: s, pages: pages ? pages.split(' › ') : [] };
+    return { id, at: new Date((m.time || 0) * 1000).toISOString(), genre: 'parcours', prenom, sid: s, pages: pages ? pages.split(' › ') : [] };
   }
   const [prenom = '', date = '', lieu = '', plongee = ''] = String(m.message || '').split(' · ');
   const d = /^(\d\d)\/(\d\d)\/(\d{4})$/.exec(date);
   return {
-    id: m.id, at: new Date((m.time || 0) * 1000).toISOString(),
+    id, at: new Date((m.time || 0) * 1000).toISOString(),
     prenom, date: d ? `${d[3]}-${d[2]}-${d[1]}` : '', lieu, plongee,
     plongeeId: (tags.find(t => t.startsWith('pj-plongee-')) || '').slice(11) || null,
     ok: tags.includes('pj-ok'), genre: 'entree', sid: s,
@@ -103,8 +116,20 @@ export async function relireVisites(canal, f = fetch) {
     .filter(m => m && m.event === 'message').map(lireMessage);
 }
 
+/**
+ * Relit tout : le canal ntfy (12 dernières heures) et la feuille Google
+ * (tout l'historique), sans doublon. Lève seulement si rien n'a pu être lu.
+ */
+export async function relireToutesVisites({ canal = '', feuille = '', cle = '' } = {}, f = fetch) {
+  const sources = [canal ? relireVisites(canal, f) : null, feuille && cle ? lireFeuille(feuille, cle, f).then(l => l.map(lireMessage)) : null].filter(Boolean);
+  const res = await Promise.allSettled(sources);
+  const lues = res.filter(r => r.status === 'fulfilled').flatMap(r => r.value);
+  if (sources.length && !res.some(r => r.status === 'fulfilled')) throw res[0].reason;
+  return fusionnerVisites([], lues, 5000);
+}
+
 /** Ajoute les nouvelles aux visites gardées (sans doublon), les plus récentes d'abord. */
-export function fusionnerVisites(anciennes = [], nouvelles = [], max = 500) {
+export function fusionnerVisites(anciennes = [], nouvelles = [], max = 2000) {
   const parId = new Map(anciennes.map(v => [v.id, v]));
   for (const v of nouvelles) if (v?.id && !parId.has(v.id)) parId.set(v.id, v);
   return [...parId.values()].sort((a, b) => String(b.at).localeCompare(String(a.at))).slice(0, max);
@@ -122,7 +147,7 @@ export function messageParcours({ prenom, sid, pages }) {
   return {
     titre: `🧭 ${prenom || 'Un visiteur'} a regardé`,
     corps: [prenom || '?', 'parcours', pages.join(' › ')].join(' · '),
-    tags: ['compass', 'pj-parcours', `pj-s-${sid}`],
+    tags: ['compass', 'pj-parcours', `pj-s-${sid}`, `pj-m-${numeroMessage()}`],
   };
 }
 
@@ -145,6 +170,7 @@ export function suivreParcours({ canal, prenom, sid, nommer }) {
     if (pages.length === envoyees) return;
     envoyees = pages.length;
     const m = messageParcours({ prenom, sid, pages });
+    posterFeuille(FEUILLE, m, { fin: aLaFin });
     const url = `${NTFY}/${encodeURIComponent(canal)}?title=${encodeURIComponent(m.titre)}&tags=${encodeURIComponent(m.tags.join(','))}`;
     try {
       if (aLaFin && navigator.sendBeacon) navigator.sendBeacon(url, m.corps);

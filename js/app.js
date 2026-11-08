@@ -260,6 +260,8 @@ async function ouvrirPartage() {
     signatureVisite = moi?.prenom || '';
     // « Qui es-tu ? » : prénom, et une plongée faite ensemble (le mot de passe).
     const { accueilVisiteur } = await import('./views/accueil-visiteur.js');
+    // Les visites sont aussi écrites dans ma feuille Google, si j'en ai une.
+    (await import('./visites.js')).brancherFeuille(donnees.partage?.feuille || '');
     await accueilVisiteur({ id: PARTAGE_ID, proprio: moi?.prenom || 'moi', dives: donnees.dives || [], buddies: donnees.buddies || [],
       canal: donnees.partage?.canal || '' });
     afficherBandeau({ classe: 'partage', icone: 'i-carte', duree: 7000,

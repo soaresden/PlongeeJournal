@@ -145,10 +145,10 @@ export async function entretenir({ analyser = null, nommer = null, visites: reli
  */
 export async function relireLesVisites({ relire = null } = {}) {
   const reglages = await store.getSettings();
-  const canal = reglages.partage?.canal;
-  if (!canal) return [];
+  const canal = reglages.partage?.canal, feuille = reglages.partage?.feuille, cle = reglages.feuilleCle;
+  if (!canal && !(feuille && cle)) return [];
   const v = await import('./visites.js');
-  const lues = await (relire || v.relireVisites)(canal);
+  const lues = await (relire || (c => v.relireToutesVisites({ canal: c, feuille, cle })))(canal);
   const avant = reglages.visites || [];
   const connues = new Set(avant.map(x => x.id));
   const nouvelles = lues.filter(x => !connues.has(x.id));

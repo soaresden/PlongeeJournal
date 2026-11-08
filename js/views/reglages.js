@@ -266,6 +266,7 @@ async function sectionPartage() {
       return;
     }
     const { lienPartage, qrSvg } = await import('../partage.js');
+    const { blocFeuille } = await import('./feuille.js');
     const lien = lienPartage(p);
     // Le QR code du lien : à montrer sur le bateau, ou à imprimer.
     const qr = el('div.partage-qr');
@@ -285,8 +286,8 @@ async function sectionPartage() {
                   : `n’a pas trouvé : ${v.lieu} le ${v.date?.split('-').reverse().join('/')}` })),
               el('span.hint', { style: { margin: 0, whiteSpace: 'nowrap' }, text: fmt(v.at) }))))
           : el('div.hint', { text: 'Personne pour l’instant.' }),
-        p.canal ? el('div.hint', { text: `Pour être prévenu tout de suite (et ne rien perdre) : installe l’appli « ntfy » et abonne-toi au canal « ${p.canal} ». `
-          + 'Sinon, les visites des 12 dernières heures sont relues à chaque ouverture du carnet.' }) : null,
+        p.canal ? el('div.hint', { text: `Pour être prévenu tout de suite sur ton téléphone : installe l’appli « ntfy » et abonne-toi au canal « ${p.canal} ». `
+          + (p.feuille ? '' : 'Sinon, les visites des 12 dernières heures sont relues à chaque ouverture du carnet.') }) : null,
         el('button.btn.sm', { type: 'button', text: '👀 Historique des visites', onclick: () => navigate('visites') }),
         el('button.btn.sm.ghost', { type: 'button', text: '↻ Relire les visites', onclick: async e => {
           e.currentTarget.disabled = true;
@@ -324,7 +325,17 @@ async function sectionPartage() {
             rendre();
           } catch (err) { toast(err.message, true); }
         } })),
-      visites);
+      visites,
+      // La feuille Google qui garde toutes les visites (ntfy : 12 h seulement).
+      blocFeuille(p, async actuel => {
+        try {
+          const { publierPartage } = await import('../partage.js');
+          const moi = await store.getDiver(await store.getActiveDiverId());
+          const n = await publierPartage(await store.raw(), actuel, { auteur: moi?.prenom || '' });
+          await store.saveSettings({ partage: { ...actuel, siteId: n.siteId, majLe: n.majLe, canal: n.canal } });
+        } catch (e) { toast(e.message, true); }
+        rendre();
+      }));
   };
   async function publier(bouton, actuel) {
     bouton.disabled = true;

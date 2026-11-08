@@ -42,12 +42,12 @@ const GARDER_BREVET = ['id', 'diverId', 'nom', 'organisme', 'dateObtention', 'cr
 const garder = (o, cles) => Object.fromEntries(cles.filter(k => o[k] !== undefined).map(k => [k, o[k]]));
 
 /** Le carnet, débarrassé de tout ce qui est privé. */
-export function instantane(carnet, { auteur = '', canal = '' } = {}) {
+export function instantane(carnet, { auteur = '', canal = '', feuille = '' } = {}) {
   const moi = carnet.settings?.activeDiverId || carnet.divers?.[0]?.id || null;
   const sansPhoto = d => { const { photoCarnet, stampImage, ...reste } = d; return reste; };
   return {
     version: 1,
-    partage: { le: new Date().toISOString(), auteur, ...(canal ? { canal } : {}) },
+    partage: { le: new Date().toISOString(), auteur, ...(canal ? { canal } : {}), ...(feuille ? { feuille } : {}) },
     divers: (carnet.divers || []).filter(d => d.id === moi).map(d => garder(d, GARDER_PLONGEUR)),
     buddies: (carnet.buddies || []).map(b => garder(b, GARDER_COMPAGNON)),
     dives: (carnet.dives || []).filter(d => d.diverId === moi).map(sansPhoto),
@@ -159,7 +159,7 @@ export async function publierPartage(carnet, actuel = {}, { auteur = '' } = {}) 
   const siteId = actuel.siteId || nouveauNumero();
   // Le canal des visites : créé une fois, gardé ensuite.
   const canal = actuel.canal || (await import('./visites.js')).nouveauCanal();
-  const contenu = await emballer(instantane(carnet, { auteur, canal }));
+  const contenu = await emballer(instantane(carnet, { auteur, canal, feuille: actuel.feuille || '' }));
   const cfg = { ...gh.configGitHub(), ...DEPOT_SITE };
   try {
     await gh.ecrireFichierBase64(cheminPartage(siteId), enB64(contenu), 'Partage du carnet : mise à jour', cfg);

@@ -71,6 +71,10 @@ export async function visitesView() {
   };
   wrap.append(
     reglages.partage?.canal ? null : el('div.card.alerte', {}, 'Ton lien de partage n’a pas encore de suivi des visites : Réglages → Partager mon carnet → « ↻ Mettre à jour ».'),
+    reglages.partage?.canal && !reglages.partage?.feuille
+      ? el('div.card.alerte', {}, 'Les visites de plus de 12 heures sont perdues si l’appli n’a pas été ouverte entre-temps. ',
+        el('button.lien-texte', { type: 'button', text: '📒 Brancher une feuille Google pour tout garder', onclick: () => navigate('reglages') }))
+      : null,
     el('div.btn-row', {},
       el('button.btn.sm', { type: 'button', text: '↻ Relire les visites', onclick: async e => {
         e.currentTarget.disabled = true;
