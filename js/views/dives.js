@@ -497,7 +497,7 @@ export async function diveView({ id }) {
     wrap.append(el('details.section.donnees-fiche', { open: b.recuperer.length ? true : null },
       el('summary', {}, el('h2', { text: 'Données' }), badgeDonnees(b)),
       el('div.card', {},
-        el('div.hint', { style: { marginTop: 0 }, text: `Venue de ${LIBELLE_SOURCE[b.source]}.` }),
+        el('div.hint', { style: { marginTop: 0 }, text: LIBELLE_SOURCE[b.source] }),
         ligne(b.courbe, 'Courbe de plongée'),
         ligne(...sonde),
         ligne(b.temp, 'Température'),

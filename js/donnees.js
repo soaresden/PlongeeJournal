@@ -39,9 +39,10 @@ export function sourcePlongee(d) {
   return 'saisie';
 }
 
+/** « Venue de la montre », « Venue du compte Suunto »… */
 export const LIBELLE_SOURCE = {
-  montre: 'la montre (Bluetooth)', compte: 'le compte Suunto', export: 'l’export Suunto',
-  fichier: 'un fichier .fit', saisie: 'saisie à la main',
+  montre: 'Venue de la montre (Bluetooth).', compte: 'Venue du compte Suunto.', export: 'Venue de l’export Suunto.',
+  fichier: 'Venue d’un fichier .fit.', saisie: 'Saisie à la main.',
 };
 
 /** Heure de début (s UNIX) d'une plongée du carnet, si on la connaît. */

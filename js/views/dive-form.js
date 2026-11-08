@@ -637,7 +637,7 @@ export async function diveFormView({ id }) {
     ),
     field('Type de plongée',
       segmented(DIVE_TYPES.map(t => ({ id: t, label: t.replace('Exploration de ', 'Explo ') })),
-                dive.type, v => set({ type: v }))),
+                dive.type, v => { set({ type: v }); majExercices(); })),
     field('Mon niveau ce jour-là', niveauSel, 'À changer seulement pour une plongée en formation.'),
   ));
 
@@ -958,6 +958,17 @@ export async function diveFormView({ id }) {
     ressentis.append(b);
   });
 
+  // Les exercices ne servent qu'en formation : affichés pour une plongée
+  // d'enseignement, ou s'il y en a déjà de cochés.
+  const zoneExercices = field('Exercices',
+    chipGroup(EXERCICES, dive.exercices, (item, on) => {
+      dive.exercices = on ? [...dive.exercices, item] : dive.exercices.filter(x => x !== item);
+    }));
+  function majExercices() {
+    zoneExercices.hidden = !(dive.type === 'Enseignement' || dive.exercices?.length);
+  }
+  majExercices();
+
   const unMot = textarea(dive.observations, v => set({ observations: v }), 'Un mot si tu veux : ce qui t’a marqué, à retenir…');
   unMot.rows = 2;
 
@@ -968,10 +979,7 @@ export async function diveFormView({ id }) {
       chipGroup(DIVE_GOALS, dive.objectifs, (item, on) => {
         dive.objectifs = on ? [...dive.objectifs, item] : dive.objectifs.filter(x => x !== item);
       })),
-    field('Exercices',
-      chipGroup(EXERCICES, dive.exercices, (item, on) => {
-        dive.exercices = on ? [...dive.exercices, item] : dive.exercices.filter(x => x !== item);
-      })),
+    zoneExercices,
     field('Un mot', unMot),
     // L'ancien texte libre « ce que j'ai fait » reste modifiable s'il existe.
     dive.fait ? field('Ce que j’ai fait (texte)', textarea(dive.fait, v => set({ fait: v }))) : null,
