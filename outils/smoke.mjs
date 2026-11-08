@@ -317,6 +317,7 @@ let ouvert = null;
 const clicOrigine = window.HTMLAnchorElement.prototype.click;
 window.HTMLAnchorElement.prototype.click = function () { ouvert = this.href; };
 boutonMaj().click();
+await tick(80);          // la barre de chargement se charge à la demande
 window.HTMLAnchorElement.prototype.click = clicOrigine;
 check('APK : le bouton ouvre l’APK de la release', /releases\/download\/android\/PlongeeJournal\.apk$/.test(ouvert || ''), ouvert);
 fausseRelease = { installee: 42, publiee: 42 };
