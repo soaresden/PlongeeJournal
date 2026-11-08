@@ -15,7 +15,6 @@ function visage({ yeux = true } = {}) {
   <ellipse cx="147" cy="100" rx="9" ry="13" fill="${PEAU_OMBRE}"/>
   <path d="M54 82 C54 50 74 34 100 34 C126 34 146 50 146 82 L146 104 C146 134 124 152 100 152 C76 152 54 134 54 104 Z" fill="${PEAU}"/>
   <path d="M55 100 C56 132 78 152 100 152 C122 152 144 132 145 100 C141 116 130 123 119 121 C112 131 88 131 81 121 C70 123 59 116 55 100 Z" fill="${BARBE}" opacity=".62"/>
-  <path d="M83 119 C91 112 109 112 117 119 C109 116.5 91 116.5 83 119 Z" fill="${BARBE}" opacity=".85"/>
   <path d="M89 126 Q100 133 111 126" fill="none" stroke="${TRAIT}" stroke-width="3" stroke-linecap="round"/>
   <path d="M100 95 Q96 107 100 111 Q104 112.5 107 109" fill="none" stroke="#c08a64" stroke-width="3" stroke-linecap="round"/>
   ${yeux ? `
@@ -44,37 +43,36 @@ const defsMii = `
   <defs>
     <radialGradient id="mPeau" cx=".42" cy=".38" r=".75"><stop offset="0" stop-color="#ffd9bd"/><stop offset=".7" stop-color="#f6bf98"/><stop offset="1" stop-color="#e9a57c"/></radialGradient>
     <linearGradient id="mCheveux" gradientUnits="userSpaceOnUse" x1="0" y1="12" x2="0" y2="90"><stop offset="0" stop-color="#4a3122"/><stop offset="1" stop-color="#2a1a11"/></linearGradient>
-    <linearGradient id="mBarbe" gradientUnits="userSpaceOnUse" x1="0" y1="104" x2="0" y2="160"><stop offset="0" stop-color="#5a3f2e" stop-opacity=".35"/><stop offset=".45" stop-color="#4a3122" stop-opacity=".85"/><stop offset="1" stop-color="#3a2619"/></linearGradient>
+    <linearGradient id="mBarbe" gradientUnits="userSpaceOnUse" x1="0" y1="100" x2="0" y2="158"><stop offset="0" stop-color="#4a3122" stop-opacity=".18"/><stop offset=".5" stop-color="#4a3122" stop-opacity=".55"/><stop offset="1" stop-color="#3a2619" stop-opacity=".75"/></linearGradient>
   </defs>`;
 
 function teteMii({ cheveux = true, lunettesFront = false, cagoule = false } = {}) {
   return `
-  <ellipse cx="48" cy="104" rx="10" ry="14" fill="#efb38b"/><ellipse cx="152" cy="104" rx="10" ry="14" fill="#efb38b"/>
-  <path d="M50 78 C50 44 72 30 100 30 C128 30 150 44 150 78 L150 110 C150 142 128 160 100 160 C72 160 50 142 50 110 Z" fill="url(#mPeau)"/>
-  <path d="M50 104 L50 110 C50 142 72 160 100 160 C128 160 150 142 150 110 L150 104 C147 122 135 131 122 130 L78 130 C65 131 53 122 50 104 Z" fill="url(#mBarbe)"/>
-  <path d="M78 133 C80 121 92 118 100 122 C108 118 120 121 122 133 C114 128 106 127 100 128 C94 127 86 128 78 133 Z" fill="#3a2619" opacity=".9"/>
-  <path d="M83 133 Q100 155 117 133 Q100 139 83 133 Z" fill="#e7967f"/>
-  <path d="M86 134 Q100 151 114 134 Q100 139 86 134 Z" fill="#5b1a14"/>
-  <path d="M88 135 Q100 139 112 135 L111 138.5 Q100 142 89 138.5 Z" fill="#fff"/>
-  <path d="M93 146 Q100 149 107 146 Q100 144 93 146 Z" fill="#e0747a"/>
-  <path d="M101 100 Q95 113 99 117 Q104 119 108 116" fill="none" stroke="#1d120c" stroke-width="3" stroke-linecap="round"/>
-  <ellipse cx="80" cy="96" rx="11" ry="9" fill="#fff" stroke="#1d120c" stroke-width="3"/><circle cx="80" cy="96" r="5.5" fill="#1d120c"/><circle cx="82" cy="94" r="1.8" fill="#fff"/>
-  <ellipse cx="120" cy="96" rx="11" ry="9" fill="#fff" stroke="#1d120c" stroke-width="3"/><circle cx="120" cy="96" r="5.5" fill="#1d120c"/><circle cx="122" cy="94" r="1.8" fill="#fff"/>
-  <path d="M67 83 Q80 73 93 80" fill="none" stroke="#3a2619" stroke-width="6" stroke-linecap="round"/>
-  <path d="M107 80 Q120 73 133 83" fill="none" stroke="#3a2619" stroke-width="6" stroke-linecap="round"/>
+  <ellipse cx="50" cy="102" rx="10" ry="14" fill="#f2b48c"/><ellipse cx="150" cy="102" rx="10" ry="14" fill="#f2b48c"/>
+  <path d="M52 74 C52 46 74 34 100 34 C126 34 148 46 148 74 L148 104 C148 138 126 158 100 158 C74 158 52 138 52 104 Z" fill="url(#mPeau)"/>
+  <!-- Barbe courte : la mâchoire et le menton seulement (pas de moustache) -->
+  <path d="M52 100 L52 104 C52 138 74 158 100 158 C126 158 148 138 148 104 L148 100 C145 122 134 136 120 140 C112 147 88 147 80 140 C66 136 55 122 52 100 Z" fill="url(#mBarbe)"/>
+  <!-- Le sourire, comme sur le Mii : un trait -->
+  <path d="M84 129 Q101 140 117 126" fill="none" stroke="#1d120c" stroke-width="3.6" stroke-linecap="round"/>
+  <path d="M102 97 Q95 111 98 115 Q102 118 108 114" fill="none" stroke="#1d120c" stroke-width="3" stroke-linecap="round"/>
+  <ellipse cx="80" cy="94" rx="11" ry="9" fill="#fff" stroke="#1d120c" stroke-width="3"/><circle cx="80" cy="94" r="5.5" fill="#1d120c"/><circle cx="82" cy="92" r="1.8" fill="#fff"/>
+  <ellipse cx="120" cy="94" rx="11" ry="9" fill="#fff" stroke="#1d120c" stroke-width="3"/><circle cx="120" cy="94" r="5.5" fill="#1d120c"/><circle cx="122" cy="92" r="1.8" fill="#fff"/>
+  <path d="M66 78 Q79 70 93 77" fill="none" stroke="#3a2619" stroke-width="6.5" stroke-linecap="round"/>
+  <path d="M107 77 Q121 70 134 78" fill="none" stroke="#3a2619" stroke-width="6.5" stroke-linecap="round"/>
   ${cheveux ? `
-  <path d="M48 84 C42 50 64 24 100 24 C138 24 160 50 152 84 C150 68 142 58 132 54 C120 60 108 52 100 56 C90 50 78 58 68 54 C58 60 50 70 48 84 Z" fill="url(#mCheveux)"/>
-  <path d="M60 46 L66 22 L80 36 L92 14 L104 32 L118 16 L126 36 L142 26 L140 50 Z" fill="url(#mCheveux)"/>` : ''}
+  <path d="M46 86 C40 48 64 22 100 22 C138 22 162 48 154 86 C152 68 144 56 132 52 C120 58 108 50 100 54 C90 48 78 56 68 52 C58 58 50 68 46 86 Z" fill="url(#mCheveux)"/>
+  <path d="M58 46 L64 20 L80 34 L92 12 L104 30 L118 14 L126 34 L144 24 L142 50 Z" fill="url(#mCheveux)"/>
+  <path d="M84 26 Q96 20 108 24" fill="none" stroke="#6b4a35" stroke-width="3" stroke-linecap="round" opacity=".7"/>` : ''}
   ${lunettesFront ? `
-  <path d="M52 52 Q100 40 148 52" fill="none" stroke="#1b1b1b" stroke-width="4"/>
-  <rect x="62" y="38" width="34" height="20" rx="9" fill="#2b2b33" stroke="#111" stroke-width="2.5"/>
-  <rect x="104" y="38" width="34" height="20" rx="9" fill="#2b2b33" stroke="#111" stroke-width="2.5"/>
-  <path d="M96 46 h8" stroke="#111" stroke-width="3"/>
-  <path d="M68 43 l8 0" stroke="#fff" stroke-width="2.5" stroke-linecap="round" opacity=".55"/>` : ''}
+  <path d="M50 50 Q100 38 150 50" fill="none" stroke="#1b1b1b" stroke-width="4"/>
+  <rect x="62" y="36" width="34" height="20" rx="9" fill="#2b2b33" stroke="#111" stroke-width="2.5"/>
+  <rect x="104" y="36" width="34" height="20" rx="9" fill="#2b2b33" stroke="#111" stroke-width="2.5"/>
+  <path d="M96 44 h8" stroke="#111" stroke-width="3"/>
+  <path d="M68 41 l8 0" stroke="#fff" stroke-width="2.5" stroke-linecap="round" opacity=".55"/>` : ''}
   ${cagoule ? `
-  <path d="M40 112 C36 52 64 20 100 20 C136 20 164 52 160 112 C158 150 140 176 100 178 C60 176 42 150 40 112 Z
-           M56 96 C56 128 76 152 100 152 C124 152 144 128 144 96 C144 64 126 46 100 46 C74 46 56 64 56 96 Z" fill="#14324f" fill-rule="evenodd"/>
-  <path d="M56 96 C56 64 74 46 100 46 C126 46 144 64 144 96" fill="none" stroke="#ff8a1f" stroke-width="3"/>` : ''}`;
+  <path d="M38 112 C34 52 62 18 100 18 C138 18 166 52 162 112 C160 152 140 178 100 180 C60 178 40 152 38 112 Z
+           M54 96 C54 130 76 154 100 154 C124 154 146 130 146 96 C146 62 126 44 100 44 C74 44 54 62 54 96 Z" fill="#14324f" fill-rule="evenodd"/>
+  <path d="M54 96 C54 62 74 44 100 44 C126 44 146 62 146 96" fill="none" stroke="#ff8a1f" stroke-width="3"/>` : ''}`;
 }
 
 const corps = (couleur, col = 'rgba(255,255,255,.18)') => `
