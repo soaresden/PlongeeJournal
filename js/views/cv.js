@@ -149,7 +149,7 @@ const MOTS = [
   [/[ée]gypte|egypt|hurghada|urghada|marsa|sharm/i, 'EG'], [/cap[- ]?vert|cabo verde|santa maria/i, 'CV'],
   [/espagne|spain|canari|lanzarote|tenerife|minorque|menorca|majorque|mallorca|ibiza|gran canaria/i, 'ES'],
   [/portugal|a[çc]ores|azores|mad[èe]re|madeira/i, 'PT'], [/belgique|belgium/i, 'BE'], [/italie|italy|sardaigne|sicile|elbe/i, 'IT'],
-  [/croatie|croatia/i, 'HR'], [/france|cherbourg|marseille|bretagne|corse/i, 'FR'],
+  [/croatie|croatia/i, 'HR'], [/maldives|mal[ée] |atoll/i, 'MV'], [/france|cherbourg|marseille|bretagne|corse/i, 'FR'],
 ];
 
 /** Le pays d'une plongée (code ISO), ou null. */

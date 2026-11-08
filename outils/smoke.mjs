@@ -266,7 +266,9 @@ await tick(150);
 check('réglages : l’état du stockage est expliqué',
   /Mode local/.test(view()), view().slice(0, 120));
 {
-  check('thème : un bouton dans Réglages (plus de grille)', !!document.querySelector('#view .theme-bouton') && !document.querySelector('#view .themes'), '');
+  check('thème : plus dans les Réglages (il est dans la barre du bas)', !document.querySelector('#view .theme-bouton') && !document.querySelector('#view .themes'), '');
+  const onglets = [...document.querySelectorAll('#tabbar .tab:not(.tab-rail-only)')];
+  check('barre du bas : le « + » au milieu (3 onglets de chaque côté)', onglets.length === 7 && onglets[3].classList.contains('tab-add'), onglets.map(t => t.dataset.route || t.dataset.action).join());
   const btnTheme = document.querySelector('#tabbar .tab-theme');
   check('thème : un onglet « Thème » juste après « Profil » dans la barre du bas',
     btnTheme?.previousElementSibling?.dataset.route === 'divers' && /Thème/.test(btnTheme.textContent), btnTheme?.previousElementSibling?.dataset.route);
@@ -290,8 +292,8 @@ check('réglages : l’état du stockage est expliqué',
 }
 check('réglages : le branchement GitHub est proposé',
   /Dépôt GitHub privé/.test(view()) && /Jeton d’accès/.test(view()), '');
-check('réglages : le thème en cours est affiché sur le bouton',
-  /Thème : /.test(view()), '');
+check('réglages : l’historique des changements est proposé',
+  /Historique des changements/.test(view()), '');
 check('réglages : sauvegarde manuelle proposée',
   /Exporter le carnet/.test(view()), '');
 check('réglages (site web) : pas de carte de mise à jour de l’APK',

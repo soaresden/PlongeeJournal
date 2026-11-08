@@ -8,6 +8,7 @@
 // ============================================================
 
 import { TABLES as TABLES_ENTITES } from './fusion.js';
+import { noter as noterHistorique } from './historique.js';
 import { computeStats, sortDives, sortPeople, reconcileTimes, sortSeances, seanceDepuisPlongee, estBapteme, numerotationAuto } from './model.js';
 
 export const CARNET_VIDE = {
@@ -71,6 +72,32 @@ export function normaliser(data) {
 export function creerStore(support) {
   let cache = null;
   const db = () => cache;
+
+  // La dernière version enregistrée de chaque plongée / séance, pour
+  // garder l'ancienne dans l'historique (les écrans modifient souvent
+  // l'objet du carnet lui-même avant de l'enregistrer). Refaite si le
+  // carnet est remplacé (synchro).
+  let instantanes = null, instantanesDe = null;
+  const instantane = () => {
+    const d = db();
+    if (!d) return new Map();
+    if (!instantanes || instantanesDe !== d || instantanes.dives !== d.dives || instantanes.seances !== d.seances) {
+      instantanes = new Map();
+      for (const x of d.dives || []) instantanes.set(x.id, JSON.stringify(x));
+      for (const x of d.seances || []) instantanes.set(x.id, JSON.stringify(x));
+      instantanes.dives = d.dives; instantanes.seances = d.seances;
+      instantanesDe = d;
+    }
+    return instantanes;
+  };
+  const garderAncienne = (type, objet, quoi = 'modif') => {
+    try {
+      const snap = instantane();
+      const avant = snap.get(objet.id);
+      if (avant) noterHistorique(type, JSON.parse(avant), { apres: quoi === 'modif' ? objet : null, quoi });
+    } catch { /* l'historique ne bloque jamais un enregistrement */ }
+  };
+  const retenir = objet => { try { instantane().set(objet.id, JSON.stringify(objet)); } catch { /* idem */ } };
 
   /** `quoi` décrit ce qui vient de changer : l'adaptateur peut s'en servir. */
   const save = (quoi = {}) => support.enregistrer(cache, quoi);
@@ -248,8 +275,8 @@ export function creerStore(support) {
 
     // ---- Plongées ----
 
-    async listDives(diverId) { return sortDives(db().dives.filter(d => d.diverId === diverId)); },
-    async getDive(id) { return db().dives.find(d => d.id === id) || null; },
+    async listDives(diverId) { instantane(); return sortDives(db().dives.filter(d => d.diverId === diverId)); },
+    async getDive(id) { instantane(); return db().dives.find(d => d.id === id) || null; },
 
     async nextNumber(diverId) {
       const list = db().dives.filter(d => d.diverId === diverId && !estBapteme(d));
@@ -259,10 +286,12 @@ export function creerStore(support) {
 
     async saveDive(dive) {
       const d = db();
+      garderAncienne('dive', dive);
       dive.updatedAt = maintenant();
       reconcileTimes(dive);          // durée ⇄ heure de sortie, toujours cohérentes
       const i = d.dives.findIndex(x => x.id === dive.id);
       if (i >= 0) d.dives[i] = dive; else d.dives.push(dive);
+      retenir(dive);
       numeroter(d, dive.diverId);       // les numéros suivent les dates
       await save({ table: 'dives', id: dive.id, plongee: dive });
       return dive;
@@ -270,7 +299,9 @@ export function creerStore(support) {
 
     async deleteDive(id) {
       const d = db();
-      const diverId = d.dives.find(x => x.id === id)?.diverId;
+      const ancienne = d.dives.find(x => x.id === id);
+      if (ancienne) garderAncienne('dive', ancienne, 'suppression');
+      const diverId = ancienne?.diverId;
       enterrer(d, id);
       d.dives = d.dives.filter(x => x.id !== id);
       numeroter(d, diverId);
@@ -321,20 +352,24 @@ export function creerStore(support) {
 
     // ---- Séances (fosse, piscine, apnée) ----
 
-    async listSeances(diverId) { return sortSeances((db().seances || []).filter(s => s.diverId === diverId)); },
-    async getSeance(id) { return (db().seances || []).find(s => s.id === id) || null; },
+    async listSeances(diverId) { instantane(); return sortSeances((db().seances || []).filter(s => s.diverId === diverId)); },
+    async getSeance(id) { instantane(); return (db().seances || []).find(s => s.id === id) || null; },
 
     async saveSeance(seance) {
       const d = db(); d.seances ||= [];
+      garderAncienne('seance', seance);
       seance.updatedAt = maintenant();
       const i = d.seances.findIndex(s => s.id === seance.id);
       if (i >= 0) d.seances[i] = seance; else d.seances.push(seance);
+      retenir(seance);
       await save({ table: 'seances', id: seance.id });
       return seance;
     },
 
     async deleteSeance(id) {
       const d = db();
+      const ancienne = (d.seances || []).find(s => s.id === id);
+      if (ancienne) garderAncienne('seance', ancienne, 'suppression');
       enterrer(d, id);
       d.seances = (d.seances || []).filter(s => s.id !== id);
       await save({ table: 'seances', id, supprime: true });

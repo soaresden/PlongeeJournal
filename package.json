@@ -5,7 +5,7 @@
   "type": "module",
   "description": "Carnet de plongée — PWA + APK Android, synchronisé dans un dépôt GitHub privé.",
   "scripts": {
-    "test": "node outils/dive-test.mjs && node outils/fit-test.mjs && node outils/geo-test.mjs && node outils/lieu-test.mjs && node outils/github-test.mjs && node outils/ambiance-test.mjs && node outils/ocean-test.mjs && node outils/seance-test.mjs && node outils/agenda-test.mjs && node outils/maj-apk-test.mjs && node outils/suunto-cloud-test.mjs && node outils/photo-test.mjs && node outils/equipement-test.mjs && node outils/noms-test.mjs && node outils/partage-test.mjs && node outils/ble-test.mjs && node outils/profil-test.mjs && node outils/videos-test.mjs && node outils/verifs-test.mjs",
+    "test": "node outils/dive-test.mjs && node outils/fit-test.mjs && node outils/geo-test.mjs && node outils/lieu-test.mjs && node outils/github-test.mjs && node outils/ambiance-test.mjs && node outils/ocean-test.mjs && node outils/seance-test.mjs && node outils/agenda-test.mjs && node outils/maj-apk-test.mjs && node outils/suunto-cloud-test.mjs && node outils/photo-test.mjs && node outils/equipement-test.mjs && node outils/noms-test.mjs && node outils/partage-test.mjs && node outils/ble-test.mjs && node outils/profil-test.mjs && node outils/videos-test.mjs && node outils/verifs-test.mjs && node outils/historique-test.mjs",
     "www": "node outils/build-www.mjs",
     "android:sync": "npm run www && npx cap sync android"
   },

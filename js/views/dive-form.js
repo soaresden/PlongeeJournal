@@ -578,6 +578,10 @@ export async function diveFormView({ id, ancienne = false }) {
     : structuredClone(await store.getDive(id));
 
   if (!dive) return { title: 'Introuvable', node: el('div.empty', { text: 'Plongée introuvable.' }) };
+  // La fiche telle qu'elle était à l'ouverture : l'enregistrement
+  // automatique ne réécrit que ce qui a changé depuis (une synchro ou un
+  // import arrivés entre-temps ne sont pas écrasés).
+  let origine = isNew ? null : structuredClone(dive);
 
   if (isNew && !dive.date && !ancienne) dive.date = todayISO();
 
@@ -1381,9 +1385,70 @@ export async function diveFormView({ id, ancienne = false }) {
   const alerte = el('div.card.alerte', { hidden: true });
 
   const saveBtn = el('button.btn.primary.block', { type: 'button',
-    text: isNew ? 'Enregistrer la plongée' : 'Mettre à jour' });
+    text: isNew ? 'Enregistrer la plongée' : '✓ Terminé' });
+
+  // ---------- Enregistrement automatique ----------
+  //
+  // Chaque changement est enregistré tout seul (une seconde après), et
+  // tout de suite si on quitte l'écran : un « retour » par erreur ne
+  // perd plus rien. L'ancienne version va dans l'historique (fiche →
+  // « Historique »), pour revenir en arrière après une bêtise.
+  const temoinAuto = el('span.auto-temoin', { text: isNew ? '' : 'Enregistrement automatique' });
+  let minuteurAuto = null, sale = false, auto = true;
+  async function enregistrerAuto() {
+    clearTimeout(minuteurAuto); minuteurAuto = null;
+    if (!sale || !auto) return;
+    reconcileTimes(dive);
+    const bloque = validerPlongee(dive).length
+      || (isNew && debutOrdi && dive.date && dive.date >= debutOrdi && !(dive.suuntoKeys || []).length);
+    if (bloque) { temoinAuto.textContent = 'Pas encore enregistrée : il manque des informations'; return; }
+    sale = false;
+    try {
+      if (!dive.numero) dive.numero = await store.nextNumber(diverId);
+      await carnetPapier.avantEnregistrement();
+      await store.saveDive(await aEcrire());
+      origine = structuredClone(dive);
+      temoinAuto.textContent = `✓ Enregistré à ${new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`;
+    } catch (e) { sale = true; temoinAuto.textContent = `⚠ ${e.message}`; }
+  }
+  /** Ce qui part au carnet : la version du carnet, plus ce que le formulaire a changé. */
+  async function aEcrire() {
+    const actuelle = await store.getDive(dive.id);
+    if (!origine || !actuelle) return structuredClone(dive);
+    const fusion = structuredClone(actuelle);
+    for (const k of new Set([...Object.keys(dive), ...Object.keys(origine)])) {
+      if (JSON.stringify(dive[k]) === JSON.stringify(origine[k])) continue;
+      if (dive[k] === undefined) delete fusion[k]; else fusion[k] = structuredClone(dive[k]);
+    }
+    return fusion;
+  }
+  const planifierAuto = () => {
+    if (!auto) return;
+    sale = true;
+    temoinAuto.textContent = 'Modifications…';
+    clearTimeout(minuteurAuto);
+    minuteurAuto = setTimeout(enregistrerAuto, 1200);
+  };
+  /** Pour supprimer, fusionner, ranger en séance : plus d'enregistrement automatique. */
+  const arreterAuto = () => { auto = false; sale = false; clearTimeout(minuteurAuto); };
+  form.addEventListener('input', planifierAuto);
+  form.addEventListener('change', planifierAuto);
+  form.addEventListener('click', e => {
+    if (e.target.closest('.actions-fiche')) return;
+    if (e.target.closest('button, .chip, .pastille, [data-piece], .etoiles')) planifierAuto();
+  });
+  // Quitter l'écran (retour, autre onglet, appli en arrière-plan).
+  const enPartant = () => { if (sale) enregistrerAuto(); };
+  const surVisibilite = () => { if (document.hidden) enPartant(); };
+  window.addEventListener('hashchange', function auRevoir() {
+    window.removeEventListener('hashchange', auRevoir);
+    document.removeEventListener('visibilitychange', surVisibilite);
+    enPartant();
+  });
+  document.addEventListener('visibilitychange', surVisibilite);
 
   saveBtn.onclick = async () => {
+    clearTimeout(minuteurAuto);
     reconcileTimes(dive);
     const manque = validerPlongee(dive);
     if (isNew && debutOrdi && dive.date && dive.date >= debutOrdi && !(dive.suuntoKeys || []).length) {
@@ -1438,8 +1503,9 @@ export async function diveFormView({ id, ancienne = false }) {
         const { fusionnerPlongees } = await import('../verifs.js');
         const montre = await store.getDive(choix.montre.id) || choix.montre;
         const f = fusionnerPlongees(montre, dive);
+        arreterAuto();
         await store.saveDive(f);
-        if (!isNew) await store.deleteDive(dive.id);
+        if (await store.getDive(dive.id)) await store.deleteDive(dive.id);
         await carnetPapier.apresEnregistrement().catch(() => {});
         toast(`Ajoutée à la n°${f.numero ?? ''} (même plongée)`);
         navigate(`dive/${f.id}`, true);
@@ -1455,6 +1521,7 @@ export async function diveFormView({ id, ancienne = false }) {
     try {
       await carnetPapier.avantEnregistrement();
       await store.saveDive(dive);
+      sale = false;
       await carnetPapier.apresEnregistrement().catch(() => {});
 
       toast(store.kind === 'local' ? 'Plongée enregistrée sur cet appareil' : 'Plongée enregistrée');
@@ -1470,6 +1537,7 @@ export async function diveFormView({ id, ancienne = false }) {
     buttons.append(el('button.btn.ghost', {
       type: 'button', text: '↪ Snorkeling, fosse…', title: 'Ce n’était pas une plongée : la ranger en séance',
       onclick: async () => {
+        await enregistrerAuto();
         const { rangerUnePlongee } = await import('./seances.js');
         rangerUnePlongee(await store.getDive(dive.id) || dive);
       },
@@ -1477,7 +1545,8 @@ export async function diveFormView({ id, ancienne = false }) {
     buttons.append(el('button.btn.danger', {
       type: 'button', text: 'Supprimer',
       onclick: async () => {
-        if (await confirmBox('Supprimer cette plongée ?', 'Supprimer')) {
+        if (await confirmBox('Supprimer cette plongée ? (Elle reste dans l’historique : Réglages → Sauvegarde.)', 'Supprimer')) {
+          arreterAuto();
           const photo = (await store.getDive(dive.id))?.photoCarnet?.ref;
           await store.deleteDive(dive.id);
           if (photo) oublierPhoto(photo).catch(() => {});
@@ -1490,7 +1559,7 @@ export async function diveFormView({ id, ancienne = false }) {
   // Les actions sont construites en dernier (elles dépendent de tout le
   // formulaire) mais s'affichent en premier. L'alerte les suit : le
   // message doit être visible depuis le bouton qui le déclenche.
-  form.prepend(buttons, alerte);
+  form.prepend(buttons, temoinAuto, alerte);
 
   return { title: isNew ? 'Nouvelle plongée' : `Plongée n°${dive.numero}`,
     node: carnetPapier.envelopper(form), back: true };

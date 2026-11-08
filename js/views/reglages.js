@@ -62,7 +62,6 @@ export async function reglagesView() {
     carteSuunto(),
     carteAgenda()));
 
-  wrap.append(sectionApparence());
   wrap.append(await sectionPartage());
   {
     const { carteVideosReglages } = await import('./videos.js');
@@ -157,7 +156,9 @@ function carteGitHub() {
   const lire = () => ({ owner: owner.value, repo: repo.value, branch: branch.value, path: path.value, token: token.value });
   const resultat = el('div.hint', { style: { minHeight: '1.4em' } });
 
-  corps.append(
+  // append(null) écrirait « null » : les éléments facultatifs sont filtrés.
+  const ajouter = (...n) => corps.append(...n.filter(x => x != null && x !== false));
+  ajouter(
     el('div.compte-sous', { text: 'Dépôt GitHub privé' }),
     el('div.row', {}, champ('Compte', owner), champ('Dépôt', repo)),
     el('details.avance', {},
@@ -321,6 +322,8 @@ function sectionDonnees() {
           + 'Un export reste utile comme copie hors de GitHub.'
           : 'En mode local, exporte régulièrement : si l’appareil est perdu, le carnet l’est aussi.' }),
       el('div.btn-row', { style: { marginTop: 0 } },
+        el('button.btn.sm', { type: 'button', text: '🕘 Historique des changements', onclick: async () =>
+          (await import('./historique.js')).ouvrirHistoriqueCarnet() }),
         el('button.btn.sm', { type: 'button', text: '⬇ Exporter le carnet', onclick: async () => {
           const json = await store.exportAll();
           await telecharger(json, `carnet-${new Date().toISOString().slice(0, 10)}.json`);
@@ -354,7 +357,7 @@ function carteAgenda() {
       changer('ok');
       etat.textContent = agendaLisible() ? 'Relié sur cet appareil' : 'Relié · lisible seulement dans l’APK';
       const resultat = el('div.hint');
-      corps.append(
+      corps.append(...[
         el('div.hint', { style: { marginTop: 0 }, text: 'Sur la fiche d’une plongée ou d’une séance sans lieu, l’appli te montre ce que dit ton agenda ce jour-là et te propose d’en faire le lieu.' }),
         agendaLisible() ? null : el('div.hint', { style: { color: 'var(--warn)' },
           text: 'Google ne laisse pas une page web lire ton agenda : ça ne marche que dans l’appli Android.' }),
@@ -368,7 +371,7 @@ function carteAgenda() {
           el('button.btn.sm.danger', { type: 'button', text: 'Oublier le lien', onclick: async () => {
             if (!(await confirmBox('Oublier le lien de ton agenda sur cet appareil ?', 'Oublier'))) return;
             oublierAgenda(); toast('Lien oublié'); rendre();
-          } })));
+          } }))].filter(Boolean));     // append(null) écrirait « null »
       return;
     }
 
@@ -409,10 +412,10 @@ function carteSuunto() {
       changer('ok');
       etat.textContent = `Relié${liaison.compte ? ` · ${liaison.compte}` : ''}`;
       corps.append(
-        kv('Compte', liaison.compte || 'relié'),
-        kv('Relié le', dateHeure(liaison.lieLe)),
-        kv('Dernière récupération', dateHeure(liaison.derniereRecup)),
-        el('div.hint', { text: 'Pour importer tes activités : Divers → Suunto → « Récupérer depuis mon compte Suunto ».' }),
+        ...[kv('Compte', liaison.compte || 'relié'),
+          liaison.lieLe ? kv('Relié le', dateHeure(liaison.lieLe)) : null,
+          liaison.derniereRecup ? kv('Dernière récupération', dateHeure(liaison.derniereRecup)) : null].filter(Boolean),
+        el('div.hint', { text: 'Pour importer : Plongées → « + » → « Depuis mon compte Suunto ».' }),
         el('button.btn.sm.danger', { type: 'button', style: { marginTop: '12px' }, text: 'Délier le compte Suunto',
           onclick: async () => {
             if (!(await confirmBox('Délier le compte Suunto ? Le carnet ne bouge pas ; tu pourras le relier à nouveau.'))) return;

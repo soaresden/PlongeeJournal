@@ -3,6 +3,18 @@
 // ============================================================
 
 /** Crée un élément DOM. tag#id.class, attributs, enfants. */
+// append(null) et replaceChildren(null) écrivent « null » en toutes
+// lettres : l'appli construit souvent ses écrans avec des éléments
+// facultatifs (« condition ? élément : null »). Partout, une fois pour
+// toutes, les vides sont ignorés.
+if (typeof Element !== 'undefined' && !Element.prototype.__sansNull) {
+  for (const nom of ['append', 'prepend', 'replaceChildren']) {
+    const original = Element.prototype[nom];
+    Element.prototype[nom] = function (...n) { return original.apply(this, n.filter(x => x !== null && x !== undefined && x !== false)); };
+  }
+  Element.prototype.__sansNull = true;
+}
+
 export function el(sel, attrs = {}, ...children) {
   const [tagPart, ...classes] = sel.split('.');
   const [tag, id] = tagPart.split('#');

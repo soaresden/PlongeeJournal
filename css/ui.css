@@ -777,3 +777,25 @@ html.partage .donnees-bandeau, html.partage .donnees-recup, html.partage .donnee
 .schema-legende { margin-top: 0; font-weight: 600; color: var(--text-dim); }
 .schema-pieces { margin-top: 8px; }
 @media (max-width: 380px) { .schema-plongeur { grid-template-columns: 120px 1fr; } }
+/* Liste : deux cartes par ligne dès qu'il y a la place (tablette en portrait) */
+@media (min-width: 560px) {
+  .annee-cartes { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .annee-cartes .dive-card .vignette { width: 68px !important; height: 68px !important; }
+  .annee-cartes .dive-card .vignette-contenu { font-size: 18px; }
+}
+@media (min-width: 1250px) { .annee-cartes { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+/* Séjours : destination et dates qui se suivent */
+.sejour-tete { grid-column: 1 / -1; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin: 14px 2px 6px; }
+.sejour-tete:first-child { margin-top: 4px; }
+.sejour-drapeau { font-size: 20px; }
+.sejour-titre { font-size: 15px; }
+.sejour-titre span { color: var(--text-dim); }
+.sejour-info { margin-left: auto; font-size: 12px; color: var(--text-mute); }
+/* Année repliée : les drapeaux des pays */
+.annee-drapeaux { display: inline-flex; flex-wrap: wrap; gap: 6px; margin-left: auto; font-size: 17px; line-height: 1; }
+.annee-drapeau small { font-size: 11px; color: var(--text-mute); margin-left: 1px; font-weight: 600; }
+.auto-temoin { display: block; font-size: 12px; color: var(--text-mute); margin: -4px 2px 8px; min-height: 1em; }
+.histo-liste { display: flex; flex-direction: column; gap: 4px; max-height: 60vh; overflow: auto; }
+.histo-ligne { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--line); }
+.histo-ligne > div { min-width: 0; }
+.histo-fiche { margin-top: 8px; font-size: 13px; }

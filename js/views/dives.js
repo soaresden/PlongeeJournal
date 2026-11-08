@@ -16,6 +16,7 @@ import { plongeesARanger } from '../seances.js';
 import { bilanDonnees, debutOrdinateur, listeMontre, LIBELLE_SOURCE } from '../donnees.js';
 import { configVideos, autresVideos, sectionVideos } from './videos.js';
 import { aVerifier, ouvrirAVerifier, alertesFiche } from './verifs.js';
+import { paysPlongee, drapeau } from './cv.js';
 import { dossiersEnCache, videosDePlongee, chargerDossiers } from '../videos.js';
 import { photoCarnetFiche } from './carnet-photo.js';
 
@@ -319,6 +320,36 @@ export async function divesView() {
   }
 
   /** Liste par année, repliable — plongées et fosses partagent le rendu. */
+  /** Nom du pays en français (Intl), ou le code. */
+  const nomPays = code => { try { return new Intl.DisplayNames(['fr'], { type: 'region' }).of(code); } catch { return code; } };
+
+  /**
+   * Les séjours d'une année : plongées qui se suivent (3 jours d'écart au
+   * plus) dans le même pays. La liste arrive de la plus récente à la plus
+   * ancienne ; les séjours aussi.
+   */
+  function sejours(lot) {
+    const jour = d => (d.date ? new Date(`${d.date}T12:00:00`).getTime() / 86400000 : null);
+    const out = [];
+    for (const d of lot) {
+      const p = paysPlongee(d) || '';
+      const der = out.at(-1);
+      const ecart = der ? Math.abs(jour(der.plongees.at(-1)) - jour(d)) : Infinity;
+      if (der && der.pays === p && ecart <= 3) der.plongees.push(d);
+      else out.push({ pays: p, plongees: [d] });
+    }
+    return out;
+  }
+  const titreSejour = sj => {
+    const lieux = new Map();
+    sj.plongees.forEach(d => { const l = String(d.lieuNom || d.site || '').trim(); if (l) lieux.set(l, (lieux.get(l) || 0) + 1); });
+    const lieu = [...lieux].sort((a, b) => b[1] - a[1])[0]?.[0] || '';
+    const dates = sj.plongees.map(d => d.date).filter(Boolean).sort();
+    const f = iso => new Date(`${iso}T12:00:00`).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+    const periode = !dates.length ? '' : dates[0] === dates.at(-1) ? f(dates[0]) : `${f(dates[0])} – ${f(dates.at(-1))}`;
+    return { drapeau: sj.pays ? drapeau(sj.pays) : '📍', pays: sj.pays ? nomPays(sj.pays) : '', lieu, periode };
+  };
+
   function listeParAnnee(elements, { etat, fabrique, mot }) {
     const q = search.value.trim().toLowerCase();
     const shown = elements.filter(d => matches(d, q));
@@ -336,8 +367,9 @@ export async function divesView() {
 
     parAnnee.forEach((lot, y) => {
       const prof = Math.max(0, ...lot.map(d => Number(d.profMax) || 0));
-      const ambiances = mot === 'plongée'
-        ? [...new Map(lot.map(d => { const a = ambianceDe(d); return [a.id, a]; })).values()] : [];
+      // Repliée : les pays de l'année, en drapeaux, avec le nombre de plongées.
+      const parPays = new Map();
+      if (mot === 'plongée') lot.forEach(d => { const c = paysPlongee(d); if (c) parPays.set(c, (parPays.get(c) || 0) + 1); });
       const ouvert = q ? true : etat.ouvertes.has(y);
       const heures = Math.round(lot.reduce((t, d) => t + (Number(d.dureeMin) || 0), 0) / 60);
 
@@ -347,15 +379,26 @@ export async function divesView() {
           el('span.annee-info', {},
             `${lot.length} ${mot}${lot.length > 1 ? 's' : ''}`,
             prof ? ` · max ${prof} m` : '', heures ? ` · ${heures} h` : ''),
-          el('span.annee-pastilles', {}, ambiances.map(a =>
-            el('span.amb-point', { style: stylesAmbiance(a), title: a.nom }))),
+          el('span.annee-drapeaux', {}, [...parPays].sort((a, b) => b[1] - a[1]).map(([c, n]) =>
+            el('span.annee-drapeau', { title: `${nomPays(c)} · ${n}` }, drapeau(c), n > 1 ? el('small', { text: `×${n}` }) : null))),
           el('span.annee-chevron', { 'aria-hidden': 'true', text: '›' })),
         el('div.annee-cartes'));
 
       // Les cartes ne sont construites qu'à l'ouverture (vignettes satellite).
       const remplir = () => {
         const zone = groupe.querySelector('.annee-cartes');
-        if (!zone.childNodes.length) zone.append(...lot.map(fabrique));
+        if (zone.childNodes.length) return;
+        if (mot !== 'plongée') { zone.append(...lot.map(fabrique)); return; }
+        // Les plongées, rangées par séjour (destination et dates qui se suivent).
+        for (const sj of sejours(lot)) {
+          const t = titreSejour(sj);
+          zone.append(el('div.sejour-tete', {},
+            el('span.sejour-drapeau', { text: t.drapeau }),
+            el('span.sejour-titre', {}, el('b', { text: t.pays || t.lieu || 'Lieu à préciser' }),
+              t.pays && t.lieu ? el('span', { text: ` · ${t.lieu}` }) : null),
+            el('span.sejour-info', { text: `${t.periode} · ${sj.plongees.length} plongée${sj.plongees.length > 1 ? 's' : ''}` })),
+            ...sj.plongees.map(fabrique));
+        }
       };
       if (ouvert) remplir();
       groupe.addEventListener('toggle', () => {
@@ -456,6 +499,8 @@ export async function diveView({ id }) {
   // Les chercher en bas d'une page longue n'avait aucun sens.
   wrap.append(el('div.btn-row.actions-fiche', {},
     el('button.btn.primary', { text: '✎ Modifier', onclick: () => navigate(`dive/${d.id}/edit`) }),
+    el('button.btn.ghost', { text: '🕘 Historique', title: 'Revenir à une version précédente',
+      onclick: async () => (await import('./historique.js')).ouvrirHistoriqueFiche(d.id, { apres: () => navigate(`dive/${d.id}`, true) }) }),
     el('button.btn.ghost', {
       text: '↪ En séance', title: 'C’était une fosse, une piscine ou une apnée',
       onclick: () => versSeance(d),
