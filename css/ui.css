@@ -685,3 +685,14 @@ html.partage .donnees-bandeau, html.partage .donnees-recup, html.partage .donnee
 .video-choix-ligne { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; text-align: left; padding: 8px 10px; border-radius: 10px;
   border: 1px solid var(--line); background: var(--surface); color: var(--text); cursor: pointer; font: inherit; }
 .video-choix-ligne small { grid-column: 2; color: var(--text-mute); }
+/* Garde-fous */
+.alertes-fiche { border-color: var(--warn); }
+.alerte-ligne { display: flex; flex-direction: column; gap: 6px; padding: 6px 0; font-size: 14px; border-top: 1px solid var(--line); }
+.alerte-ligne:first-of-type { border-top: 0; }
+.alerte-ligne .btn { align-self: flex-start; }
+.donnees.a-verifier { background: color-mix(in srgb, var(--warn) 18%, transparent); color: var(--warn); }
+.fusion-cartes { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.fusion-carte { padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; font-size: 13px; line-height: 1.45; min-width: 0; overflow-wrap: anywhere; }
+.fusion-carte b { display: block; margin-bottom: 4px; }
+.fusion-candidat { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--line); }
+.fusion-candidat > div { min-width: 0; }

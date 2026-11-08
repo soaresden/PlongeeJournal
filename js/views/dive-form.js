@@ -1348,6 +1348,30 @@ export async function diveFormView({ id }) {
     }
 
     alerte.hidden = true;
+
+    // Saisie à la main : la montre a-t-elle déjà cette plongée ?
+    const verifs = await import('./verifs.js');
+    const choix = await verifs.avantEnregistrement(dive, await store.listDives(diverId));
+    if (choix.action === 'annuler') return;
+    if (choix.action === 'fusionner') {
+      saveBtn.disabled = true;
+      try {
+        await carnetPapier.avantEnregistrement();
+        const { fusionnerPlongees } = await import('../verifs.js');
+        const montre = await store.getDive(choix.montre.id) || choix.montre;
+        const f = fusionnerPlongees(montre, dive);
+        await store.saveDive(f);
+        if (!isNew) await store.deleteDive(dive.id);
+        await carnetPapier.apresEnregistrement().catch(() => {});
+        toast(`Ajoutée à la n°${f.numero ?? ''} (même plongée)`);
+        navigate(`dive/${f.id}`, true);
+      } catch (e) {
+        toast(e.message, true);
+        saveBtn.disabled = false;
+      }
+      return;
+    }
+
     if (!dive.numero) dive.numero = await store.nextNumber(diverId);
     saveBtn.disabled = true;
     try {

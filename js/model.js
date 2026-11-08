@@ -425,9 +425,13 @@ export function guessWater(label = '') {
                  'source', 'canal', "plan d'eau", 'réservoir', 'reservoir', 'ballastière', 'ballastiere'];
   const salee = ['mer', 'méditerranée', 'mediterranee', 'atlantique', 'manche', 'océan', 'ocean',
                  'baie', 'calanque', 'plage', 'port', 'crique', 'cap ', 'île', 'ile ', 'golfe',
-                 'rade', 'anse', 'lagon', 'récif', 'recif', 'détroit', 'detroit', 'estuaire'];
-  if (douce.some(k => s.includes(k))) return 'douce';
-  if (salee.some(k => s.includes(k))) return 'salee';
+                 'rade', 'anse', 'lagon', 'récif', 'recif', 'détroit', 'detroit', 'estuaire',
+                 'açores', 'acores', 'canaries', 'madère', 'madere', 'malte', 'malta', 'gozo', 'corse', 'martinique',
+                 'guadeloupe', 'maldives', 'hurghada', 'marsa', 'sea', 'reef', 'beach', 'bay', 'island'];
+  // Des mots entiers : « Ravaillac » n'est pas un lac, « Portugal » pas un port.
+  const mot = k => new RegExp(`(^|[^a-zà-ÿ])${k.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(s|x)?($|[^a-zà-ÿ])`).test(s);
+  if (douce.some(mot)) return 'douce';
+  if (salee.some(mot)) return 'salee';
   return '';
 }
 

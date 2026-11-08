@@ -79,9 +79,10 @@ export function confirmBox(question, okLabel = 'Confirmer', danger = true) {
 }
 
 /** Ouvre une modale personnalisée. `build(close)` doit renvoyer un noeud. */
-export function openModal(build) {
+export function openModal(build, { onClose = null } = {}) {
   const root = document.getElementById('modalRoot');
-  const close = () => { root.innerHTML = ''; };
+  let ferme = false;
+  const close = () => { root.innerHTML = ''; if (!ferme) { ferme = true; onClose?.(); } };
   const back = el('div.modal-back', { onclick: e => { if (e.target === back) close(); } });
   const modal = el('div.modal');
   modal.append(build(close));

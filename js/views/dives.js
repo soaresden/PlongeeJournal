@@ -15,6 +15,7 @@ import { ambianceDe, stylesAmbiance, vignetteLieu, etiquetteAmbiance } from '../
 import { plongeesARanger } from '../seances.js';
 import { bilanDonnees, debutOrdinateur, listeMontre, LIBELLE_SOURCE } from '../donnees.js';
 import { configVideos, sectionVideos } from './videos.js';
+import { aVerifier, ouvrirAVerifier, alertesFiche } from './verifs.js';
 import { dossiersEnCache, videosDePlongee, chargerDossiers } from '../videos.js';
 import { photoCarnetFiche } from './carnet-photo.js';
 
@@ -204,6 +205,14 @@ export async function divesView() {
       text: `☁️ ${parCompte.length} sans courbe : à compléter depuis le compte Suunto` }) : null,
   ) : null;
 
+  // Doublons possibles, fiches qui se contredisent.
+  const verif = aVerifier(dives);
+  const bandeauVerif = verif.ids.size ? el('div.card.alerte.clickable', { onclick: () => ouvrirAVerifier(dives, { rafraichir: () => navigate('dives', true) }) },
+    el('div', { style: { fontWeight: '650' }, text: `⚠ ${verif.ids.size} plongée${verif.ids.size > 1 ? 's' : ''} à vérifier` }),
+    el('div.hint', { text: [verif.paires.length ? `${verif.paires.length} doublon${verif.paires.length > 1 ? 's' : ''} possible${verif.paires.length > 1 ? 's' : ''}` : null,
+      verif.inc.length ? `${verif.inc.length} fiche${verif.inc.length > 1 ? 's' : ''} qui se contredi${verif.inc.length > 1 ? 'sent' : 't'}` : null]
+      .filter(Boolean).join(' · ') + ' ›' })) : null;
+
   const aRanger = plongeesARanger(dives, seances);
   const bandeauRanger = aRanger.length ? el('div.card.alerte.clickable', {
     onclick: () => { discipline = 'seances'; garder(CLE_DISC, discipline); rendreSegments(); afficher(); },
@@ -212,7 +221,7 @@ export async function divesView() {
     el('div.hint', { text: 'Piscine, fosse : range-les dans Séances pour qu’elles ne comptent plus comme plongées ›' })) : null;
 
   outils.append(search);
-  wrap.append(el('div.dives-barre', {}, segDisc, outils), bandeauRanger || '', bandeauDonnees || '', contenu);
+  wrap.append(el('div.dives-barre', {}, segDisc, outils), bandeauRanger || '', bandeauVerif || '', bandeauDonnees || '', contenu);
 
   function matches(d, q) {
     if (!q) return true;
@@ -271,7 +280,8 @@ export async function divesView() {
         el('div.dive-sub', {}, fmtDate(d.date), d.heureImmersion ? ` · ${d.heureImmersion}` : ''),
         el('div.dive-tags', {}, etiquetteAmbiance(d), d.type ? typeBadge(d.type) : null,
           bilans.get(d.id) ? badgeDonnees(bilans.get(d.id)) : null,
-          aDesVideos(d) ? el('span.donnees', { title: 'Vidéos dans pCloud', text: '🎬' }) : null),
+          aDesVideos(d) ? el('span.donnees', { title: 'Vidéos dans pCloud', text: '🎬' }) : null,
+          verif.ids.has(d.id) ? el('span.donnees.a-verifier', { title: 'À vérifier', text: '⚠' }) : null),
         el('div.dive-bas', {},
           el('div.dive-metrics', {},
             chiffre('prof', prof ? `${prof} m` : '—', 'Profondeur max'),
@@ -492,6 +502,9 @@ export async function diveView({ id }) {
 
   // ---------- Vidéos (pCloud) ----------
   const toutesPlongees = await store.listDives(d.diverId);
+  const lectureSeule = document.documentElement.classList.contains('partage');
+  const alertes = lectureSeule ? null : alertesFiche(d, toutesPlongees, { rafraichir: () => navigate(`dive/${d.id}`, true) });
+  if (alertes) wrap.insertBefore(alertes, wrap.children[2] || null);
   wrap.append(sectionVideos(d, toutesPlongees, { lecture: document.documentElement.classList.contains('partage') }));
 
   // ---------- Les données : ce qu'on a, ce qui manque, où le trouver ----------
