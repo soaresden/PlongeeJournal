@@ -88,7 +88,9 @@ const avecDelai = (p, ms, quoi) => Promise.race([
 export const MONTRE_MUETTE = 'La montre ne répond pas. Réveille-la (écran allumé, sur le cadran), vérifie que son Bluetooth '
   + 'est actif (pas en mode avion), garde-la près du téléphone, puis réessaie. Encore mieux : sur la montre, ouvre le menu '
   + 'des appareils appairés (là où l’on voit « MobileApp ») et mets-la en mode appairage : laisse-la sur cet écran pendant que le carnet la cherche, c’est là qu’elle se laisse détecter. '
-  + 'Sur une tablette ou un 2e téléphone : la montre doit l’avoir dans sa liste ; sinon « Oublier » la montre dans le Bluetooth '
+  + 'Sur une tablette ou un 2e téléphone : la montre ne parle souvent qu’à un appareil à la fois ; si elle est connectée '
+  + 'au téléphone (appli Suunto), coupe le Bluetooth du téléphone le temps de l’import. La montre doit aussi avoir la tablette '
+  + 'dans sa liste ; sinon « Oublier » la montre dans le Bluetooth '
   + 'd’Android, puis « Choisir une autre montre » avec la montre en mode appairage (voir le mode d’emploi). '
   + 'Si ça ne passe toujours pas : ouvre '
   + 'l’appli Suunto pour qu’elle se connecte à la montre, reviens ici et relance (le carnet passera par sa connexion). '
@@ -138,12 +140,36 @@ export function chercherMontre(ble, id, ms, journal) {
 }
 
 /**
- * Se connecte à la montre. Si elle ne répond pas (souvent : en veille, elle
- * ne s'annonce plus), on la cherche une dizaine de secondes, puis on
- * réessaie ; sinon, un message qui dit quoi faire.
+ * Se connecte à la montre.
+ *
+ * Android ne sait se connecter à un appareil Bluetooth « basse
+ * consommation » que s'il l'a VU s'annoncer depuis que le Bluetooth est
+ * allumé : sinon il ignore si son adresse est publique ou aléatoire, et
+ * la connexion directe à l'adresse de l'appairage tourne dans le vide
+ * (« Connection timeout »). L'appli Suunto, elle, ne lâche jamais la
+ * montre. Donc, sauf si elle est déjà connectée : on la cherche d'abord
+ * (`chercherAvant`), on se connecte à l'adresse où elle vient d'être vue ;
+ * sinon connexion directe, puis une recherche plus longue et un dernier
+ * essai ; sinon, un message qui dit quoi faire.
  */
-export async function connecterNatif(ble, appareil, journal, { delai = 15000, recherche = 12000 } = {}) {
+export async function connecterNatif(ble, appareil, journal, { delai = 15000, recherche = 12000, chercherAvant = 0 } = {}) {
   const id = appareil.deviceId;
+  if (chercherAvant) {
+    journal(`recherche de la montre (${Math.round(chercherAvant / 1000)} s) : Android doit la voir s’annoncer avant de s’y connecter…`);
+    const vue = await chercherMontre(ble, id, chercherAvant, journal);
+    if (vue) {
+      const cible = vue.deviceId || id;
+      try {
+        await ble.connect({ deviceId: cible, timeout: Math.max(delai, 20000) });
+        return cible;
+      } catch (e) {
+        journal(`✗ vue mais pas de connexion (${e?.message || e})`);
+        try { await ble.disconnect({ deviceId: cible }); } catch { /* rien d'ouvert */ }
+      }
+    } else {
+      journal('la montre ne s’annonce pas : en veille, ou déjà connectée à un autre appareil (le téléphone et son appli Suunto ?)');
+    }
+  }
   try {
     await ble.connect({ deviceId: id, timeout: delai });
     return id;
@@ -180,7 +206,7 @@ async function ouvrirNatif({ journal, choisirAutre }) {
     }
   } catch { /* pas grave */ }
 
-  let appareil = null;
+  let appareil = null, dejaConnectee = false;
   const connu = memo.lire();
 
   if (!choisirAutre) {
@@ -190,7 +216,7 @@ async function ouvrirNatif({ journal, choisirAutre }) {
       const { devices = [] } = await ble.getConnectedDevices({ services: [OCEAN_SERVICE] });
       journal(`appareils déjà connectés : ${devices.map(d => d.name || d.deviceId).join(', ') || 'aucun'}`);
       appareil = devices.find(d => d.deviceId === connu?.id) || devices.find(d => estOcean(d.name)) || null;
-      if (appareil) journal(`→ montre déjà connectée : ${appareil.name}`);
+      if (appareil) { dejaConnectee = true; journal(`→ montre déjà connectée : ${appareil.name}`); }
     } catch (e) { journal(`getConnectedDevices : ${e.message || e}`); }
 
     // 2. Appairée au téléphone (par l'appli Suunto) : on s'y connecte
@@ -215,8 +241,10 @@ async function ouvrirNatif({ journal, choisirAutre }) {
   const coupures = [];
   journal('connexion…');
   // La montre peut répondre sous une autre adresse que celle mémorisée :
-  // c'est celle de la connexion qui compte pour la suite.
-  const id = await connecterNatif(ble, appareil, journal);
+  // c'est celle de la connexion qui compte pour la suite. Déjà connectée
+  // (par l'appli Suunto) : on s'y branche directement ; sinon on la
+  // cherche d'abord (voir connecterNatif).
+  const id = await connecterNatif(ble, appareil, journal, { chercherAvant: dejaConnectee ? 0 : 8000 });
   ble.addListener(`disconnected|${id}`, () => {
     journal('⚠ montre déconnectée');
     coupures.forEach(cb => cb());
@@ -250,7 +278,9 @@ async function ouvrirNatif({ journal, choisirAutre }) {
   await avecDelai(ble.startNotifications({ deviceId: id, service: service.uuid, characteristic: notif.uuid }), 45000, 'abonnement');
   journal('notifications actives');
 
-  memo.ecrire({ id, nom: appareil.name || 'Suunto Ocean', moteur: 'capacitor' });
+  // L'adresse de l'appairage est stable ; celle vue au scan peut changer
+  // toutes les quelques minutes (adresse aléatoire).
+  memo.ecrire({ id: appareil.deviceId || id, nom: appareil.name || 'Suunto Ocean', moteur: 'capacitor' });
   const sansReponse = !!ecriture.props.writeWithoutResponse;
 
   return {

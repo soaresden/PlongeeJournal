@@ -74,6 +74,23 @@ const montre = { deviceId: 'AA', name: 'Suunto Ocean 2425' };
   check('introuvable : le journal liste ce qui a été vu (diagnostic)', journal.some(t => /appareils vus pendant la recherche : GoPro 6440/.test(t)), journal.join(' | '));
 }
 
+{
+  // Montre appairée mais jamais vue depuis l'allumage du Bluetooth : on la cherche AVANT de se connecter.
+  const ble = fauxPlugin({ repondAu: 1 });
+  journal.length = 0;
+  const id = await B.connecterNatif(ble, montre, j, { delai: 50, recherche: 200, chercherAvant: 300 });
+  check('recherche d’abord, puis connexion à l’adresse vue (un seul essai)', id === 'AA'
+    && ble.appels.join() === 'scan,stopScan,connect(20000)', ble.appels.join());
+}
+{
+  // Rien vu à la recherche préalable : connexion directe quand même, puis la recherche longue.
+  const ble = fauxPlugin({ repondAu: 1, visible: false });
+  journal.length = 0;
+  await B.connecterNatif(ble, montre, j, { delai: 50, recherche: 200, chercherAvant: 100 });
+  check('pas vue avant : le journal le dit, connexion directe tentée', ble.appels.join() === 'scan,stopScan,connect(50)'
+    && journal.some(t => /ne s’annonce pas/.test(t)), `${ble.appels.join()} | ${journal.join(' | ')}`);
+}
+
 const ko = results.filter(r => r.startsWith(' FAIL'));
 console.log(results.join('\n'));
 console.log(ko.length ? `\n${ko.length} test(s) en échec` : `\n${results.length}/${results.length} vérifications Bluetooth`);
