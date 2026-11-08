@@ -18,6 +18,8 @@ import { el, toast, fmtDuration, uid } from '../lib.js';
 import { store, emptyDive } from '../store.js';
 import { navigate } from '../router.js';
 import { fitToDive, mergeDives, profileSvg } from '../fit.js';
+import { paliersDuProfil } from '../profil-analyse.js';
+import { lieuDuCarnet, memeSortie } from '../lieu-auto.js';
 
 function fmtDateHeure(d) {
   if (!d) return 'Date inconnue';
@@ -232,8 +234,29 @@ export async function creerPlongeeImportee(diverId, fusion, { cles, suunto = nul
     dive.paliersEstimes = true;
   }
 
+  // Quand la montre donne son plafond et qu'il n'a jamais été franchi,
+  // le séjour à 3-5 m était un palier de SÉCURITÉ, pas de décompression.
+  const vraisPaliers = paliersDuProfil(dive.samples);
+  if (vraisPaliers) Object.assign(dive, vraisPaliers, { paliersEstimes: false });
+
   dive.suuntoKeys = cles;
   if (suunto) dive.suunto = suunto;
+
+  // Ce que le carnet sait déjà : le nom du lieu (une plongée à moins de
+  // 2 km), et, le même jour, le centre et l'équipement du matin.
+  const autres = await store.listDives(diverId).catch(() => []);
+  const lieu = lieuDuCarnet(dive, autres);
+  if (lieu) Object.assign(dive, lieu);
+  const matin = memeSortie(dive, autres);
+  if (matin) {
+    for (const k of ['centreNom', 'centreAdresse', 'centreLat', 'centreLng', 'lestage', 'combiType', 'combiMm',
+      'blocType', 'blocMatiere', 'palanqueeMode']) {
+      if ((dive[k] == null || dive[k] === '') && matin[k] != null && matin[k] !== '') dive[k] = matin[k];
+    }
+    if (!dive.blocLitres && matin.blocLitres) dive.blocLitres = matin.blocLitres;
+    if (!dive.type && matin.type) dive.type = matin.type;
+    dive.repriseDe = matin.id;
+  }
 
   await store.saveDive(dive);
   return dive;

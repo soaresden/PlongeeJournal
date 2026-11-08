@@ -4,14 +4,21 @@
 //  - les numéros suivent les dates (une plongée ajoutée sur un autre
 //    appareil, un ancien carnet) ;
 //  - l'eau douce ou salée se déduit du point GPS des plongées qui
-//    n'en ont pas encore (imports de la montre, anciennes fiches).
+//    n'en ont pas encore (imports de la montre, anciennes fiches) ;
+//  - le lieu d'une plongée importée sans nom se déduit de son point
+//    (une plongée voisine du carnet, sinon OpenStreetMap) ;
+//  - les paliers « estimés » d'une plongée dont la montre donne le
+//    plafond sont corrigés : jamais de plafond, pas de décompression.
 //
 //  Rien ne bloque : sans réseau, on réessaiera à la prochaine ouverture.
 // ============================================================
 
 import { store, premierMoniteur } from './store.js';
+import { paliersDuProfil } from './profil-analyse.js';
+import { lieuxANommer, lieuDuCarnet, lieuOsm } from './lieu-auto.js';
 
 const PAR_OUVERTURE = 25;      // les services OSM n'aiment pas être pressés
+const LIEUX_PAR_OUVERTURE = 6;
 const PAUSE_MS = 1200;
 
 const attendre = ms => new Promise(r => setTimeout(r, ms));
@@ -22,9 +29,27 @@ export function eauxAReconnaitre(dives) {
     && Math.abs(d.lat) > 0.01);   // « au large du Gabon » : un GPS sans signal
 }
 
-export async function entretenir({ analyser = null } = {}) {
+/** Paliers estimés à corriger d'après le plafond de la montre. */
+export function paliersACorriger(dives) {
+  const out = [];
+  for (const d of dives) {
+    if (!d.paliersEstimes || !d.samples?.length) continue;
+    const p = paliersDuProfil(d.samples);
+    if (!p) continue;
+    const copie = { ...d, ...p, paliersEstimes: false };
+    // « Décompression » posée d'après les faux paliers s'en va, sauf si
+    // elle avait été choisie à la main.
+    if (!(d.optionsManuelles || []).includes('Décompression')) {
+      copie.options = (d.options || []).filter(o => o !== 'Décompression');
+    }
+    out.push(copie);
+  }
+  return out;
+}
+
+export async function entretenir({ analyser = null, nommer = null } = {}) {
   const diverId = await store.getActiveDiverId();
-  if (!diverId) return { numeros: 0, eaux: 0, chefs: 0 };
+  if (!diverId) return { numeros: 0, eaux: 0, chefs: 0, lieux: 0 };
   const numeros = await store.numeroterAuto(diverId).catch(() => 0);
 
   // Le moniteur avec qui j'étais : le premier de la palanquée.
@@ -36,8 +61,43 @@ export async function entretenir({ analyser = null } = {}) {
   }
   if (chefs.length) await store.savePlongees(chefs).catch(() => {});
 
+  const paliers = paliersACorriger(await store.listDives(diverId));
+  if (paliers.length) await store.savePlongees(paliers).catch(() => {});
+
+  // Le lieu, d'après le carnet : sans réseau, tout de suite.
+  let lieux = 0;
+  {
+    const toutes = await store.listDives(diverId);
+    const nommees = [];
+    for (const d of lieuxANommer(toutes)) {
+      const patch = lieuDuCarnet(d, toutes);
+      if (patch) { Object.assign(d, patch); nommees.push(d); }
+    }
+    if (nommees.length) { await store.savePlongees(nommees).catch(() => {}); lieux += nommees.length; }
+  }
+
   let eaux = 0;
-  if (typeof navigator !== 'undefined' && navigator.onLine === false) return { numeros, eaux, chefs: chefs.length };
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return { numeros, eaux, chefs: chefs.length, lieux };
+
+  // Le lieu, d'après OpenStreetMap : quelques-unes par ouverture.
+  {
+    const nom = nommer || lieuOsm;
+    const restantes = lieuxANommer(await store.listDives(diverId)).slice(0, LIEUX_PAR_OUVERTURE);
+    const nommees = [];
+    for (const d0 of restantes) {
+      let patch = null;
+      try { patch = await nom(d0.lat, d0.lng); } catch { /* service indisponible */ }
+      const d = await store.getDive(d0.id);
+      if (!d || String(d.lieuNom || '').trim()) continue;
+      // Rien trouvé : on ne redemandera pas à chaque ouverture.
+      Object.assign(d, patch || { lieuEssaye: true });
+      nommees.push(d);
+      if (!nommer) await attendre(PAUSE_MS);
+    }
+    if (nommees.length) await store.savePlongees(nommees).catch(() => {});
+    lieux += nommees.filter(d => d.lieuNom).length;
+  }
+
   const a = analyser || (await import('./geo.js')).analyserPoint;
   const liste = eauxAReconnaitre(await store.listDives(diverId)).slice(0, PAR_OUVERTURE);
   const modifiees = [];
@@ -62,7 +122,7 @@ export async function entretenir({ analyser = null } = {}) {
   if (modifiees.length) await store.savePlongees(modifiees);
   eaux = modifiees.filter(d => d.eau).length;
   const partage = await majPartage().catch(() => false);
-  return { numeros, eaux, chefs: chefs.length, partage };
+  return { numeros, eaux, chefs: chefs.length, lieux, partage };
 }
 
 /**

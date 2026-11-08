@@ -13,7 +13,7 @@ import { store, TYPES_SEANCE, typeSeance, niveauALaDate, NIVEAUX } from './store
 import { DIVE_TYPES } from './config.js';
 import { chercherEnElargissant, resolveResult } from './map.js';
 import { navigate } from './router.js';
-import { profileSvg } from './fit.js';
+import { graphiquePlongee } from './courbes.js';
 import { ambianceDe, stylesAmbiance, vignetteLieu, etiquetteAmbiance } from './ambiance.js';
 import { agendaBranche, agendaLisible, chargerAgenda, evenementsDu, lieuPropose, texteEvenement } from './agenda.js';
 import { editeurPalanquee, champCentre, propositionsTexte } from './palanquee.js';
@@ -144,8 +144,8 @@ function liste(options, valeur, surChange) {
 const chiffre = (valeur, unite) => el('div.apercu-chiffre', {},
   el('b', { text: valeur }), el('span', { text: unite }));
 
-const courbe = samples => samples?.length
-  ? el('div.apercu-courbe', { html: profileSvg(samples, { width: 520, height: 150 }) }) : null;
+const courbe = (samples, dive = {}) => samples?.length
+  ? el('div.apercu-courbe', {}, graphiquePlongee(samples, { dive, hauteur: 160 })) : null;
 
 // ------------------------------------------------------------
 //  Plongée
@@ -264,7 +264,7 @@ export async function apercuPlongee(id, { retour = null, onClose = null } = {}) 
     // La page du carnet papier, pour relire et corriger en la regardant.
     d.photoCarnet?.ref ? el('div.apercu-bloc', {}, el('div.apercu-lbl', { text: '📓 Page du carnet' }),
       pageLisible(d.photoCarnet.ref, { hauteur: 'min(48vh, 420px)' })) : null,
-    courbe(d.samples || d.profil),
+    courbe(d.samples?.length ? d.samples : d.profil, d),
     el('div.apercu-grille', {},
       champ('N° (auto)', el('input', { type: 'text', readOnly: true, tabIndex: -1, value: d.numero ?? '—', class: 'lecture-seule' })),
       champ('Date', date),

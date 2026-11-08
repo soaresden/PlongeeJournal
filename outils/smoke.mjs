@@ -472,7 +472,7 @@ window.dispatchEvent(new window.Event('hashchange'));
 await tick(90);
 const detail = view();
 check('fiche : libellé du lieu conservé', detail.includes('Lac de Beaumont-sur-Oise'), '');
-check('fiche : paliers', detail.includes('3 min à 3 m'), '');
+check('fiche : paliers', detail.includes('3′ à 3 m'), '');
 check('fiche : coordonnées', detail.includes('49.14210'), '');
 check('fiche : chef de palanquée marqué', detail.includes('Jean Moniteur ★'), '');
 check('fiche : comptes-rendus', detail.includes('Remontée assistée') && detail.includes('Brochet'), '');
@@ -743,7 +743,7 @@ await tick(60);
 
 check('formulaire : sections en entonnoir',
   [...document.querySelectorAll('#view .sec-titre')].map(x => x.textContent.trim())
-    .join('|').includes('Lieu et environnement'),
+    .join('|').includes('Lieu •|Plongeurs|Ma plongée|Conditions|Les chiffres'),
   [...document.querySelectorAll('#view .sec-titre')].map(x => x.textContent.trim()).join('|'));
 
 check('formulaire : la palanquée se tape (champ + puces)',

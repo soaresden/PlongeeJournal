@@ -16,7 +16,15 @@
 import { el, toast, fmtDuration } from '../lib.js';
 import { store, TYPES_SEANCE, typeSeance } from '../store.js';
 import { navigate } from '../router.js';
-import { profileSvg } from '../fit.js';
+import { graphiquePlongee, tuilesPlongee } from '../courbes.js';
+
+/** Une plongée décodée, vue comme une fiche (pour les chiffres et les courbes). */
+const apercuDive = dec => ({
+  dureeMin: dec.dureeMin, profMax: dec.profMax, profMoy: dec.profMoy, tempFond: dec.tempFond,
+  pressionDepart: dec.pressionDepart, pressionFin: dec.pressionFin, blocLitres: dec.blocLitres,
+  gazType: dec.gazHe ? 'trimix' : dec.gazO2 && dec.gazO2 !== 21 ? 'nitrox' : 'air', gazO2: dec.gazO2, gazHe: dec.gazHe,
+  samples: dec.samples,
+});
 import { bleDisponible, ouvrirLienOcean, montreMemorisee, oublierMontre } from '../ble.js';
 import { OceanSession, Annule } from '../ocean-device.js';
 import { parseOcean, oceanToDive, plongeeCorrespondante, CLE_OCEAN } from '../ocean-sbem.js';
@@ -275,6 +283,18 @@ export async function montreView() {
         creees.push(dive);
         journalBle.log(`+ plongée n°${dive.numero} ajoutée au carnet (${CLE_OCEAN(f.id)})`);
       }
+      // Le lieu, d'après le GPS de la montre, quand le carnet ne le
+      // connaissait pas encore (8 s au plus : sinon, à la prochaine ouverture).
+      for (const dive of creees.filter(d => !d.lieuNom && d.lat != null).slice(0, 3)) {
+        dire('Recherche du nom du lieu…');
+        const { lieuOsm } = await import('../lieu-auto.js');
+        const patch = await Promise.race([lieuOsm(dive.lat, dive.lng), new Promise(r => setTimeout(() => r(null), 8000))]).catch(() => null);
+        if (patch) {
+          Object.assign(dive, patch);
+          await store.saveDive(dive).catch(() => {});
+          journalBle.log(`  lieu : ${patch.lieuNom}${patch.site ? ` — ${patch.site}` : ''} (d’après le GPS)`);
+        }
+      }
       toast([creees.length ? `${creees.length} plongée${creees.length > 1 ? 's' : ''} au carnet` : null,
              rangees.length ? `${rangees.length} séance${rangees.length > 1 ? 's' : ''}` : null].filter(Boolean).join(' · '));
       await deconnecter();
@@ -358,7 +378,9 @@ export async function montreView() {
             d?.erreur ? el('div', { style: { color: 'var(--danger, #e5534b)', fontSize: '12px' }, text: `Échec : ${d.erreur}` }) : null,
           )),
         d?.dive && !deja ? selecteurRangement(f.id) : null,
-        d?.dive?.samples?.length ? el('div', { style: { marginTop: '10px' }, html: profileSvg(d.dive.samples) }) : null,
+        d?.dive?.samples?.length ? el('div', { style: { marginTop: '10px' } },
+          tuilesPlongee(apercuDive(d.dive), null),
+          el('div', { style: { marginTop: '10px' } }, graphiquePlongee(d.dive.samples, { dive: apercuDive(d.dive) }))) : null,
       ));
     }
 

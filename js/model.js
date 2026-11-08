@@ -145,6 +145,9 @@ export function emptyDive(diverId, numero) {
     photoCarnet: null,
 
     fait: '', vu: '', observations: '',
+    exercices: [],          // cochés (config EXERCICES)
+    ressenti: [],           // ids (config RESSENTIS)
+    note: null,             // 1 à 5 étoiles
 
     // « Ce que j'ai vu », en trois catégories cochables.
     // Chaque entrée : { id, nom, sci, photo, source }

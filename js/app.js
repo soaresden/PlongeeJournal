@@ -263,7 +263,7 @@ function entretienDeFond() {
   import('./entretien.js')
     .then(m => m.entretenir())
     .then(r => {
-      if (r.numeros && ['dives', 'stats'].includes(currentPath())) navigate(currentPath(), true);
+      if ((r.numeros || r.lieux) && ['dives', 'stats'].includes(currentPath())) navigate(currentPath(), true);
     })
     .catch(() => {});
 }

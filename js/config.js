@@ -218,6 +218,30 @@ export const DIVE_GOALS = [
   'Nettoyage', 'Archéologie',
 ];
 
+/** Ce que j'ai fait sous l'eau : on coche au lieu d'écrire. */
+export const EXERCICES = [
+  'Vidage de masque', 'Lâcher / reprise d’embout', 'Échange d’embout', 'Panne d’air',
+  'Remontée assistée', 'Remontée contrôlée', 'Stabilisation', 'Poumon-ballast',
+  'Navigation au compas', 'Parachute de palier', 'Tour d’horizon', 'Palmage',
+  'J’ai guidé', 'J’ai encadré',
+];
+
+/** Comment ça s'est passé. */
+export const RESSENTIS = [
+  { id: 'top',       label: 'Plongée de rêve', icone: '🤩' },
+  { id: 'detendu',   label: 'Détendu',         icone: '😌' },
+  { id: 'stab',      label: 'Bonne stab',      icone: '🎈' },
+  { id: 'conso',     label: 'Bonne conso',     icone: '🫧' },
+  { id: 'froid',     label: 'Froid',           icone: '🥶' },
+  { id: 'fatigue',   label: 'Fatigué',         icone: '😮‍💨' },
+  { id: 'stress',    label: 'Stressé',         icone: '😬' },
+  { id: 'oreilles',  label: 'Oreilles',        icone: '👂' },
+  { id: 'malMer',    label: 'Mal de mer',      icone: '🤢' },
+  { id: 'tropLeste', label: 'Trop lesté',      icone: '⬇️' },
+  { id: 'pasAssez',  label: 'Pas assez lesté', icone: '⬆️' },
+  { id: 'materiel',  label: 'Souci de matériel', icone: '🔧' },
+];
+
 export const BLOOD_TYPES = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
 
 // Pas de « solo » : la plongée solitaire n'est pas autorisée en

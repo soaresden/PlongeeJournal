@@ -7,9 +7,10 @@ import { apercuPlongee, apercuSeance } from '../apercu.js';
 import { store, TYPES_SEANCE } from '../store.js';
 import { staticMap } from '../map.js';
 import { navigate } from '../router.js';
-import { profileSvg } from '../fit.js';
 import { consommation, libelleGaz } from '../store.js';
-import { METEO, ETAT_MER, COURANTS, VISIBILITE_ICONES } from '../config.js';
+import { METEO, ETAT_MER, COURANTS, VISIBILITE_ICONES, RESSENTIS } from '../config.js';
+import { graphiquePlongee, tuilesPlongee } from '../courbes.js';
+import { analyserProfil } from '../profil-analyse.js';
 import { ambianceDe, stylesAmbiance, vignetteLieu, etiquetteAmbiance } from '../ambiance.js';
 import { plongeesARanger } from '../seances.js';
 import { photoCarnetFiche } from './carnet-photo.js';
@@ -424,115 +425,67 @@ export async function diveView({ id }) {
   const pageCarnet = photoCarnetFiche(d);
   if (pageCarnet) wrap.append(pageCarnet);
 
-  // Carte
-  if (d.lat != null) {
+  // ---------- Ce que dit la montre : chiffres et courbes ----------
+  const courbe = d.samples?.length ? d.samples : d.profil;
+  const analyse = analyserProfil(courbe, d);
+  const tuiles = tuilesPlongee(d, analyse);
+  const paliersTxt = [d.palier9 && `${d.palier9}′ à 9 m`, d.palier6 && `${d.palier6}′ à 6 m`, d.palier3 && `${d.palier3}′ à 3 m`]
+    .filter(Boolean).join(', ');
+  if (tuiles || courbe?.length) {
     wrap.append(el('div.section', {},
-      // 3 km de large : assez pour reconnaître la côte et le port.
-      staticMap(d.lat, d.lng, { km: 3 }),
-      el('div.hint', {},
-        d.lieuDetail ? el('div', { text: d.lieuDetail }) : null,
-        el('div', { text: `${d.lat.toFixed(5)}, ${d.lng.toFixed(5)}` }),
-        el('a', {
-          href: `https://www.google.com/maps?q=${d.lat},${d.lng}`,
-          target: '_blank', rel: 'noopener',
-          style: { color: 'var(--accent)' },
-        }, 'Ouvrir dans Maps'),
-      ),
-    ));
-  }
-
-  // Courbe de profondeur (import ordinateur de plongée)
-  if ((d.samples || d.profil)?.length) {
-    wrap.append(el('div.section', {},
-      el('h2', { text: 'Courbe de profondeur' }),
+      el('h2', { text: courbe?.length ? 'La plongée, d’après la montre' : 'Les chiffres' }),
       el('div.card', {},
-        el('div', { html: profileSvg(d.samples || d.profil) }),
+        tuiles,
+        courbe?.length ? el('div', { style: { marginTop: '12px' } }, graphiquePlongee(courbe, { dive: d })) : null,
         (d.suuntoKeys || []).length > 1
-          ? el('div.hint', { text: `Fusion de ${d.suuntoKeys.length} enregistrements Suunto.` })
-          : null,
+          ? el('div.hint', { text: `Fusion de ${d.suuntoKeys.length} enregistrements Suunto.` }) : null,
+        el('div.hint', { style: { marginBottom: 0 }, text: [
+          d.heureImmersion ? `Immersion ${d.heureImmersion}${d.heureSortie ? `, sortie ${d.heureSortie}` : ''}` : null,
+          paliersTxt ? `paliers : ${paliersTxt}${d.paliersEstimes ? ' (estimés)' : ''}` : null,
+          d.palierSecu && !analyse?.palierSecuMin ? `palier de sécurité ${d.palierSecuMin || 3} min` : null,
+          d.niveau ? `niveau ${d.niveau}` : null,
+          d.altitude != null && d.altitude > 300 ? `altitude ${Math.round(d.altitude)} m` : null,
+        ].filter(Boolean).join(' · ') || null }),
       ),
     ));
   }
 
-  // Profil
-  const paliers = [
-    d.palier9 ? `${d.palier9} min à 9 m` : null,
-    d.palier6 ? `${d.palier6} min à 6 m` : null,
-    d.palier3 ? `${d.palier3} min à 3 m` : null,
-  ].filter(Boolean).join(' · ');
-
-  wrap.append(el('div.section', {},
-    el('h2', { text: 'Profil' }),
-    el('div.card', {},
-      kv('Durée', d.dureeMin ? fmtDuration(d.dureeMin) : null),
-      kv('Profondeur max', d.profMax ? `${d.profMax} m` : null),
-      kv('Immersion', d.heureImmersion || null),
-      kv('Sortie', d.heureSortie || null),
-      kv('Paliers', paliers || null),
-      kv('Palier de sécurité', d.palierSecu ? `${d.palierSecuMin || 3} min` : null),
-      kv('Eau', d.eau === 'salee' ? 'Salée' : d.eau === 'douce' ? 'Douce' : null),
-      kv('Altitude', d.altitude != null ? `${Math.round(d.altitude)} m` : null),
-      kv('Mon niveau', d.niveau || null),
-    ),
-  ));
-
-  // Conditions & matériel
-  const condCard = el('div.card', {},
-    kv('Température fond', d.tempFond != null ? `${d.tempFond} °C` : null),
-    kv('Température surface', d.tempSurface != null ? `${d.tempSurface} °C` : null),
-    kv('Température air', d.tempAir != null ? `${d.tempAir} °C` : null),
-    kv('Météo', picto(METEO, d.meteo)),
-    kv('État de l’eau', picto(ETAT_MER, d.etatMer)),
-    kv('Visibilité', d.visibilite
-      ? `${VISIBILITE_ICONES[d.visibilite] || ''} ${d.visibilite}`.trim() : null),
-    kv('Courant', picto(COURANTS, d.courant)),
-    kv('Lestage', d.lestage || null),
-    kv('Combinaison', [d.combiType, d.combiMm ? `${d.combiMm} mm` : null]
-      .filter(Boolean).join(' ') || d.combinaison || null),
-    kv('Bloc', d.blocLitres ? `${d.blocLitres} L` : null),
-    kv('Pression', (d.pressionDepart || d.pressionFin)
-      ? `${d.pressionDepart ?? '?'} → ${d.pressionFin ?? '?'} bar` : null),
-  );
-  if (condCard.children.length) {
-    wrap.append(el('div.section', {}, el('h2', { text: 'Conditions & matériel' }), condCard));
-  }
-
-  // Consommation d'air
-  const conso = consommation(d);
-  if (conso) {
+  // ---------- Ma plongée : ce qui a été coché ----------
+  const ressentis = (d.ressenti || []).map(id => RESSENTIS.find(r => r.id === id)).filter(Boolean);
+  const coches = [...(d.objectifs || []), ...(d.exercices || []), d.objectifAutre].filter(Boolean);
+  const options = d.options || [];
+  if (d.note || ressentis.length || coches.length || options.length || d.observations) {
     wrap.append(el('div.section', {},
-      el('h2', { text: 'Consommation' }),
+      el('h2', { text: 'Ma plongée' }),
       el('div.card', {},
-        el('div.conso-chiffres', {},
-          el('div.conso-bloc', {},
-            el('div.conso-val', { text: `${conso.surface} L/min` }),
-            el('div.conso-lbl', { text: 'à la surface' })),
-          el('div.conso-bloc', {},
-            el('div.conso-val.secondaire', { text: `${conso.brute} L/min` }),
-            el('div.conso-lbl', { text: `à ${conso.profMoy} m` })),
-          el('div.conso-bloc', {},
-            el('div.conso-val.secondaire', { text: `${conso.litres} L` }),
-            el('div.conso-lbl', { text: 'consommés' })),
-        ),
-        el('div.hint', { style: { marginBottom: 0 },
-          text: [libelleGaz(d),
-                 `${d.pressionDepart} → ${d.pressionFin} bar sur ${d.blocLitres} L`,
-                 conso.estime ? 'profondeur moyenne estimée' : null]
-            .filter(Boolean).join(' · ') }),
+        d.note ? el('div.etoiles.lecture', { 'aria-label': `${d.note} sur 5` },
+          ...[1, 2, 3, 4, 5].map(n => el('button', { type: 'button', tabindex: '-1', class: d.note >= n ? 'on' : null, text: '★' }))) : null,
+        ressentis.length ? el('div.fiche-coches', { style: { marginTop: d.note ? '8px' : 0 } },
+          ...ressentis.map(r => el('span.chip.solid', { text: `${r.icone} ${r.label}` }))) : null,
+        coches.length ? el('div.fiche-coches', { style: { marginTop: '8px' } },
+          ...coches.map(t => el('span.chip.solid', { text: t }))) : null,
+        options.length ? el('div.fiche-coches', { style: { marginTop: '8px' } },
+          ...options.map(t => el('span.chip', { text: t }))) : null,
+        d.observations ? el('div.prose', { style: { marginTop: '10px' }, text: d.observations }) : null,
       ),
     ));
   }
 
-  // Spécificités
-  const tags = [...(d.options || []), ...(d.objectifs || []), d.objectifAutre].filter(Boolean);
-  if (tags.length) {
-    wrap.append(el('div.section', {},
-      el('h2', { text: 'Spécificités & objectifs' }),
-      el('div.card', {}, el('div.chips', {}, tags.map(t => el('span.chip.solid', { text: t })))),
-    ));
+  // ---------- Conditions, en une ligne de pictos ----------
+  const conditions = [
+    picto(METEO, d.meteo), picto(ETAT_MER, d.etatMer),
+    d.visibilite ? `${VISIBILITE_ICONES[d.visibilite] || '👁'} visibilité ${d.visibilite.toLowerCase()}` : null,
+    d.courant ? `${COURANTS.find(c => c.id === d.courant)?.icone || ''} courant ${String(picto(COURANTS, d.courant) || '').replace(/^\S+\s*/, '').toLowerCase()}`.trim() : null,
+    d.tempAir != null ? `🌡 air ${d.tempAir} °C` : null,
+    d.tempSurface != null ? `🌊 surface ${d.tempSurface} °C` : null,
+    d.eau ? (d.eau === 'salee' ? '🧂 eau salée' : '💧 eau douce') : null,
+  ].filter(Boolean);
+  if (conditions.length) {
+    wrap.append(el('div.section', {}, el('h2', { text: 'Conditions' }),
+      el('div.card', {}, el('div.fiche-conditions', {}, ...conditions.map(c => el('span', { text: c }))))));
   }
 
-  // Palanquée
+  // ---------- Palanquée ----------
   if ((d.buddyIds || []).length || d.palanqueeMode || d.moniteurSansNom || d.centreNom) {
     const modeLabel = {
       moniteur: 'Encadré par un moniteur', chef: 'Guide de palanquée',
@@ -556,6 +509,40 @@ export async function diveView({ id }) {
           : null,
       ),
     ));
+  }
+
+  // ---------- Lieu ----------
+  if (d.lat != null) {
+    wrap.append(el('div.section', {},
+      el('h2', { text: d.site ? `Lieu · ${d.site}` : 'Lieu' }),
+      // 3 km de large : assez pour reconnaître la côte et le port.
+      staticMap(d.lat, d.lng, { km: 3 }),
+      el('div.hint', {},
+        d.lieuDetail ? el('div', { text: d.lieuDetail }) : null,
+        el('div', { text: `${d.lat.toFixed(5)}, ${d.lng.toFixed(5)}${d.lieuAuto ? ' · nom trouvé d’après le GPS' : ''}` }),
+        el('a', {
+          href: `https://www.google.com/maps?q=${d.lat},${d.lng}`,
+          target: '_blank', rel: 'noopener',
+          style: { color: 'var(--accent)' },
+        }, 'Ouvrir dans Maps'),
+      ),
+    ));
+  }
+
+  // ---------- Matériel & bouteille ----------
+  const conso = analyse?.bloc?.sac ? null : consommation(d);
+  const matCard = el('div.card', {},
+    kv('Gaz', libelleGaz(d) || null),
+    kv('Bloc', [d.blocType, d.blocMatiere, d.blocLitres ? `${d.blocLitres} L` : null].filter(Boolean).join(' · ') || null),
+    kv('Pression', (d.pressionDepart || d.pressionFin) && !analyse?.bloc
+      ? `${d.pressionDepart ?? '?'} → ${d.pressionFin ?? '?'} bar` : null),
+    kv('Consommation', conso ? `${conso.surface} L/min en surface · ${conso.litres} L${conso.estime ? ' (estimé)' : ''}` : null),
+    kv('Lestage', d.lestage ? `${String(d.lestage).replace(/\s*kg$/i, '')} kg` : null),
+    kv('Combinaison', [d.combiType, d.combiMm ? `${d.combiMm} mm` : null]
+      .filter(Boolean).join(' ') || d.combinaison || null),
+  );
+  if (matCard.children.length) {
+    wrap.append(el('div.section', {}, el('h2', { text: 'Matériel' }), matCard));
   }
 
   // Ce que j'ai vu
@@ -582,7 +569,6 @@ export async function diveView({ id }) {
   // Comptes-rendus
   const notes = [
     ['Ce que j’ai fait', d.fait],
-    ['Observations', d.observations],
     ['Note', d.vu],           // ancien champ libre, conservé s'il est rempli
   ].filter(([, v]) => v);
   if (notes.length) {

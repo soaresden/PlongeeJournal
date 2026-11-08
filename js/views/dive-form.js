@@ -13,10 +13,12 @@ import { idsEquipes, combiEquipee } from '../equipement.js';
 import { DIVE_TYPES, DIVE_OPTIONS, DIVE_GOALS, PALANQUEE_MODES,
          OPTIONS_AUTO, VISIBILITES, COMBI_TYPES, COMBI_MM, NIVEAUX,
          GAZ, gazParId, BLOC_TYPES, BLOC_MATIERES, typeMateriel,
-         VISIBILITE_ICONES, METEO, ETAT_MER, COURANTS } from '../config.js';
+         VISIBILITE_ICONES, METEO, ETAT_MER, COURANTS, EXERCICES, RESSENTIS } from '../config.js';
+import { graphiquePlongee, tuilesPlongee } from '../courbes.js';
+import { analyserProfil } from '../profil-analyse.js';
+import { memeSortie } from '../lieu-auto.js';
 import { locationPicker } from '../map.js';
 import { navigate } from '../router.js';
-import { profileSvg } from '../fit.js';
 import { photoCarnetFormulaire, pageLisible } from './carnet-photo.js';
 import { oublierPhoto } from '../photos.js';
 
@@ -121,13 +123,14 @@ function section(titre, options, ...contenu) {
     contenu = [options, ...contenu];
     options = {};
   }
-  const { ouvert = true, icone = '', id = '' } = options || {};
+  const { ouvert = true, icone = '', id = '', resume = '' } = options || {};
 
   const corps = el('div.card', {}, ...contenu);
   const fleche = el('span.sec-fleche', { text: '▾' });
   const entete = el('button.sec-entete', { type: 'button' },
     icone ? el('span', { text: icone + ' ' }) : null,
     el('span.sec-titre', { text: titre }),
+    resume ? el('span.sec-resume', { text: resume }) : null,
     fleche);
 
   const bloc = el('div.section.repliable', {}, entete, corps);
@@ -550,48 +553,44 @@ export async function diveFormView({ id }) {
 
   const form = el('form', { onsubmit: e => e.preventDefault() });
 
-  // ---------- 0. Import direct depuis l'ordinateur de plongée ----------
+  // ---------- 0. Ce que la montre a déjà donné ----------
   //
-  // Placé tout en haut : c'est le raccourci qui évite le plus de saisie.
-  // Horaires, profondeurs, températures et profil arrivent d'un coup.
-  if (!dive.profil?.length && !(dive.suuntoKeys || []).length) {
+  // Une plongée importée arrive avec presque tout : on le montre d'emblée
+  // (chiffres, courbes) au lieu de le cacher dans des champs à relire.
+  const courbe = dive.samples?.length ? dive.samples : dive.profil;
+  const importee = !!(courbe?.length || (dive.suuntoKeys || []).length);
+  const analyse = analyserProfil(courbe, dive);
+  if (!importee) {
     form.append(el('button.btn.block.suunto-link', {
       type: 'button',
-      onclick: () => navigate('suunto'),
+      onclick: () => navigate('montre'),
     },
       el('span', { style: { fontSize: '20px' }, text: '⌚' }),
       el('span', {},
-        el('div', { style: { fontWeight: '650' }, text: 'Link Suunto Dive' }),
+        el('div', { style: { fontWeight: '650' }, text: 'Importer depuis la montre' }),
         el('div', { style: { fontSize: '12px', opacity: '.75' },
-          text: 'Importer la plongée depuis la montre' })),
+          text: 'Durée, profondeurs, températures, bouteille, lieu : tout arrive d’un coup' })),
       el('span', { style: { marginLeft: 'auto', opacity: '.6' }, text: '›' }),
     ));
-  }
-
-  // ---------- 0 bis. Bandeau import ordinateur de plongée ----------
-  if (dive.profil?.length || (dive.suuntoKeys || []).length) {
-    form.append(el('div.card', { style: { borderColor: 'var(--accent-2)' } },
-      el('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px' } },
-        el('div', { style: { fontWeight: '650' }, text: '⌚ Données importées de l’ordinateur' }),
-        el('span.badge.tek', { text: `${(dive.suuntoKeys || []).length || 1} enregistrement(s)` }),
-      ),
-      dive.profil?.length
-        ? el('div', { html: profileSvg(dive.profil), style: { marginTop: '10px' } })
-        : null,
-      el('div.hint', { text: 'Horaires, profondeurs et températures sont pré-remplis. Les paliers sont ESTIMÉS à partir du '
-        + 'profil : vérifie-les. Il te reste à saisir le lieu, la palanquée et tes commentaires.' }),
+  } else {
+    form.append(el('div.card.carte-montre', {},
+      el('div.carte-montre-tete', {},
+        el('b', { text: '⌚ De la montre' }),
+        el('span.badge.tek', { text: dive.suunto?.appareil || 'ordinateur' })),
+      tuilesPlongee(dive, analyse),
+      courbe?.length ? el('div', { style: { marginTop: '12px' } }, graphiquePlongee(courbe, { dive })) : null,
+      el('div.hint', { style: { marginBottom: 0 }, text: 'Rien à recopier : tout ça est déjà dans la fiche. '
+        + 'Il reste à cocher ce qui ne se mesure pas — avec qui, comment c’était.' }),
     ));
   }
 
-  // Rappel du minimum vital, en tête de formulaire.
-  form.append(el('div.card.essentiel', {},
+  // Rappel du minimum vital, en tête de formulaire (pas pour un import : tout y est).
+  if (!importee) form.append(el('div.card.essentiel', {},
     el('div', { style: { fontSize: '13px', color: 'var(--text-dim)', lineHeight: '1.6' } },
       'Pour être valable, une plongée demande au minimum : ',
       el('b', { text: 'lieu' }), ', ', el('b', { text: 'date' }), ', ',
       el('b', { text: 'durée' }), ' et ', el('b', { text: 'profondeur max' }),
-      '. Ces champs portent un point ', el('span.requis', { text: '•' }),
-      '. L’heure d’immersion est facultative — inutile de l’inventer sur une '
-    + 'plongée d’avant l’ordinateur.'),
+      '. Ces champs portent un point ', el('span.requis', { text: '•' }), '.'),
   ));
 
   // ---------- 0 ter. La page du carnet papier ----------
@@ -599,8 +598,8 @@ export async function diveFormView({ id }) {
   // Facultative, mais quand elle est là c'est le modèle de toute la
   // saisie : elle reste visible à côté des champs.
   const carnetPapier = photoCarnetFormulaire(dive);
-  form.append(section('Page du carnet papier', { icone: '📓', ouvert: !!dive.photoCarnet?.ref || isNew },
-    carnetPapier.bloc));
+  form.append(section('Page du carnet papier', { icone: '📓', ouvert: !!dive.photoCarnet?.ref || (isNew && !importee),
+    resume: dive.photoCarnet?.ref ? 'photo' : '' }, carnetPapier.bloc));
 
   // ---------- 1. Identité de la plongée ----------
   // Le numéro n'est plus saisi : il suit les dates (la plus ancienne est la n°1).
@@ -633,15 +632,13 @@ export async function diveFormView({ id }) {
 
   form.append(section('La plongée', { icone: '🤿', ouvert: true },
     el('div.row', {},
-      field('N° de plongée', numeroInput, 'Automatique : suit l’ordre des dates'),
+      field('N° (automatique)', numeroInput),
       champDate,
     ),
     field('Type de plongée',
       segmented(DIVE_TYPES.map(t => ({ id: t, label: t.replace('Exploration de ', 'Explo ') })),
                 dive.type, v => set({ type: v }))),
-    field('Mon niveau ce jour-là', niveauSel,
-      'Rien à saisir : il se déduit de tes diplômes (Profil). '
-    + 'Choisis-en un seulement pour une plongée en formation (PN2…).'),
+    field('Mon niveau ce jour-là', niveauSel, 'À changer seulement pour une plongée en formation.'),
   ));
 
   // ---------- 2. Lieu ----------
@@ -716,6 +713,7 @@ export async function diveFormView({ id }) {
   const picker = locationPicker(dive, patch => {
     const avait = dive.eau;
     set(patch);
+    if ('lieuNom' in patch && dive.lieuAuto) { delete dive.lieuAuto; majOrigine?.(); }
     // Le nom du lieu reste un indice de secours, jamais prioritaire.
     if (patch.eau && !avait && !dive.eauManuelle) renderWater();
     if (patch.lat != null) reconnaitreLePoint();
@@ -723,16 +721,43 @@ export async function diveFormView({ id }) {
     majOptionsAuto();
   });
 
-  const blocLieu = section('Lieu et environnement', { icone: '📍', ouvert: true },
+  // Le nom deviné d'après le GPS de la montre : on le dit, et un nom
+  // tapé à la main le remplace.
+  const lieuOrigine = el('div.hint.lieu-auto', { hidden: true });
+  const champSite = input('text', dive.site, v => set({ site: v }), { placeholder: 'Banana Reef, épave du Thistlegorm…' });
+  function majOrigine() {
+    lieuOrigine.hidden = !dive.lieuAuto || !dive.lieuNom;
+    lieuOrigine.textContent = dive.lieuAuto === 'carnet'
+      ? '✨ Nom repris d’une de tes plongées à côté. Tape un autre nom pour le changer.'
+      : '✨ Nom trouvé d’après le GPS de la montre (OpenStreetMap). Tape un autre nom pour le changer.';
+  }
+  majOrigine();
+  if (dive.lat != null && !dive.lieuNom && !dive.lieuEssaye) {
+    // Pas encore de nom : on le cherche maintenant, sans bloquer la saisie.
+    import('../lieu-auto.js').then(m => m.lieuAuto(dive, toutesDives)).then(patch => {
+      if (!patch || dive.lieuNom) return;
+      set(patch);
+      const champ = picker.querySelector('input[type="search"]');
+      if (champ && !champ.value) champ.value = patch.lieuNom;
+      if (patch.site && !champSite.value) champSite.value = patch.site;
+      majOrigine();
+    }).catch(() => {});
+  }
+
+  const blocLieu = section('Lieu', { icone: '📍', ouvert: true },
+    lieuOrigine,
     picker,
-    el('div', { style: { marginTop: '14px' } },
+    field('Site (facultatif)', champSite),
+    el('div', { style: { marginTop: '10px' } },
       field('Nature de l’eau', waterSeg, waterInfo)),
-    el('div.row-3', { style: { marginTop: '6px' } },
-      field('Air (°C)', numInput(dive.tempAir, v => set({ tempAir: v }))),
-      field('Surface de l’eau (°C)',
-        numInput(dive.tempSurface, v => { set({ tempSurface: v }); majOptionsAuto(); })),
-      field('Fond min (°C)', numInput(dive.tempFond, v => set({ tempFond: v }))),
-    ),
+  );
+  blocLieu.id = 'champ-lieu';
+  blocLieu.querySelector('.sec-titre').append(el('span.requis', { text: ' •' }));
+  form.append(blocLieu);
+
+  // Les conditions : tout se touche, rien ne s'écrit (affiché plus bas).
+  const blocConditions = section('Conditions', { icone: '🌤', ouvert: true,
+    resume: dive.tempFond != null ? `eau ${dive.tempFond} °C` : '' },
     field('Météo en surface', pastilles(METEO, dive.meteo, v => set({ meteo: v }))),
     field('État de l’eau', pastilles(ETAT_MER, dive.etatMer, v => set({ etatMer: v }))),
     field('Visibilité', segmented(
@@ -740,10 +765,13 @@ export async function diveFormView({ id }) {
       dive.visibilite,
       v => set({ visibilite: dive.visibilite === v ? '' : v }))),
     field('Courant', pastilles(COURANTS, dive.courant, v => set({ courant: v }))),
+    el('div.row-3', { style: { marginTop: '6px' } },
+      field('Air (°C)', numInput(dive.tempAir, v => set({ tempAir: v }))),
+      field('Surface (°C)',
+        numInput(dive.tempSurface, v => { set({ tempSurface: v }); majOptionsAuto(); })),
+      field('Fond (°C)', numInput(dive.tempFond, v => set({ tempFond: v }))),
+    ),
   );
-  blocLieu.id = 'champ-lieu';
-  blocLieu.querySelector('.sec-titre').append(el('span.requis', { text: ' •' }));
-  form.append(blocLieu);
 
   if (dive.lat != null) reconnaitreLePoint();
 
@@ -775,7 +803,9 @@ export async function diveFormView({ id }) {
   champDuree.id = 'champ-duree';
   champProfMax.id = 'champ-profMax';
 
-  form.append(section('Profil de la plongée', { icone: '📉', ouvert: true },
+  const resumeChiffres = [dive.dureeMin ? `${dive.dureeMin} min` : null, dive.profMax ? `${dive.profMax} m` : null,
+    dive.heureImmersion || null].filter(Boolean).join(' · ');
+  const secProfil = section('Les chiffres', { icone: '📉', ouvert: !importee, resume: resumeChiffres },
     el('div.row', {}, champDuree, champProfMax),
     el('div.row', { style: { marginTop: '4px' } },
       field('Immersion (si connue)', inTime),
@@ -783,7 +813,7 @@ export async function diveFormView({ id }) {
     ),
     el('div.hint', { text: 'Si tu donnes les deux horaires, la durée se calcule. '
       + 'Sinon la durée seule suffit — et l’heure de sortie se déduit si tu connais l’immersion.' }),
-  ));
+  );
 
   // ---------- 4. Paliers ----------
   const secuCase = el('input', { type: 'checkbox' });
@@ -800,7 +830,11 @@ export async function diveFormView({ id }) {
   const palierNum = (label, cle) => field(label,
     numInput(dive[cle], v => { set({ [cle]: v }); majOptionsAuto(); }, { placeholder: 'min' }));
 
-  form.append(section('Paliers', { icone: '⏱', ouvert: false },
+  const secPaliers = el('div', { style: { marginTop: '14px' } },
+    el('div.lbl', { text: '⏱ Paliers' }),
+    dive.paliersEstimes ? el('div.hint', { style: { marginTop: 0 }, text: 'Estimés d’après le profil : vérifie-les.' }) : null,
+    analyse && analyse.deco === false ? el('div.hint', { style: { marginTop: 0 },
+      text: 'D’après la montre, aucun palier obligatoire (le plafond n’a jamais été atteint).' }) : null,
     el('div.row-3', {},
       palierNum('9 m', 'palier9'),
       palierNum('6 m', 'palier6'),
@@ -815,7 +849,8 @@ export async function diveFormView({ id }) {
     el('div.hint', { style: { marginBottom: 0 },
       text: 'Le palier de sécurité n’est pas un palier de décompression : '
           + 'il ne déclenche pas l’étiquette « Décompression ».' }),
-  ));
+  );
+  secProfil.querySelector('.card').append(secPaliers);
 
   // ---------- 8. Palanquée ----------
   // Taper un nom : connu, il est proposé ; inconnu, il est créé tout seul.
@@ -836,15 +871,36 @@ export async function diveFormView({ id }) {
 
   renderMode();
 
+  // Le même jour, au même endroit : la palanquée du matin, d'un geste.
+  const matin = memeSortie(dive, toutesDives);
+  const reprise = el('div');
+  function rendreReprise() {
+    reprise.replaceChildren();
+    if (!matin?.buddyIds?.length) return;
+    const memes = matin.buddyIds.length === (dive.buddyIds || []).length
+      && matin.buddyIds.every(id => (dive.buddyIds || []).includes(id));
+    if (memes) return;
+    const noms = matin.buddyIds.map(id => buddies.find(b => b.id === id)).filter(Boolean)
+      .map(b => b.prenom || fullName(b)).slice(0, 4).join(', ');
+    reprise.append(el('button.btn.sm.reprise', { type: 'button', onclick: () => {
+      dive.buddyIds = [...new Set([...(dive.buddyIds || []), ...matin.buddyIds])];
+      if (!dive.palanqueeMode && matin.palanqueeMode) dive.palanqueeMode = matin.palanqueeMode;
+      if (!dive.centreNom && matin.centreNom) {
+        Object.assign(dive, { centreNom: matin.centreNom, centreAdresse: matin.centreAdresse || '',
+          centreLat: matin.centreLat ?? null, centreLng: matin.centreLng ?? null });
+      }
+      editeur.rafraichir?.();
+      renderMode();
+      rendreReprise();
+      toast('Palanquée reprise');
+    } }, `👥 Comme la n°${matin.numero ?? ''} : ${noms}${matin.buddyIds.length > 4 ? '…' : ''}`));
+  }
+  rendreReprise();
+
   form.append(section('Plongeurs', { icone: '👥', ouvert: true },
+    reprise,
     modeWrap,
-    el('div.hint', { style: { marginTop: 0 },
-      text: 'Plonger avec un moniteur ne fait pas une plongée d’enseignement : '
-          + 'on peut très bien sortir en exploration avec lui. Le type de plongée '
-          + 'se choisit plus haut, indépendamment de qui t’accompagne.' }),
-    field('Centre de plongée', centre,
-      'Tape son nom ou son adresse, ou « plongée » pour voir les centres autour du lieu. '
-    + '« Sur la carte » : zoome sur l’endroit et choisis.'),
+    field('Centre de plongée', centre, 'Tape « plongée » pour voir les centres autour du lieu.'),
     field('Palanquée', editeur),
     el('button.btn.sm.ghost', { type: 'button', text: '📝 Retrouver les plongeurs dans un texte',
       onclick: () => lireUnTexte() }),
@@ -880,6 +936,48 @@ export async function diveFormView({ id }) {
         el('div.btn-row', {}, el('button.btn.primary', { type: 'button', text: 'Terminé', onclick: close })));
     });
   }
+
+  // ---------- Ma plongée : cocher plutôt qu'écrire ----------
+  dive.exercices ||= []; dive.ressenti ||= []; dive.objectifs ||= [];
+  const etoiles = el('div.etoiles');
+  function rendreEtoiles() {
+    etoiles.replaceChildren(...[1, 2, 3, 4, 5].map(n => el('button', { type: 'button',
+      class: (dive.note || 0) >= n ? 'on' : null, 'aria-label': `${n} sur 5`, text: '★',
+      onclick: () => { dive.note = dive.note === n ? null : n; rendreEtoiles(); } })));
+  }
+  rendreEtoiles();
+
+  const ressentis = el('div.pastilles');
+  RESSENTIS.forEach(r => {
+    const b = el('button.pastille', { type: 'button', class: dive.ressenti.includes(r.id) ? 'on' : null },
+      el('span.pastille-ico', { text: r.icone }), el('span.pastille-txt', { text: r.label }));
+    b.onclick = () => {
+      dive.ressenti = dive.ressenti.includes(r.id) ? dive.ressenti.filter(x => x !== r.id) : [...dive.ressenti, r.id];
+      b.classList.toggle('on', dive.ressenti.includes(r.id));
+    };
+    ressentis.append(b);
+  });
+
+  const unMot = textarea(dive.observations, v => set({ observations: v }), 'Un mot si tu veux : ce qui t’a marqué, à retenir…');
+  unMot.rows = 2;
+
+  form.append(section('Ma plongée', { icone: '✨', ouvert: true },
+    field('Ma note', etoiles),
+    field('Comment c’était', ressentis),
+    field('Au programme',
+      chipGroup(DIVE_GOALS, dive.objectifs, (item, on) => {
+        dive.objectifs = on ? [...dive.objectifs, item] : dive.objectifs.filter(x => x !== item);
+      })),
+    field('Exercices',
+      chipGroup(EXERCICES, dive.exercices, (item, on) => {
+        dive.exercices = on ? [...dive.exercices, item] : dive.exercices.filter(x => x !== item);
+      })),
+    field('Un mot', unMot),
+    // L'ancien texte libre « ce que j'ai fait » reste modifiable s'il existe.
+    dive.fait ? field('Ce que j’ai fait (texte)', textarea(dive.fait, v => set({ fait: v }))) : null,
+  ));
+
+  form.append(blocConditions, secProfil);
 
   // ---------- 5. Options & objectifs ----------
   const optionsZone = el('div');
@@ -936,13 +1034,10 @@ export async function diveFormView({ id }) {
   rendreOptions();
   majOptionsAuto();
 
-  form.append(section('Spécificités & objectifs', { icone: '🏷', ouvert: false },
+  form.append(section('Spécificités', { icone: '🏷', ouvert: false,
+    resume: (dive.options || []).join(', ') },
     field('Options de la plongée', optionsZone, optionsNote),
-    field('Objectifs',
-      chipGroup(DIVE_GOALS, dive.objectifs, (item, on) => {
-        dive.objectifs = on ? [...dive.objectifs, item] : dive.objectifs.filter(x => x !== item);
-      })),
-    field('Autre', input('text', dive.objectifAutre, v => set({ objectifAutre: v }),
+    field('Autre objectif', input('text', dive.objectifAutre, v => set({ objectifAutre: v }),
       { placeholder: 'Un objectif qui n’est pas dans la liste' })),
   ));
 
@@ -1062,7 +1157,9 @@ export async function diveFormView({ id }) {
 
   majConso();
 
-  form.append(section('Bouteille', { icone: '🛢', ouvert: false },
+  form.append(section('Bouteille', { icone: '🛢', ouvert: false,
+    resume: [libelleGaz(dive), dive.blocLitres ? `${dive.blocLitres} L` : null,
+      dive.pressionDepart && dive.pressionFin ? `${dive.pressionDepart}→${dive.pressionFin} bar` : null].filter(Boolean).join(' · ') },
     field('Gaz respiré', gazZone),
     el('div.row-3', { style: { marginTop: '14px' } },
       field('Type', blocTypeSel),
@@ -1180,7 +1277,9 @@ export async function diveFormView({ id }) {
 
   rendreEquipement();
 
-  form.append(section('Mon matériel', { icone: '🎽', ouvert: false },
+  form.append(section('Mon matériel', { icone: '🎽', ouvert: false,
+    resume: [dive.lestage ? `${String(dive.lestage).replace(/\s*kg$/i, '')} kg` : null, dive.combiType,
+      dive.combiMm ? `${dive.combiMm} mm` : null].filter(Boolean).join(' · ') },
     field('Lestage', input('text', dive.lestage, v => set({ lestage: v }),
       { placeholder: '6 kg ceinture + 2 kg poches' })),
     field('Combinaison', combiSeg),
@@ -1191,16 +1290,9 @@ export async function diveFormView({ id }) {
 
 
   // ---------- 9. Ce que j'ai vu ----------
-  form.append(section('Ce que j’ai vu', { icone: '🐟', ouvert: false },
+  const nbVus = ['vuFaune', 'vuFlore', 'vuEpaves'].reduce((n, k) => n + (dive[k]?.length || 0), 0);
+  form.append(section('Ce que j’ai vu', { icone: '🐟', ouvert: false, resume: nbVus ? `${nbVus}` : '' },
     observationsPicker(dive)));
-
-  // ---------- 10. Comptes-rendus ----------
-  form.append(section('Comptes-rendus', { icone: '📝', ouvert: false },
-    field('Ce que j’ai fait', textarea(dive.fait, v => set({ fait: v }),
-      'Exercices, remontée assistée, navigation…')),
-    field('Observations libres', textarea(dive.observations, v => set({ observations: v }),
-      'Sensations, matériel, conditions, à retenir pour la prochaine fois…')),
-  ));
 
   // ---------- Actions ----------
   const alerte = el('div.card.alerte', { hidden: true });
