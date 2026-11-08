@@ -286,13 +286,12 @@ export async function cvView() {
       onclick: async () => { try { await navigator.clipboard.writeText(texte); toast(t.copie); } catch { toast(texte); } } });
     const infos = el('div.cv-infos', {},
       el('div.cv-tete', {},
-        diver.photoProfil
-          ? el('div.cv-photo', {}, el('img', { src: diver.photoProfil, alt: p.prenom }), p.niveau ? el('span.cv-photo-niv', { text: p.niveau }) : null)
-          : el('div.cv-badge', { text: p.niveau || '🤿' }),
+        portrait(),
         el('div.cv-ident', {},
           el('div.cv-nom', { text: `${p.prenom} ${p.nom}`.trim() }),
           el('div.cv-niveau', { text: [p.niveau ? `${t.plongeur} ${p.niveau}` : t.plongeur, CMAS[p.niveau]].filter(Boolean).join(' · ') }),
-          descNiv ? el('div.cv-desc', { text: descNiv }) : null)),
+          descNiv ? el('div.cv-desc', { text: descNiv }) : null,
+          diver.licence ? el('div.cv-licence', { text: `${langue === 'fr' ? 'Licence' : 'Licence n°'} ${diver.licence}` }) : null)),
       el('div.cv-chiffres', {},
         chiffre(p.n, `${t.plongees} · ${t.depuis(annee)}`),
         chiffre(`${p.profMax} m`, t.profMax),
@@ -388,6 +387,28 @@ export async function cvView() {
     carte.on('click', () => { if (selection) { selection = null; marquer(); remplirVolet(); } });
     placer();
     setTimeout(() => carte && carte.invalidateSize(), 120);
+  }
+
+  /**
+   * Le portrait : l'avatar d'abord, la photo au toucher (et retour).
+   * Sans l'un ni l'autre : le niveau en grand.
+   */
+  let vuePhoto = false;
+  function portrait() {
+    const images = [diver.avatar, diver.photoProfil].filter(Boolean);
+    if (!images.length) return el('div.cv-badge', { text: p.niveau || '🤿' });
+    const img = el('img', { src: images[vuePhoto && images.length > 1 ? 1 : 0], alt: p.prenom });
+    const boite = el(`div.cv-photo${images.length > 1 ? '.bascule' : ''}`, {
+      title: images.length > 1 ? (langue === 'fr' ? 'Toucher : avatar ou photo' : 'Tap: avatar or photo') : '',
+      onclick: () => {
+        if (images.length < 2) return;
+        vuePhoto = !vuePhoto;
+        boite.classList.add('tourne');
+        setTimeout(() => { img.src = images[vuePhoto ? 1 : 0]; }, 150);
+        setTimeout(() => boite.classList.remove('tourne'), 300);
+      },
+    }, img, p.niveau ? el('span.cv-photo-niv', { text: p.niveau }) : null);
+    return boite;
   }
 
   /** Le volet : les plongées choisies (ou toutes), les plus récentes d'abord. */

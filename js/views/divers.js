@@ -54,7 +54,7 @@ export async function diversView() {
 
   tb.append(el('div.tb-carte.plein', {},
     el('div.profil-tete', {},
-      moi.photoProfil ? el('img.profil-av.photo', { src: moi.photoProfil, alt: '' })
+      moi.avatar || moi.photoProfil ? el('img.profil-av.photo', { src: moi.avatar || moi.photoProfil, alt: '' })
         : el('div.profil-av', { text: ((moi.prenom?.[0] || '') + (moi.nom?.[0] || '')).toUpperCase() || '?' }),
       el('div', { style: { flex: 1, minWidth: 0 } },
         el('div.profil-nom', { text: fullName(moi) || 'Sans nom' }),
@@ -240,10 +240,38 @@ export async function diverFormView({ id }) {
       d.photoProfil ? el('button.btn.sm.ghost', { type: 'button', text: 'Retirer', onclick: () => { d.photoProfil = null; rendrePhoto(); } }) : null));
   rendrePhoto();
 
+  // L'avatar (montré par défaut ; la photo vient au toucher) : un des
+  // dessins proposés, ou une image à moi.
+  const { AVATARS, enImage } = await import('../avatars.js');
+  const apercuAvatar = el('div.photo-profil');
+  const choixAvatar = el('input', { type: 'file', accept: 'image/*', hidden: true, onchange: async () => {
+    const f = choixAvatar.files?.[0];
+    if (!f) return;
+    try { d.avatarImporte = d.avatar = await reduirePhoto(f); rendreAvatar(); toast('Avatar prêt : pense à Enregistrer'); }
+    catch { toast('Image illisible', true); }
+    choixAvatar.value = '';
+  } });
+  const rendreAvatar = () => {
+    const options = [
+      ...(d.avatarImporte ? [{ nom: 'Le mien', src: d.avatarImporte }] : []),
+      ...AVATARS.map(a => ({ nom: a.nom, src: enImage(a.svg) })),
+    ];
+    apercuAvatar.replaceChildren(
+      d.avatar ? el('img', { src: d.avatar, alt: '' }) : el('span', { text: '🙂' }),
+      el('div', { style: { minWidth: 0 } },
+        el('div.hint', { style: { margin: '0 0 6px' }, text: 'Avatar : montré par défaut, ta photo vient quand on le touche.' }),
+        el('div.avatar-choix', {},
+          ...options.map(o => el(`button.avatar-option${d.avatar === o.src ? '.on' : ''}`, { type: 'button', title: o.nom,
+            onclick: () => { d.avatar = o.src; rendreAvatar(); } }, el('img', { src: o.src, alt: o.nom }))),
+          el('button.avatar-option.importer', { type: 'button', title: 'Importer une image', text: '📥', onclick: () => choixAvatar.click() }),
+          d.avatar ? el('button.avatar-option.importer', { type: 'button', title: 'Pas d’avatar', text: '✕', onclick: () => { d.avatar = null; rendreAvatar(); } }) : null)));
+  };
+  rendreAvatar();
+
   form.append(el('div.section', {},
     el('h2', { text: 'Identité' }),
     el('div.card', {},
-      apercuPhoto, choixPhoto,
+      apercuAvatar, choixAvatar, apercuPhoto, choixPhoto,
       el('div.row', {},
         field('Prénom', input('text', d.prenom, v => set({ prenom: v }), { autocomplete: 'given-name' })),
         field('Nom', input('text', d.nom, v => set({ nom: v }), { autocomplete: 'family-name' })),

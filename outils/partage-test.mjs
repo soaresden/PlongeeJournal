@@ -25,9 +25,11 @@ const carnet = {
 
 const inst = P.instantane(carnet, { auteur: 'Denis' });
 const texte = JSON.stringify(inst);
-check('rien de privé : adresse, groupe sanguin, licences, notes, photos, n° de carte',
-  !['B-', '76 avenue', 'A-20-1', 'L-9', 'secret', 'photos/p.jpg', 'CARTE-123', '"partage":{"gistId"'].some(m => texte.includes(m)),
-  ['B-', '76 avenue', 'A-20-1', 'L-9', 'secret', 'photos/p.jpg', 'CARTE-123'].filter(m => texte.includes(m)).join());
+check('rien de privé : adresse, groupe sanguin, licences des autres, notes, photos, n° de carte',
+  !['B-', '76 avenue', 'L-9', 'secret', 'photos/p.jpg', 'CARTE-123', '"partage":{"gistId"'].some(m => texte.includes(m)),
+  ['B-', '76 avenue', 'L-9', 'secret', 'photos/p.jpg', 'CARTE-123'].filter(m => texte.includes(m)).join());
+// Demandé exprès : mon numéro de licence est montré.
+check('mon numéro de licence est montré (demandé)', texte.includes('A-20-1'));
 // Demandé exprès : le contact à appeler en cas d'urgence est montré.
 check('le contact d’urgence est montré (demandé)', texte.includes('0600000000') && texte.includes('Maman'));
 {

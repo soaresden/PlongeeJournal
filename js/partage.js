@@ -33,10 +33,11 @@ const API = 'https://api.github.com';
 //  L'instantané : ce qu'on montre, et seulement ça
 // ------------------------------------------------------------
 
-// Le contact à appeler en cas d'urgence est montré (demandé exprès) ;
-// l'adresse, le groupe sanguin et la licence restent privés.
-const GARDER_PLONGEUR = ['id', 'prenom', 'nom', 'niveau', 'materiel', 'equipe', 'combiType', 'combiMm',
-  'urgPrenom', 'urgNom', 'urgTel', 'urgLien', 'photoProfil', 'createdAt', 'updatedAt'];
+// Le contact à appeler en cas d'urgence et MON numéro de licence sont
+// montrés (demandé exprès) ; l'adresse, le groupe sanguin et les licences
+// des autres plongeurs restent privés.
+const GARDER_PLONGEUR = ['id', 'prenom', 'nom', 'niveau', 'licence', 'materiel', 'equipe', 'combiType', 'combiMm',
+  'urgPrenom', 'urgNom', 'urgTel', 'urgLien', 'photoProfil', 'avatar', 'createdAt', 'updatedAt'];
 const GARDER_COMPAGNON = ['id', 'prenom', 'nom', 'club', 'moniteur', 'structure', 'categories', 'genre', 'createdAt', 'updatedAt'];
 const GARDER_BREVET = ['id', 'diverId', 'nom', 'organisme', 'dateObtention', 'createdAt', 'updatedAt'];
 const garder = (o, cles) => Object.fromEntries(cles.filter(k => o[k] !== undefined).map(k => [k, o[k]]));

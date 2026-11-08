@@ -12,6 +12,8 @@ export function emptyDiver() {
     rue: '', cp: '', ville: '', pays: 'France', groupeSanguin: '',
     urgPrenom: '', urgNom: '', urgTel: '', urgLien: '',
     photoProfil: null,          // petite photo (JPEG 256 px, en data URL)
+    avatar: null,               // l'avatar montré par défaut (dessiné ou importé)
+    avatarImporte: null,        // un avatar importé (gardé pour pouvoir y revenir)
     niveau: '',
     // Matériel personnel : une ligne par pièce, ajoutée au besoin.
     // [{ id, type, marque, modele, note }]

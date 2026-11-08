@@ -260,7 +260,7 @@ async function sectionPartage() {
         el('div.hint', { text: 'La personne voit tes plongées, stats, carte, plongeurs et « Qui je suis », sur son téléphone, '
           + 'sans rien installer ni pouvoir modifier. La copie est déposée sur ton site, sous un numéro tiré au hasard. '
           + 'Pour entrer, la personne donne son prénom et une plongée faite avec toi (date et lieu) : tu sais qui regarde. '
-          + 'Ton contact d’urgence est montré ; restent cachés : les numéros de licence (les tiens et ceux des autres), '
+          + 'Ton contact d’urgence et ton numéro de licence sont montrés ; restent cachés : les licences des autres, '
           + 'ton adresse, ton groupe sanguin, les notes sur les plongeurs, les photos.' }),
         el('button.btn.primary.sm', { type: 'button', text: 'Créer le lien', onclick: e => publier(e.currentTarget, null) }));
       return;
