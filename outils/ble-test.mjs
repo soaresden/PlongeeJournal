@@ -54,6 +54,26 @@ const montre = { deviceId: 'AA', name: 'Suunto Ocean 2425' };
   check('… et la recherche est bien arrêtée', !ble.scanEnCours && ble.appels.includes('stopScan'), ble.appels.join());
 }
 
+{
+  // Une montre appairée qui s'annonce sans nom, sous une autre adresse, avec le service Suunto.
+  const ble = fauxPlugin({ repondAu: 2, visible: false });
+  ble.requestLEScan = async function () { this.appels.push('scan');
+    setTimeout(() => { ecouteur?.({ device: { deviceId: 'ZZ' }, rssi: -80 }); ecouteur?.({ device: { deviceId: 'BB' }, uuids: ['61353090-8231-49CC-B57A-886370740041'], rssi: -55 }); }, 20); };
+  let ecouteur = null;
+  ble.addListener = async (nom, cb) => { if (nom === 'onScanResult') ecouteur = cb; return { remove: async () => {} }; };
+  const id = await B.connecterNatif(ble, montre, j, { delai: 50, recherche: 500 });
+  check('sans nom, autre adresse : reconnue au service Suunto, connexion à cette adresse', id === 'BB' && ble.appels.at(-1) === 'connect(25000)', `${id} ${ble.appels.join()}`);
+}
+{
+  const ble = fauxPlugin({ repondAu: 99, visible: false });
+  let ecouteur = null;
+  ble.addListener = async (nom, cb) => { if (nom === 'onScanResult') ecouteur = cb; return { remove: async () => {} }; };
+  ble.requestLEScan = async function () { setTimeout(() => ecouteur?.({ device: { deviceId: 'CC', name: 'GoPro 6440' }, rssi: -70 }), 20); };
+  journal.length = 0;
+  try { await B.connecterNatif(ble, montre, j, { delai: 50, recherche: 150 }); } catch { /* attendu */ }
+  check('introuvable : le journal liste ce qui a été vu (diagnostic)', journal.some(t => /appareils vus pendant la recherche : GoPro 6440/.test(t)), journal.join(' | '));
+}
+
 const ko = results.filter(r => r.startsWith(' FAIL'));
 console.log(results.join('\n'));
 console.log(ko.length ? `\n${ko.length} test(s) en échec` : `\n${results.length}/${results.length} vérifications Bluetooth`);

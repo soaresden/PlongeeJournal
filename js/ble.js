@@ -87,33 +87,48 @@ const avecDelai = (p, ms, quoi) => Promise.race([
 /** Le message quand la montre ne répond vraiment pas : quoi faire, concrètement. */
 export const MONTRE_MUETTE = 'La montre ne répond pas. Réveille-la (écran allumé, sur le cadran), vérifie que son Bluetooth '
   + 'est actif (pas en mode avion), garde-la près du téléphone, puis réessaie. Si ça ne passe toujours pas : ouvre '
-  + 'l’appli Suunto pour qu’elle se connecte à la montre, reviens ici et relance (le carnet passera par sa connexion).';
+  + 'l’appli Suunto pour qu’elle se connecte à la montre, reviens ici et relance (le carnet passera par sa connexion). '
+  + 'Autre chemin, sans Bluetooth : Plongées → Importer → « Récupérer depuis mon compte Suunto » (ce que l’appli Suunto a synchronisé).';
 
 /**
  * Cherche la montre quelques secondes (un scan la « réveille » souvent :
- * Android ne se connecte qu'à un appareil qui s'annonce).
+ * Android ne se connecte qu'à un appareil qui s'annonce). Sans filtre de
+ * nom : une montre déjà appairée s'annonce souvent SANS son nom. On la
+ * reconnaît à son adresse, à son nom ou au service Suunto annoncé. Tout ce
+ * qui est vu est noté dans le journal, pour le diagnostic.
  * @returns {Promise<object|null>} l'appareil vu, ou null
  */
 export function chercherMontre(ble, id, ms, journal) {
   return new Promise(resolve => {
     let fini = false, ecoute = null;
+    const vus = new Map();
     const finir = async vu => {
       if (fini) return;
       fini = true;
       clearTimeout(minuteur);
       try { await ble.stopLEScan(); } catch { /* déjà arrêté */ }
       try { await ecoute?.remove?.(); } catch { /* idem */ }
+      if (!vu) {
+        const liste = [...vus.values()].sort((a, b) => (b.rssi ?? -999) - (a.rssi ?? -999)).slice(0, 12);
+        journal(`appareils vus pendant la recherche : ${liste.length
+          ? liste.map(v => `${v.nom || 'sans nom'} [${v.id}${v.rssi != null ? `, ${v.rssi} dBm` : ''}${v.suunto ? ', service Suunto' : ''}]`).join(' ; ')
+          : 'aucun (Bluetooth ou autorisation « Appareils à proximité » ?)'}`);
+      }
       resolve(vu);
     };
     const minuteur = setTimeout(() => finir(null), ms);
     Promise.resolve(ble.addListener('onScanResult', r => {
       const d = r?.device || {};
-      if (d.deviceId === id || estOcean(d.name || r?.localName)) {
-        journal(`→ montre vue : ${d.name || r?.localName || d.deviceId}${r?.rssi != null ? ` (signal ${r.rssi} dBm)` : ''}`);
-        finir(d.deviceId ? d : { deviceId: id, name: d.name });
+      const nom = d.name || r?.localName || '';
+      const uuids = (r?.uuids || []).map(u => String(u).toLowerCase());
+      const suunto = uuids.includes(OCEAN_SERVICE);
+      if (d.deviceId) vus.set(d.deviceId, { id: d.deviceId, nom, rssi: r?.rssi, suunto });
+      if (d.deviceId === id || estOcean(nom) || suunto) {
+        journal(`→ montre vue : ${nom || d.deviceId}${r?.rssi != null ? ` (signal ${r.rssi} dBm)` : ''}${d.deviceId !== id ? ` à l’adresse ${d.deviceId}` : ''}`);
+        finir(d.deviceId ? { deviceId: d.deviceId, name: nom } : { deviceId: id, name: nom });
       }
     })).then(h => { ecoute = h; if (fini) h?.remove?.(); });
-    Promise.resolve(ble.requestLEScan({ namePrefix: 'Suunto', allowDuplicates: false }))
+    Promise.resolve(ble.requestLEScan({ allowDuplicates: false }))
       .catch(e => { journal(`recherche impossible : ${e?.message || e}`); finir(null); });
   });
 }
@@ -134,14 +149,15 @@ export async function connecterNatif(ble, appareil, journal, { delai = 15000, re
   }
   const vue = await chercherMontre(ble, id, recherche, journal);
   if (!vue) { journal('✗ montre introuvable autour du téléphone'); throw new Error(MONTRE_MUETTE); }
-  journal('nouvel essai de connexion…');
+  const cible = vue.deviceId || id;
+  journal(`nouvel essai de connexion${cible !== id ? ` (adresse ${cible})` : ''}…`);
   try {
-    await ble.connect({ deviceId: id, timeout: 25000 });
+    await ble.connect({ deviceId: cible, timeout: 25000 });
   } catch (e) {
     journal(`✗ toujours pas : ${e?.message || e}`);
     throw new Error(MONTRE_MUETTE);
   }
-  return id;
+  return cible;
 }
 
 async function ouvrirNatif({ journal, choisirAutre }) {
@@ -192,15 +208,15 @@ async function ouvrirNatif({ journal, choisirAutre }) {
     journal(`→ choisi : ${appareil.name || '?'} (${appareil.deviceId})`);
   }
 
-  const id = appareil.deviceId;
   const coupures = [];
+  journal('connexion…');
+  // La montre peut répondre sous une autre adresse que celle mémorisée :
+  // c'est celle de la connexion qui compte pour la suite.
+  const id = await connecterNatif(ble, appareil, journal);
   ble.addListener(`disconnected|${id}`, () => {
     journal('⚠ montre déconnectée');
     coupures.forEach(cb => cb());
   });
-
-  journal('connexion…');
-  await connecterNatif(ble, appareil, journal);
   journal('connecté');
   try { await ble.requestConnectionPriority({ deviceId: id, connectionPriority: 1 }); } catch { /* facultatif */ }
 
