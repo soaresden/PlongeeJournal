@@ -108,6 +108,7 @@ export async function montreView() {
   const zoneMontre = el('div');
   const liste = el('div');
   const actions = el('div');
+  const attenteZone = el('div');      // l'attente guidée de la montre
 
   const dire = (texte, erreur = false) => {
     statut.textContent = texte;
@@ -147,7 +148,7 @@ export async function montreView() {
     onclick: async () => { await deconnecter(); etat.occupe = false; dire('Déconnecté.'); rendre(); },
   });
 
-  wrap.append(btnConnexion, btnAutre, btnStop, statut, barre, zoneMontre, liste, actions);
+  wrap.append(btnConnexion, btnAutre, btnStop, statut, attenteZone, barre, zoneMontre, liste, actions);
 
   // ---------- connexion ----------
 
@@ -166,7 +167,8 @@ export async function montreView() {
     etat.abort = new AbortController();
     try {
       dire('Recherche de la montre…');
-      const lien = await ouvrirLienOcean({ journal: log, choisirAutre });
+      const lien = await ouvrirLienOcean({ journal: log, choisirAutre, signal: etat.abort.signal, surAttente: montrerAttente });
+      montrerAttente(null);
       etat.lien = lien;
       lien.surCoupure(() => { if (etat.lien === lien) { dire('La montre s’est déconnectée.', true); etat.lien = null; } });
 
@@ -191,8 +193,26 @@ export async function montreView() {
     }
   }
 
+  /**
+   * Pendant que l'appareil attend la montre : ce qu'il faut faire, en
+   * grand, avec le temps qui reste et un bouton pour arrêter.
+   */
+  function montrerAttente(info) {
+    if (!info) { attenteZone.replaceChildren(); return; }
+    const pourcent = Math.round(100 * (1 - info.restant / Math.max(1, info.total)));
+    attenteZone.replaceChildren(el('div.card.attente-montre', {},
+      el('div', { style: { fontWeight: '700', marginBottom: '6px' }, text: `📡 J’attends la montre… ${info.restant} s` }),
+      el('div.maj-barre', {}, el('div.maj-rempli', { style: { width: `${pourcent}%` } })),
+      el('div', { style: { margin: '8px 0 4px' }, text: 'Elle ne s’annonce pas : elle est sûrement connectée à ton téléphone (appli Suunto). Pendant que je cherche, fais l’un des deux :' }),
+      el('ol', { style: { margin: '0 0 6px', paddingLeft: '20px', lineHeight: '1.6' } },
+        el('li', {}, el('b', { text: 'coupe le Bluetooth du téléphone' }), ' (une montre ne parle qu’à un appareil à la fois) ;'),
+        el('li', {}, 'ou, sur la montre : ', el('b', { text: 'appareils appairés' }), ' (l’écran où l’on voit « MobileApp »), et reste sur cet écran.')),
+      el('div.hint', { style: { margin: 0 }, text: 'Je me connecte dès qu’elle apparaît. Garde-la allumée, près de l’appareil.' }),
+      el('button.btn.sm', { type: 'button', style: { marginTop: '8px' }, text: '⏹ Arrêter', onclick: () => etat.abort?.abort() })));
+  }
+
   function erreur(e, contexte) {
-    if (e instanceof Annule) { dire('Import arrêté.'); return; }
+    if (e instanceof Annule || e?.name === 'Annule') { dire('Import arrêté.'); montrerAttente(null); return; }
     console.error(e);
     journalBle.log(`✗ ${contexte} : ${e?.name || ''} ${e?.message || e}`);
     if (e?.stack) journalBle.log(e.stack.split('\n').slice(0, 4).join(' | '));

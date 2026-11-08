@@ -102,6 +102,30 @@ const montre = { deviceId: 'AA', name: 'Suunto Ocean 2425' };
   check('reconnue au fabricant Suunto (0x009F)', id === '59:FA', `${id} ${ble.appels.join()}`);
 }
 
+{
+  // Attente guidée : la montre (connectée au téléphone) n'apparaît qu'au bout d'un moment.
+  const ble = fauxPlugin({ repondAu: 2, visible: false });
+  let ecouteur = null, scans = 0;
+  ble.addListener = async (nom, cb) => { if (nom === 'onScanResult') ecouteur = cb; return { remove: async () => {} }; };
+  ble.requestLEScan = async function () { scans++; this.appels.push('scan');
+    if (scans === 2) setTimeout(() => ecouteur?.({ device: { deviceId: 'AA', name: 'Suunto Ocean 2425' }, rssi: -60 }), 1300); };
+  const attentes = [];
+  const id = await B.connecterNatif(ble, montre, j, { delai: 50, chercherAvant: 100, attente: 3000, surAttente: x => attentes.push(x) });
+  check('attente guidée : connexion dès que la montre se montre', id === 'AA' && ble.appels.at(-1) === 'connect(25000)', ble.appels.join());
+  check('attente guidée : l’écran est tenu au courant, puis libéré', attentes.length >= 2 && attentes[0].total === 3 && attentes.at(-1) === null, JSON.stringify(attentes));
+}
+{
+  // « Arrêter » pendant l'attente.
+  const ble = fauxPlugin({ repondAu: 99, visible: false });
+  const ctrl = new AbortController();
+  setTimeout(() => ctrl.abort(), 300);
+  let nom = '';
+  const t0 = Date.now();
+  try { await B.connecterNatif(ble, montre, j, { delai: 50, chercherAvant: 100, attente: 60000, surAttente: () => {}, signal: ctrl.signal }); }
+  catch (e) { nom = e.name; }
+  check('arrêter : l’attente s’interrompt tout de suite', nom === 'Annule' && Date.now() - t0 < 2000 && !ble.scanEnCours, `${nom} ${Date.now() - t0} ms`);
+}
+
 const ko = results.filter(r => r.startsWith(' FAIL'));
 console.log(results.join('\n'));
 console.log(ko.length ? `\n${ko.length} test(s) en échec` : `\n${results.length}/${results.length} vérifications Bluetooth`);
