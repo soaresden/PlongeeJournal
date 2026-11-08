@@ -84,6 +84,66 @@ const avecDelai = (p, ms, quoi) => Promise.race([
 //  Moteur natif (APK)
 // ============================================================
 
+/** Le message quand la montre ne répond vraiment pas : quoi faire, concrètement. */
+export const MONTRE_MUETTE = 'La montre ne répond pas. Réveille-la (écran allumé, sur le cadran), vérifie que son Bluetooth '
+  + 'est actif (pas en mode avion), garde-la près du téléphone, puis réessaie. Si ça ne passe toujours pas : ouvre '
+  + 'l’appli Suunto pour qu’elle se connecte à la montre, reviens ici et relance (le carnet passera par sa connexion).';
+
+/**
+ * Cherche la montre quelques secondes (un scan la « réveille » souvent :
+ * Android ne se connecte qu'à un appareil qui s'annonce).
+ * @returns {Promise<object|null>} l'appareil vu, ou null
+ */
+export function chercherMontre(ble, id, ms, journal) {
+  return new Promise(resolve => {
+    let fini = false, ecoute = null;
+    const finir = async vu => {
+      if (fini) return;
+      fini = true;
+      clearTimeout(minuteur);
+      try { await ble.stopLEScan(); } catch { /* déjà arrêté */ }
+      try { await ecoute?.remove?.(); } catch { /* idem */ }
+      resolve(vu);
+    };
+    const minuteur = setTimeout(() => finir(null), ms);
+    Promise.resolve(ble.addListener('onScanResult', r => {
+      const d = r?.device || {};
+      if (d.deviceId === id || estOcean(d.name || r?.localName)) {
+        journal(`→ montre vue : ${d.name || r?.localName || d.deviceId}${r?.rssi != null ? ` (signal ${r.rssi} dBm)` : ''}`);
+        finir(d.deviceId ? d : { deviceId: id, name: d.name });
+      }
+    })).then(h => { ecoute = h; if (fini) h?.remove?.(); });
+    Promise.resolve(ble.requestLEScan({ namePrefix: 'Suunto', allowDuplicates: false }))
+      .catch(e => { journal(`recherche impossible : ${e?.message || e}`); finir(null); });
+  });
+}
+
+/**
+ * Se connecte à la montre. Si elle ne répond pas (souvent : en veille, elle
+ * ne s'annonce plus), on la cherche une dizaine de secondes, puis on
+ * réessaie ; sinon, un message qui dit quoi faire.
+ */
+export async function connecterNatif(ble, appareil, journal, { delai = 15000, recherche = 12000 } = {}) {
+  const id = appareil.deviceId;
+  try {
+    await ble.connect({ deviceId: id, timeout: delai });
+    return id;
+  } catch (e) {
+    journal(`✗ pas de réponse (${e?.message || e}) : la montre ne s’annonce pas. Recherche ${Math.round(recherche / 1000)} s — réveille-la…`);
+    try { await ble.disconnect({ deviceId: id }); } catch { /* rien d'ouvert */ }
+  }
+  const vue = await chercherMontre(ble, id, recherche, journal);
+  if (!vue) { journal('✗ montre introuvable autour du téléphone'); throw new Error(MONTRE_MUETTE); }
+  journal('nouvel essai de connexion…');
+  try {
+    await ble.connect({ deviceId: id, timeout: 25000 });
+  } catch (e) {
+    journal(`✗ toujours pas : ${e?.message || e}`);
+    throw new Error(MONTRE_MUETTE);
+  }
+  return id;
+}
+
 async function ouvrirNatif({ journal, choisirAutre }) {
   const ble = pluginNatif();
   const file = fileUnique();
@@ -140,7 +200,7 @@ async function ouvrirNatif({ journal, choisirAutre }) {
   });
 
   journal('connexion…');
-  await ble.connect({ deviceId: id, timeout: 20000 });
+  await connecterNatif(ble, appareil, journal);
   journal('connecté');
   try { await ble.requestConnectionPriority({ deviceId: id, connectionPriority: 1 }); } catch { /* facultatif */ }
 
