@@ -121,6 +121,42 @@ function plongee({ prof = 20, plafond = 0, bar0 = 200, sac = 20, litres = 12, te
   check('OSM : hors ligne, null (sans lever)', horsLigne === null);
 }
 
+// ---------- Ce qu'on sait d'une plongée, où trouver le reste ----------
+{
+  const D = await imp('js/donnees.js');
+  const liste = { ids: [1794106227, 1788000000] };
+  const ble = { suuntoKeys: ['ocean:1794106227'], samples: plongee(), lat: 4.2, lng: 73.5, pressionDepart: 195, pressionFin: 18 };
+  const b = D.bilanDonnees(ble, { liste });
+  check('bilan : plongée Bluetooth complète', b.source === 'montre' && b.niveau === 'complet' && !b.recuperer.length && b.coeur, JSON.stringify(b));
+  const sansSonde = plongee().map(({ pression, ...x }) => x);
+  const cloud = { suunto: { source: 'suunto-cloud' }, suuntoKeys: ['suunto:abc'], date: '2026-08-30', heureImmersion: '09:00',
+    samples: [], lat: 16.6, lng: -22.9, pressionDepart: 200, pressionFin: 50 };
+  const c = D.bilanDonnees(cloud, { liste: null });
+  check('bilan : compte Suunto sans .fit → à compléter depuis le compte', c.niveau === 'vide' && c.sonde === 'defaut'
+    && c.recuperer[0]?.ou === 'compte' && c.manque.includes('courbe de plongée'), JSON.stringify(c));
+  const t = new Date('2026-08-30T09:00:00').getTime() / 1000;
+  const c2 = D.bilanDonnees(cloud, { liste: { ids: [t + 120] } });
+  check('bilan : encore dans la montre → récupérer en Bluetooth', c2.recuperer[0]?.ou === 'montre', JSON.stringify(c2.recuperer));
+  const rg = D.bilanDonnees({ suuntoKeys: ['rgpd:2025-06-14_10.00.00'], samples: sansSonde, pressionDepart: 209, pressionFin: 102, lat: 49, lng: 2 }, { liste: null });
+  check('bilan : export RGPD, sonde début/fin seulement', rg.niveau === 'partiel' && rg.sonde === 'debut-fin' && !rg.recuperer.length, JSON.stringify(rg));
+  const vieux = D.bilanDonnees({ date: '2019-05-01', pressionDepart: 200, pressionFin: 50 }, { liste: null, debutMontre: '2022-01-01' });
+  check('bilan : avant l’ordinateur, rien à aller chercher', vieux.niveau === 'vide' && !vieux.recuperer.length);
+  const apres = D.bilanDonnees({ date: '2025-04-29' }, { liste: null, debutMontre: '2022-01-01' });
+  check('bilan : saisie après l’ordinateur, peut-être sur le compte', apres.recuperer[0]?.ou === 'compte');
+  check('début de l’ordinateur', D.debutOrdinateur([{ date: '2020-01-01' }, { date: '2022-03-01', suuntoKeys: ['rgpd:x'] }, { date: '2023-01-01', suuntoKeys: ['ocean:1'] }]) === '2022-03-01');
+
+  // Compléter une plongée du compte Suunto avec la montre
+  const dec = { samples: plongee(), pressionDepart: 196, pressionFin: 60, profMax: 20, dureeMin: 27, tempFond: 18, blocLitres: 12,
+    lieu: { lat: 16.6, lng: -22.9 }, gazO2: 32 };
+  const { champs, libelles } = D.completerDepuisMontre({ ...cloud, profMax: 19.8, dureeMin: 28, lestage: '6' }, dec);
+  check('compléter : courbe + sonde, 200/50 par défaut remplacés', champs.samples?.length && champs.pressionDepart === 196 && libelles.includes('courbe et sonde'), JSON.stringify(libelles));
+  check('compléter : ce qui est saisi n’est pas écrasé', !('profMax' in champs) && !('dureeMin' in champs) && !('lat' in champs) && champs.blocLitres === 12 && champs.gazType === 'nitrox');
+  const r2 = D.completerDepuisMontre({ samples: sansSonde }, dec);
+  check('compléter : une courbe sans sonde est remplacée', !!r2.champs.samples);
+  const r3 = D.completerDepuisMontre({ samples: plongee() }, { samples: sansSonde });
+  check('compléter : une courbe avec sonde est gardée', !r3.champs.samples);
+}
+
 console.log(results.join('\n'));
 const ko = results.filter(r => r.startsWith(' FAIL'));
 console.log(`\n${results.length - ko.length}/${results.length} vérifications profil & lieu`);

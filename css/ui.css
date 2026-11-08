@@ -652,3 +652,22 @@ html.partage .apercu input:not([type="search"])::placeholder, html.partage .aper
 .fiche-conditions { display: flex; flex-wrap: wrap; gap: 8px 14px; font-size: 14px; }
 .fiche-conditions span { white-space: nowrap; }
 .fiche-conditions b { font-weight: 600; }
+/* Indicateur de données d'une plongée */
+.donnees { display: inline-flex; align-items: center; gap: 3px; font-size: 12px; padding: 1px 6px; border-radius: 999px;
+  background: rgba(var(--accent-rgb), .08); white-space: nowrap; }
+.donnees.vide { color: var(--text-mute); background: none; }
+.donnees-recup { font-size: 11px; font-weight: 600; color: var(--warn); margin-left: 2px; }
+.donnees-bandeau { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; border-color: var(--warn); }
+.donnees-bandeau .btn { white-space: normal; text-align: left; }
+.donnees-fiche > summary { list-style: none; display: flex; align-items: center; gap: 10px; cursor: pointer; }
+.donnees-fiche > summary::-webkit-details-marker { display: none; }
+.donnees-fiche > summary h2 { margin: 0; }
+.donnees-fiche > summary { margin-bottom: 10px; }
+.donnee { display: flex; gap: 8px; padding: 4px 0; font-size: 14px; }
+.donnee small { color: var(--text-mute); }
+.donnee-ico { width: 18px; text-align: center; font-weight: 700; }
+.donnee.ok .donnee-ico { color: var(--ok); }
+.donnee.moyen .donnee-ico { color: var(--warn); }
+.donnee.non { color: var(--text-dim); }
+.donnee.non .donnee-ico { color: var(--danger); }
+html.partage .donnees-bandeau, html.partage .donnees-recup, html.partage .donnees-fiche .btn { display: none !important; }

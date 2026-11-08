@@ -174,6 +174,19 @@ export function fitToDive(buffer) {
     });
   }
 
+  // Courbe de la sonde (Tank POD) : relevés 319 horodatés, posés sur le
+  // point de profil le plus proche (à 30 s près).
+  const releves319 = messages.filter(m => m.global === 319 && m.fields[253] != null && m.fields[1] > 0)
+    .map(m => ({ t: m.fields[253] - (t0 ?? m.fields[253]), bar: m.fields[1] / 100 }))
+    .filter(r => r.bar > 0 && r.bar < 400);
+  if (releves319.length >= 3 && samples.length) {
+    let j = 0;
+    for (const s of samples) {
+      while (j < releves319.length - 1 && Math.abs(releves319[j + 1].t - s.t) <= Math.abs(releves319[j].t - s.t)) j++;
+      if (Math.abs(releves319[j].t - s.t) <= 30) s.pression = Math.round(releves319[j].bar * 10) / 10;
+    }
+  }
+
   const start = fitDate(session[2] ?? fileId?.fields[4] ?? (records[0]?.fields[253]));
   const elapsedS = session[7] != null ? mm(session[7])
                  : (samples.length ? samples[samples.length - 1].t : null);

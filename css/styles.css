@@ -273,7 +273,7 @@ body { background-image: var(--bg-image); background-attachment: fixed; }
 .card.clickable:active { background: var(--surface-2); }
 
 .section { margin-bottom: 20px; }
-.section > h2 {
+.section > h2, .donnees-fiche > summary > h2 {
   font-size: 12px; text-transform: uppercase; letter-spacing: 1.1px;
   color: var(--text-mute); margin: 0 0 8px 2px; font-weight: 700;
 }

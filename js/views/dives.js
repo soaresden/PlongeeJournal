@@ -13,6 +13,7 @@ import { graphiquePlongee, tuilesPlongee } from '../courbes.js';
 import { analyserProfil } from '../profil-analyse.js';
 import { ambianceDe, stylesAmbiance, vignetteLieu, etiquetteAmbiance } from '../ambiance.js';
 import { plongeesARanger } from '../seances.js';
+import { bilanDonnees, debutOrdinateur, listeMontre, LIBELLE_SOURCE } from '../donnees.js';
 import { photoCarnetFiche } from './carnet-photo.js';
 
 // ------------------------------------------------------------
@@ -65,6 +66,21 @@ const picto = (liste, valeur) => {
   const o = liste.find(x => x.id === valeur || x.label === valeur);
   return o ? `${o.icone} ${o.label}` : (valeur || null);
 };
+
+/**
+ * Le petit indicateur de données d'une plongée : 📈 la courbe, 🛢 la
+ * sonde, et ce qu'on peut aller chercher (⌚ montre, ☁️ compte Suunto).
+ */
+export function badgeDonnees(b) {
+  const bouts = [];
+  if (b.courbe) bouts.push(el('span', { text: '📈', title: 'Courbe de plongée' }));
+  if (b.sonde === 'courbe') bouts.push(el('span', { text: '🛢', title: 'Courbe de la sonde (pression du bloc)' }));
+  const r = b.recuperer[0];
+  if (r) bouts.push(el('span.donnees-recup', { text: r.ou === 'montre' ? '⌚ à récupérer' : '☁️ à compléter',
+    title: r.ou === 'montre' ? 'Encore dans la montre : le Bluetooth donnerait tout' : 'Le compte Suunto a la courbe' }));
+  if (!bouts.length) return el('span.donnees.vide', { title: 'Ni courbe, ni sonde' }, '·');
+  return el(`span.donnees.${b.niveau}`, { title: b.manque.length ? `Manque : ${b.manque.join(', ')}` : 'Tout y est' }, ...bouts);
+}
 
 function typeBadge(type = '') {
   const t = type.toLowerCase();
@@ -166,6 +182,20 @@ export async function divesView() {
   }
 
   // Des « plongées » importées qui étaient des piscines ou des fosses.
+  // Ce qui manque, et ce qu'on peut aller chercher.
+  const liste = listeMontre();
+  const debutMontre = debutOrdinateur(dives);
+  const bilans = new Map(dives.map(d => [d.id, bilanDonnees(d, { liste, debutMontre })]));
+  const parMontre = dives.filter(d => bilans.get(d.id).recuperer.some(r => r.ou === 'montre'));
+  const parCompte = dives.filter(d => bilans.get(d.id).recuperer.some(r => r.ou === 'compte'));
+  const bandeauDonnees = parMontre.length || parCompte.length ? el('div.card.donnees-bandeau', {},
+    el('div', { style: { fontWeight: '650' }, text: '📥 Des données à récupérer' }),
+    parMontre.length ? el('button.btn.sm', { type: 'button', onclick: () => navigate('montre'),
+      text: `⌚ ${parMontre.length} plongée${parMontre.length > 1 ? 's' : ''} encore dans la montre : courbe, sonde, cœur` }) : null,
+    parCompte.length ? el('button.btn.sm', { type: 'button', onclick: () => navigate('suunto-cloud'),
+      text: `☁️ ${parCompte.length} sans courbe : à compléter depuis le compte Suunto` }) : null,
+  ) : null;
+
   const aRanger = plongeesARanger(dives, seances);
   const bandeauRanger = aRanger.length ? el('div.card.alerte.clickable', {
     onclick: () => { discipline = 'seances'; garder(CLE_DISC, discipline); rendreSegments(); afficher(); },
@@ -174,7 +204,7 @@ export async function divesView() {
     el('div.hint', { text: 'Piscine, fosse : range-les dans Séances pour qu’elles ne comptent plus comme plongées ›' })) : null;
 
   outils.append(search);
-  wrap.append(el('div.dives-barre', {}, segDisc, outils), bandeauRanger || '', contenu);
+  wrap.append(el('div.dives-barre', {}, segDisc, outils), bandeauRanger || '', bandeauDonnees || '', contenu);
 
   function matches(d, q) {
     if (!q) return true;
@@ -231,7 +261,8 @@ export async function divesView() {
       el('div.dive-main', {},
         el('div.dive-title', { text: d.lieuNom || d.site || 'Lieu non précisé' }),
         el('div.dive-sub', {}, fmtDate(d.date), d.heureImmersion ? ` · ${d.heureImmersion}` : ''),
-        el('div.dive-tags', {}, etiquetteAmbiance(d), d.type ? typeBadge(d.type) : null),
+        el('div.dive-tags', {}, etiquetteAmbiance(d), d.type ? typeBadge(d.type) : null,
+          bilans.get(d.id) ? badgeDonnees(bilans.get(d.id)) : null),
         el('div.dive-bas', {},
           el('div.dive-metrics', {},
             chiffre('prof', prof ? `${prof} m` : '—', 'Profondeur max'),
@@ -448,6 +479,39 @@ export async function diveView({ id }) {
         ].filter(Boolean).join(' · ') || null }),
       ),
     ));
+  }
+
+  // ---------- Les données : ce qu'on a, ce qui manque, où le trouver ----------
+  {
+    const toutes = await store.listDives(d.diverId);
+    const b = bilanDonnees(d, { debutMontre: debutOrdinateur(toutes) });
+    const ligne = (ok, texte, detail = '') => el('div.donnee', { class: ok === true ? 'ok' : ok === 'moyen' ? 'moyen' : 'non' },
+      el('span.donnee-ico', { text: ok === true ? '✓' : ok === 'moyen' ? '◐' : '✗' }),
+      el('span', {}, texte, detail ? el('small', { text: ` — ${detail}` }) : null));
+    const sonde = {
+      courbe: [true, 'Sonde : courbe de pression du bloc'],
+      'debut-fin': ['moyen', 'Sonde : pression de début et de fin seulement', 'pas la courbe'],
+      defaut: [false, 'Sonde : 200 → 50 bar par défaut', 'pas une mesure'],
+      aucune: [false, 'Sonde : pas de pression du bloc'],
+    }[b.sonde];
+    wrap.append(el('details.section.donnees-fiche', { open: b.recuperer.length ? true : null },
+      el('summary', {}, el('h2', { text: 'Données' }), badgeDonnees(b)),
+      el('div.card', {},
+        el('div.hint', { style: { marginTop: 0 }, text: `Venue de ${LIBELLE_SOURCE[b.source]}.` }),
+        ligne(b.courbe, 'Courbe de plongée'),
+        ligne(...sonde),
+        ligne(b.temp, 'Température'),
+        ligne(b.ndl, 'Temps sans palier / plafond'),
+        ligne(b.coeur, 'Cœur'),
+        ligne(b.gps, 'Point GPS'),
+        ...b.recuperer.map(r => el('button.btn.sm', { type: 'button', style: { marginTop: '10px' },
+          onclick: () => navigate(r.ou === 'montre' ? 'montre' : 'suunto-cloud'),
+          text: r.ou === 'montre' ? `⌚ Récupérer depuis la montre : ${r.quoi}` : `☁️ Compléter depuis le compte Suunto : ${r.quoi}` })),
+        !b.recuperer.length && b.niveau !== 'complet' ? el('div.hint', { style: { marginBottom: 0 }, text:
+          b.source === 'montre' ? 'C’est tout ce que la montre a enregistré.'
+          : 'La courbe de la sonde ne vient que de la montre en Bluetooth, tant qu’elle garde la plongée. '
+          + 'Connecte-toi à la montre : si la plongée y est encore, elle sera proposée pour compléter.' }) : null,
+      )));
   }
 
   // ---------- Ma plongée : ce qui a été coché ----------
