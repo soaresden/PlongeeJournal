@@ -15,18 +15,22 @@ const cle = F.nouvelleCle();
 check('clé longue et aléatoire', cle.length === 24 && cle !== F.nouvelleCle());
 
 // --- Le script Google, exécuté avec de faux services Google
-function google() {
+function google({ lie = true } = {}) {
   const lignes = [];
   const feuille = { appendRow: r => lignes.push(r), setFrozenRows() {}, setColumnWidth() {}, getDataRange: () => ({ getValues: () => lignes.map(r => [...r]) }) };
   let creee = false;
+  const ss = { getId: () => 'ID1', getSheetByName: () => (creee ? feuille : null), insertSheet: () => { creee = true; return feuille; } };
+  const props = {}, crees = [];
   const env = {
-    SpreadsheetApp: { getActiveSpreadsheet: () => ({ getSheetByName: () => (creee ? feuille : null), insertSheet: () => { creee = true; return feuille; } }) },
+    // lie : script collé dans une feuille ; sinon créé seul sur script.google.com
+    SpreadsheetApp: { getActiveSpreadsheet: () => (lie ? ss : null), create: nom => { crees.push(nom); return ss; }, openById: id => (id === 'ID1' ? ss : null) },
+    PropertiesService: { getScriptProperties: () => ({ getProperty: k => props[k] ?? null, setProperty: (k, v) => { props[k] = v; } }) },
     LockService: { getScriptLock: () => ({ waitLock() {}, releaseLock() {} }) },
     ContentService: { MimeType: { JSON: 'json' }, createTextOutput: t => ({ texte: t, setMimeType() { return this; } }) },
   };
   const code = F.scriptFeuille(cle) + '\nreturn { doPost, doGet };';
   const fn = new Function(...Object.keys(env), code)(...Object.values(env));
-  return { ...fn, lignes };
+  return { ...fn, lignes, crees };
 }
 const g = google();
 const m = V.message({ prenom: 'Alison', date: '2025-03-29', lieu: 'Egypte', plongee: { id: 'p48', numero: 48, lieuNom: 'Hurghada' }, ok: true, sid: 's1' });
@@ -39,6 +43,14 @@ check('un message qui ne vient pas du carnet est ignoré', !g.lignes.some(l => l
 check('sans la clé : rien à lire', JSON.parse(g.doGet({ parameter: { cle: 'mauvaise' } }).texte).erreur === 'clé');
 const lus = JSON.parse(g.doGet({ parameter: { cle } }).texte);
 check('avec la clé : les visites, au format des messages ntfy', lus.length === 2 && lus[0].event === 'message' && lus[0].tags.includes('pj-ok') && lus[0].message === m.corps, JSON.stringify(lus[0]));
+
+// Créé seul sur script.google.com (tablette) : la feuille est créée une fois, puis réutilisée.
+const seul = google({ lie: false });
+seul.doGet({ parameter: { cle } });
+seul.doPost({ parameter: { title: m.titre, tags: m.tags.join(',') }, postData: { contents: m.corps } });
+seul.doPost({ parameter: { title: m.titre, tags: m.tags.join(',') }, postData: { contents: m.corps } });
+check('script seul : sa feuille créée une seule fois, dans le Drive', seul.crees.length === 1 && /Visites du carnet/.test(seul.crees[0]) && seul.lignes.length === 3,
+  JSON.stringify(seul.crees));
 
 // --- Relecture : feuille + ntfy, le même message n'est compté qu'une fois
 const visiteFeuille = V.lireMessage(lus[0]);

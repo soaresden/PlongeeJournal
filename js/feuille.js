@@ -3,7 +3,8 @@
 //
 //  ntfy.sh ne garde les messages que 12 heures. Pour ne rien perdre,
 //  chaque visite est aussi écrite dans une feuille Google à moi, par un
-//  petit script Google (Apps Script) déployé en « application Web » :
+//  petit script Google (Apps Script) déployé en « application Web » (créé
+//  sur script.google.com : ça marche aussi depuis une tablette) :
 //  - n'importe qui peut y AJOUTER une ligne (c'est ce que fait la page du
 //    visiteur, sans clé) ;
 //  - seule mon appli peut la RELIRE, avec une clé secrète qui reste dans
@@ -44,15 +45,27 @@ function doPost(e) {
 function doGet(e) {
   const p = (e && e.parameter) || {};
   if (p.cle !== CLE) return json({ erreur: 'clé' });
-  const lignes = feuille().getDataRange().getValues().slice(1);
+  const verrou = LockService.getScriptLock();
+  verrou.waitLock(10000);
+  let lignes;
+  try { lignes = feuille().getDataRange().getValues().slice(1); } finally { verrou.releaseLock(); }
   return json(lignes.map((l, i) => ({
     id: 'f' + (i + 2), event: 'message', time: Math.floor(new Date(l[0]).getTime() / 1000),
     title: String(l[1]), message: String(l[2]), tags: String(l[3]).split(',').filter(String),
   })));
 }
 
+// La feuille « Visites du carnet de plongée » : créée toute seule la
+// première fois, dans ton Google Drive (ou celle où le script est collé).
 function feuille() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let ss = null;
+  try { ss = SpreadsheetApp.getActiveSpreadsheet(); } catch (e) { ss = null; }
+  if (!ss) {
+    const props = PropertiesService.getScriptProperties();
+    const id = props.getProperty('FEUILLE');
+    if (id) ss = SpreadsheetApp.openById(id);
+    else { ss = SpreadsheetApp.create('Visites du carnet de plongée'); props.setProperty('FEUILLE', ss.getId()); }
+  }
   let f = ss.getSheetByName('Visites');
   if (!f) {
     f = ss.insertSheet('Visites');

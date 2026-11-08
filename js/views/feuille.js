@@ -46,11 +46,9 @@ export async function ouvrirBranchementFeuille(brancher) {
     } });
     return el('div.feuille-guide', {},
       el('h3', { text: '📒 Garder toutes les visites dans une feuille Google' }),
-      el('div.hint', { text: 'À faire une seule fois, plus simple sur un ordinateur (5 minutes). '
+      el('div.hint', { text: 'À faire une seule fois (5 minutes), sur la tablette ou un ordinateur. '
         + 'Les visiteurs pourront seulement y ajouter une ligne ; toi seul peux la relire (avec une clé secrète, déjà dans le script).' }),
-      etape(1, 'Crée une feuille vide : ', el('a', { href: 'https://sheets.new', target: '_blank', rel: 'noopener', text: 'sheets.new' }),
-        ' (connecté à ton compte Google). Donne-lui un nom, par exemple « Visites du carnet ».'),
-      etape(2, 'Dans la feuille : menu ', el('b', { text: 'Extensions → Apps Script' }), '. Efface ce qui est écrit, et colle le script :',
+      etape(1, 'D’abord, copie le script :',
         el('div.btn-row', {},
           el('button.btn.sm', { type: 'button', text: '📋 Copier le script', onclick: async () => {
             try { await navigator.clipboard.writeText(script); toast('Script copié'); }
@@ -58,12 +56,18 @@ export async function ouvrirBranchementFeuille(brancher) {
           } }),
           el('button.btn.sm.ghost', { type: 'button', text: 'Voir', onclick: () => { zone.hidden = !zone.hidden; } })),
         zone),
+      etape(2, 'Dans ', el('b', { text: 'Chrome' }), ' (pas l’appli Sheets), connecté à ton compte Google, ouvre ',
+        el('a', { href: 'https://script.google.com/create', target: '_blank', rel: 'noopener', text: 'script.google.com/create' }),
+        '. Sur tablette, si la page est réduite ou renvoie vers une appli : menu ⋮ → coche ', el('b', { text: 'Version pour ordinateur' }), '. ',
+        'Efface tout ce qui est écrit dans l’éditeur et colle le script.'),
       etape(3, 'Clique sur 💾 (Enregistrer), puis en haut à droite ', el('b', { text: 'Déployer → Nouveau déploiement' }),
         '. Roue ⚙ « Sélectionnez le type » : ', el('b', { text: 'Application Web' }), '. ',
         'Exécuter en tant que : ', el('b', { text: 'Moi' }), ' ; Qui a accès : ', el('b', { text: 'Tout le monde' }), '. Puis Déployer.'),
       etape(4, 'Google demande l’autorisation : choisis ton compte. S’il affiche « Google n’a pas validé cette application », ',
         'clique sur ', el('b', { text: 'Paramètres avancés → Accéder à … (non sécurisé)' }), ' : c’est ton propre script, il n’écrit que dans cette feuille.'),
-      etape(5, 'Copie l’', el('b', { text: 'URL de l’application Web' }), ' (elle finit par /exec) et colle-la ici :', champ),
+      etape(5, 'Copie l’', el('b', { text: 'URL de l’application Web' }), ' (elle finit par /exec) et colle-la ici :', champ,
+        el('div.hint', { style: { margin: '6px 0 0' }, text: 'La feuille « Visites du carnet de plongée » se crée toute seule dans ton Google Drive, '
+          + 'à la vérification : tu la retrouves dans l’appli Sheets.' })),
       message,
       el('div.btn-row', {}, el('button.btn.ghost', { type: 'button', text: 'Annuler', onclick: close }), valider));
   });
