@@ -44,6 +44,17 @@ export async function montreAideView() {
         'Sur le site, Chrome ne voit que les montres qui se signalent. Si la tienne n’apparaît pas, ferme l’appli Suunto le temps de la choisir une première fois. Ensuite le site s’en souvient.',
       )),
 
+    bloc('Un deuxième appareil (tablette, autre téléphone)',
+      el('div.hint', { text: 'La montre garde plusieurs appareils appairés. Celui où tourne l’appli Suunto s’appelle « MobileApp » ; '
+        + 'une tablette doit avoir SON propre appairage. Si la tablette « connaît » la montre mais que la montre ne la liste pas, '
+        + 'cet ancien appairage ne marche plus : la connexion échoue (« Connection timeout »).' }),
+      liste(
+        'Sur la tablette : Réglages Android → Bluetooth → Suunto Ocean → « Oublier » (seulement sur la tablette : le téléphone garde « MobileApp »).',
+        'Sur la montre : menu des appareils appairés → mode appairage.',
+        'Dans le carnet, sur la tablette : Importer depuis la montre → « Choisir une autre montre » (ou « Chercher la montre ») → Suunto Ocean.',
+        'Accepte l’association et vérifie que le code est le même sur la tablette et sur la montre. La montre affiche alors une nouvelle entrée, à côté de « MobileApp ».',
+      )),
+
     bloc('3. L’import',
       liste(
         'La liste montre les plongées gardées dans la montre. Celles déjà dans le carnet (import .fit ou Bluetooth) sont grisées.',
@@ -56,7 +67,7 @@ export async function montreAideView() {
     bloc('En cas de souci',
       liste(
         'Montre introuvable : réveille-la, rapproche-la, vérifie que le Bluetooth du téléphone est allumé. Puis « Choisir une autre montre ».',
-        'Toujours rien : sur la montre, ouvre le menu des appareils appairés (là où l’appli Suunto apparaît sous le nom « MobileApp ») et mets-la en mode appairage : elle s’annonce alors et le carnet la trouve. Pas besoin d’une entrée à part pour le carnet : l’appairage appartient au téléphone, et « MobileApp » sert aux deux applis. N’efface pas « MobileApp ».',
+        'Toujours rien : sur la montre, ouvre le menu des appareils appairés (là où l’appli Suunto apparaît sous le nom « MobileApp ») et mets-la en mode appairage : elle s’annonce alors et le carnet la trouve. N’efface pas « MobileApp ».',
         'Ferme l’appli Suunto avant l’import si elle est en train de synchroniser : la montre ne parle qu’à une appli à la fois.',
         'Ouvre « Journal Bluetooth (diagnostic) » en bas de l’écran d’import, puis « Copier le journal » et envoie-le. Il ne contient ni ton carnet ni tes identifiants.',
         '« Données brutes » enregistre les octets reçus de la montre : de quoi rejouer le décodage sans la montre.',
