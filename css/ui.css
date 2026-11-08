@@ -756,3 +756,12 @@ html.partage .donnees-bandeau, html.partage .donnees-recup, html.partage .donnee
   .ip-grille { grid-template-columns: minmax(240px, 1fr) 1.4fr; align-items: start; }
   .ip-journal { max-height: 11em; }
 }
+/* Import depuis la montre : journal SOUS la barre ; plongées à droite sur un écran large */
+.ip-journal { margin-top: 8px; max-height: 6.2em; }
+@media (min-width: 600px) {
+  .import-montre { display: grid; grid-template-columns: minmax(250px, 1fr) 1.35fr; gap: 16px; align-items: start; }
+  .import-gauche { position: sticky; top: 8px; min-width: 0; }
+  .import-droite { min-width: 0; }
+  .import-montre #import-progres { position: static; box-shadow: none; }
+  .import-montre .ip-journal { max-height: 14em; }
+}

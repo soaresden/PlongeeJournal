@@ -109,15 +109,12 @@ export async function montreView() {
   const pTitre = el('div.maj-etat');
   const pRempli = el('div.maj-rempli');
   const pDetail = el('div.hint.maj-detail');
-  // Le journal en direct, à côté de la barre (en dessous en portrait).
+  // Le journal en direct, sous la barre.
   const pJournal = el('pre.ip-journal');
   const pBarre = el('div.maj-barre', {}, pRempli);
   const barre = el('div#import-progres.card', { hidden: true },
-    el('div.ip-grille', {},
-      el('div.ip-gauche', {},
-        pTitre, pBarre, pDetail,
-        el('button.btn.sm', { type: 'button', style: { marginTop: '6px' }, text: '⏹ Arrêter', onclick: () => etat.abort?.abort() })),
-      pJournal));
+    pTitre, pBarre, pDetail, pJournal,
+    el('button.btn.sm', { type: 'button', style: { marginTop: '6px' }, text: '⏹ Arrêter', onclick: () => etat.abort?.abort() }));
   const LIGNES_DIRECT = 8;
   const majJournalDirect = () => {
     if (barre.hidden) return;
@@ -175,7 +172,14 @@ export async function montreView() {
   // ---------- en-tête ----------
 
   const memo = montreMemorisee();
-  wrap.append(el('div.card', {},
+  // Deux colonnes sur un écran large : à gauche la connexion, la barre et
+  // le journal ; à droite les plongées de la montre. L'une sous l'autre
+  // sur un écran étroit.
+  const gauche = el('div.import-gauche');
+  const droite = el('div.import-droite');
+  wrap.classList.add('import-montre');
+  wrap.append(gauche, droite);
+  gauche.append(el('div.card', {},
     el('div', { style: { fontWeight: '650', marginBottom: '4px' }, text: '⌚ Suunto Ocean en Bluetooth' }),
     el('div.hint', {
       text: 'Garde la montre près du téléphone, écran allumé. Si l’appli Suunto est en train de '
@@ -201,7 +205,8 @@ export async function montreView() {
     onclick: async () => { await deconnecter(); etat.occupe = false; dire('Déconnecté.'); rendre(); },
   });
 
-  wrap.append(btnConnexion, btnAutre, btnStop, statut, attenteZone, barre, zoneMontre, liste, actions);
+  gauche.append(btnConnexion, btnAutre, btnStop, statut, attenteZone, barre);
+  droite.append(zoneMontre, liste, actions);
 
   // ---------- connexion ----------
 
@@ -538,7 +543,7 @@ export async function montreView() {
     setTimeout(() => { enAttente = false; majJournal(); }, 250);
   });
 
-  wrap.append(el('details.card', { style: { marginTop: '18px' } },
+  gauche.append(el('details.card', { style: { marginTop: '18px' } },
     el('summary', { style: { fontWeight: '600', cursor: 'pointer' }, text: '🛠 Journal Bluetooth (diagnostic)' }),
     el('div.hint', { style: { margin: '8px 0' },
       text: 'Tout ce qui s’est échangé avec la montre. En cas de souci, copie-le et envoie-le : '
