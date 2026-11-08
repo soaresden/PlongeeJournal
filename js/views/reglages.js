@@ -275,9 +275,6 @@ async function sectionPartage() {
     const n = (reglages.visites || []).length;
     const visites = el('div.partage-visites', {},
       el('div', { style: { fontWeight: '650', marginTop: '14px' }, text: `👀 Visites${n ? ` (${n})` : ''}` }),
-      // Sans feuille Google, les visites passent par ntfy (gardées 12 h) : l'appli ntfy évite d'en perdre
-      p.canal && !p.feuille ? el('div.hint', { text: `Pour être prévenu tout de suite sur ton téléphone : installe l’appli « ntfy » et abonne-toi au canal « ${p.canal} ». `
-        + 'Sinon, les visites des 12 dernières heures sont relues à chaque ouverture du carnet.' }) : null,
       el('button.btn.sm', { type: 'button', text: '👀 Historique des visites', onclick: () => navigate('visites') }));
     const champ = el('input', { type: 'text', readOnly: true, value: lien, class: 'partage-lien' });
     champ.onclick = () => champ.select();

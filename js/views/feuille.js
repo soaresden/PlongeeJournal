@@ -87,14 +87,12 @@ export function blocFeuille(p, republier) {
   };
   if (!p.feuille) {
     return el('div.feuille-bloc', {},
-      el('div', { style: { fontWeight: '650' }, text: '📒 Ne perdre aucune visite' }),
-      el('div.hint', { text: 'ntfy.sh n’en garde que 12 heures. Branche une feuille Google : chaque visite y est écrite, pour toujours, '
-        + 'et l’appli la relit.' }),
+      el('div', { style: { fontWeight: '650' }, text: '📒 Garder les visites dans une feuille Google' }),
       el('button.btn.sm', { type: 'button', text: '📒 Brancher une feuille Google', onclick: () => ouvrirBranchementFeuille(brancher) }));
   }
   return el('div.feuille-bloc', {},
     el('div', { style: { fontWeight: '650' }, text: '📒 Feuille Google branchée ✓' }),
-    el('div.hint', { text: 'Chaque visite y est écrite (onglet « Visites ») ; l’appli la relit à chaque ouverture.' }),
+    el('div.hint', { text: 'Fichier « Visites du carnet de plongée » de ton Google Drive.' }),
     el('div.btn-row', {},
       el('button.btn.sm.ghost', { type: 'button', text: 'Changer de feuille', onclick: () => ouvrirBranchementFeuille(brancher) }),
       el('button.btn.sm.ghost.danger', { type: 'button', text: 'Débrancher', onclick: async () => {
