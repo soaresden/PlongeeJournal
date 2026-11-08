@@ -14,6 +14,7 @@ import { DIVE_TYPES } from './config.js';
 import { chercherEnElargissant, resolveResult } from './map.js';
 import { navigate } from './router.js';
 import { graphiquePlongee } from './courbes.js';
+import { sectionVideos } from './views/videos.js';
 import { ambianceDe, stylesAmbiance, vignetteLieu, etiquetteAmbiance } from './ambiance.js';
 import { agendaBranche, agendaLisible, chargerAgenda, evenementsDu, lieuPropose, texteEvenement } from './agenda.js';
 import { editeurPalanquee, champCentre, propositionsTexte } from './palanquee.js';
@@ -264,6 +265,8 @@ export async function apercuPlongee(id, { retour = null, onClose = null } = {}) 
     // La page du carnet papier, pour relire et corriger en la regardant.
     d.photoCarnet?.ref ? el('div.apercu-bloc', {}, el('div.apercu-lbl', { text: '📓 Page du carnet' }),
       pageLisible(d.photoCarnet.ref, { hauteur: 'min(48vh, 420px)' })) : null,
+    // Et ses vidéos (pCloud), juste à côté.
+    sectionVideos(d, await store.listDives(d.diverId), { lecture: document.documentElement.classList.contains('partage') }),
     courbe(d.samples?.length ? d.samples : d.profil, d),
     el('div.apercu-grille', {},
       champ('N° (auto)', el('input', { type: 'text', readOnly: true, tabIndex: -1, value: d.numero ?? '—', class: 'lecture-seule' })),

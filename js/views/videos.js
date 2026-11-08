@@ -46,6 +46,9 @@ export async function carteVideosReglages() {
         + 'aperçus et lecture sur la fiche. Rien n’est copié dans le carnet.' }),
       champ, etat,
       el('div.btn-row', {},
+        cfg ? el('button.btn.sm', { type: 'button', text: '🎬 Voir quel dossier va avec quelle plongée', onclick: async () => {
+          const { navigate } = await import('../router.js'); navigate('videos');
+        } }) : null,
         el('button.btn.primary.sm', { type: 'button', text: 'Enregistrer', onclick: async () => {
           const c = await tester(true);
           if (!c && champ.value.trim()) return;
@@ -169,4 +172,93 @@ export function sectionVideos(dive, toutes, { lecture = false } = {}) {
     rendre();
   })();
   return section;
+}
+
+// ------------------------------------------------------------
+//  « Mes vidéos » : quel dossier va avec quelle plongée
+// ------------------------------------------------------------
+
+/** Choisir la plongée d'un dossier (les plus proches de sa date en premier). */
+function choisirPlongee(dossier, dives, surChoix) {
+  const jour = s => (s ? new Date(`${s}T12:00:00`).getTime() / 86400000 : 1e9);
+  const tries = [...dives].filter(d => d.date).sort((a, b) =>
+    Math.abs(jour(a.date) - jour(dossier.date)) - Math.abs(jour(b.date) - jour(dossier.date)));
+  openModal(close => el('div', {},
+    el('h3', { text: `🎬 ${dossier.nom} : quelle plongée ?` }),
+    el('div.hint', { style: { marginTop: 0 }, text: 'Les plus proches de la date du dossier en premier.' }),
+    el('div.video-choix', {}, ...tries.slice(0, 30).map(d => el('button.video-choix-ligne', { type: 'button',
+      onclick: () => { close(); surChoix(d); } },
+      el('b', { text: `n°${d.numero ?? '?'}` }), el('span', { text: `${fmtDate(d.date)}${d.heureImmersion ? ` · ${d.heureImmersion}` : ''}` }),
+      el('small', { text: d.lieuNom || d.site || 'lieu non précisé' })))),
+    el('div.btn-row', {}, el('button.btn.ghost', { type: 'button', text: 'Annuler', onclick: close }))));
+}
+
+export async function videosView() {
+  const { navigate } = await import('../router.js');
+  const wrap = el('div');
+  const cfg = await configVideos();
+  if (!cfg) {
+    wrap.append(await carteVideosReglages());
+    return { title: 'Mes vidéos', node: wrap, back: true };
+  }
+  const diverId = await store.getActiveDiverId();
+  const etat = el('div.hint', { text: 'Lecture du dossier pCloud…' });
+  wrap.append(etat);
+
+  const rendre = async (forcer = false) => {
+    let dossiers;
+    try { dossiers = await chargerDossiers(cfg, { forcer }); } catch (e) {
+      etat.textContent = `pCloud injoignable : ${e.message}`; return;
+    }
+    const dives = await store.listDives(diverId);
+    const lies = new Map(dossiers.map(x => [x, dives.filter(d => videosDePlongee(d, dossiers, dives)?.dossier === x)]));
+    const sansPlongee = dossiers.filter(x => !lies.get(x).length);
+    etat.textContent = `${dossiers.length} dossier${dossiers.length > 1 ? 's' : ''} daté${dossiers.length > 1 ? 's' : ''} · `
+      + `${dossiers.length - sansPlongee.length} relié${dossiers.length - sansPlongee.length > 1 ? 's' : ''} à des plongées`
+      + (sansPlongee.length ? ` · ${sansPlongee.length} sans plongée` : '');
+
+    const lier = async (dossier, d) => {
+      d.videoDossier = dossier.folderid;
+      try { await store.saveDive(d); toast(`Dossier lié à la n°${d.numero ?? ''}`); } catch (e) { toast(e.message, true); }
+      rendre();
+    };
+    const delier = async d => {
+      delete d.videoDossier;
+      try { await store.saveDive(d); toast('Lien retiré : retour au dossier de la même date'); } catch (e) { toast(e.message, true); }
+      rendre();
+    };
+
+    const lignes = [...dossiers].reverse().map(x => {
+      const plongees = lies.get(x);
+      const apercu = x.fichiers.slice(0, 4);
+      return el('div.card.video-dossier', { class: plongees.length ? null : 'orphelin' },
+        el('div.video-tete', {},
+          el('div', {}, el('b', { text: x.nom }),
+            el('div.hint', { style: { margin: 0 }, text: `${fmtDate(x.date)} · ${x.fichiers.filter(f => f.video).length} vidéo(s), ${x.fichiers.filter(f => !f.video).length} photo(s)` })),
+          el('a', { href: lienDossier(cfg, x.folderid), target: '_blank', rel: 'noopener', style: { color: 'var(--accent)', fontSize: '13px' }, text: 'pCloud ↗' })),
+        apercu.length ? el('div.video-bande', {}, ...apercu.map((f, i) =>
+          el('button.video-vignette', { type: 'button', onclick: () => lire(cfg, x.fichiers, i) },
+            el('img', { src: urlMiniature(cfg, f.fileid, '240x180'), alt: f.nom, loading: 'lazy',
+              onerror: e => { e.target.replaceWith(el('span.video-sans', { text: f.video ? '🎬' : '🖼' })); } }),
+            f.video ? el('span.video-play', { text: '▶' }) : null))) : null,
+        el('div.video-liens', {},
+          ...plongees.map(d => el('span.chip.solid.video-plongee', {},
+            el('button.lien-texte', { type: 'button', text: `n°${d.numero ?? '?'} · ${d.lieuNom || fmtDate(d.date)}${d.heureImmersion ? ` ${d.heureImmersion}` : ''}`,
+              onclick: () => navigate(`dive/${d.id}`) }),
+            d.videoDossier ? el('button.x', { type: 'button', title: 'Retirer ce lien', text: '×', onclick: () => delier(d) }) : null)),
+          plongees.length ? null : el('span.hint', { style: { margin: 0 }, text: 'Aucune plongée ce jour-là.' }),
+          el('button.btn.sm.ghost', { type: 'button', text: plongees.length ? '＋ Autre plongée' : '🔗 Lier à une plongée',
+            onclick: () => choisirPlongee(x, dives, d => lier(x, d)) })));
+    });
+    corps.replaceChildren(...lignes);
+  };
+
+  const corps = el('div');
+  wrap.append(
+    el('div.btn-row', {},
+      el('button.btn.sm', { type: 'button', text: '↻ Relire pCloud', onclick: () => rendre(true) }),
+      el('button.btn.sm.ghost', { type: 'button', text: 'Changer le lien', onclick: () => navigate('reglages') })),
+    corps);
+  rendre();
+  return { title: 'Mes vidéos', node: wrap, back: true };
 }

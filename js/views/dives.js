@@ -471,9 +471,12 @@ export async function diveView({ id }) {
     }),
   ));
 
-  // La page du carnet papier, telle qu'elle a été photographiée
+  // La page du carnet papier et les vidéos de la plongée, côte à côte.
+  const toutesPlongees = await store.listDives(d.diverId);
+  const lectureSeule = document.documentElement.classList.contains('partage');
   const pageCarnet = photoCarnetFiche(d);
-  if (pageCarnet) wrap.append(pageCarnet);
+  const videos = sectionVideos(d, toutesPlongees, { lecture: lectureSeule });
+  wrap.append(pageCarnet ? el('div.carnet-videos', {}, pageCarnet, videos) : videos);
 
   // ---------- Ce que dit la montre : chiffres et courbes ----------
   const courbe = d.samples?.length ? d.samples : d.profil;
@@ -500,12 +503,9 @@ export async function diveView({ id }) {
     ));
   }
 
-  // ---------- Vidéos (pCloud) ----------
-  const toutesPlongees = await store.listDives(d.diverId);
-  const lectureSeule = document.documentElement.classList.contains('partage');
+  // ---------- À vérifier ----------
   const alertes = lectureSeule ? null : alertesFiche(d, toutesPlongees, { rafraichir: () => navigate(`dive/${d.id}`, true) });
   if (alertes) wrap.insertBefore(alertes, wrap.children[2] || null);
-  wrap.append(sectionVideos(d, toutesPlongees, { lecture: document.documentElement.classList.contains('partage') }));
 
   // ---------- Les données : ce qu'on a, ce qui manque, où le trouver ----------
   {

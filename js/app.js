@@ -65,6 +65,7 @@ route('setup',            reglagesView);   // ancien lien
 route('suunto',           suuntoView);
 route('suunto-cloud',     suuntoCloudView);
 route('montre',           montreView);
+route('videos',           async () => (await import('./views/videos.js')).videosView());
 route('montre-aide',      montreAideView);
 route('urgence',          urgenceView);
 route('cv',               cvView);
@@ -365,7 +366,7 @@ onRender(async path => {
     dives: 'dives', dive: path === 'dive/new' ? 'dive/new' : 'dives',
     divers: 'divers', diver: 'divers',
     buddies: 'buddies', buddy: 'buddies', stats: 'stats',
-    reglages: 'reglages', mn90: 'mn90', cv: 'divers', suunto: 'divers', 'suunto-cloud': 'divers', montre: 'divers', 'montre-aide': 'divers', urgence: 'divers',
+    reglages: 'reglages', mn90: 'mn90', cv: 'divers', suunto: 'divers', 'suunto-cloud': 'divers', montre: 'divers', 'montre-aide': 'divers', videos: 'divers', urgence: 'divers',
     seances: 'dives', seance: 'dives',
   }[root];
   $$('#tabbar .tab').forEach(t => t.classList.toggle('active', t.dataset.route === tabFor));

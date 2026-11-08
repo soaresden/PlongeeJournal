@@ -702,3 +702,15 @@ html.partage .donnees-bandeau, html.partage .donnees-recup, html.partage .donnee
 .choix-import-ico { font-size: 26px; }
 .choix-import-fleche { margin-left: auto; opacity: .5; font-size: 20px; }
 .choix-ancienne { display: block; margin: 14px auto 0; font-size: 13px; }
+/* La page du carnet et les vidéos, côte à côte quand il y a la place */
+.carnet-videos > .section { margin-bottom: 18px; }
+@media (min-width: 760px) {
+  .carnet-videos { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+}
+.video-dossier.orphelin { opacity: .85; border-style: dashed; }
+.video-bande { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 8px; }
+.video-liens { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.video-plongee { display: inline-flex; align-items: center; gap: 4px; }
+.video-plongee .lien-texte { color: inherit; }
+.apercu .section > h2 { margin-top: 4px; }
+.fiche > .carnet-videos { column-span: all; }
