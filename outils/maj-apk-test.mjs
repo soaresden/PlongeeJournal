@@ -185,6 +185,40 @@ for (const [statut, motif] of [[404, /Aucune version publiée/], [403, /limite/]
     (await M.telechargerApk(URL_REL, { w: {}, navigateur: u => web.push(u), progres: () => {} })) === 'navigateur' && web.length === 1);
 }
 
+// ---------- Barre de chargement : fichier par version, vérifié, erreur sans bascule ----------
+{
+  const URL_REL = 'https://github.com/soaresden/PlongeeJournal/releases/download/android/PlongeeJournal.apk';
+  const tel = ({ taille = 6_900_000, panne = false } = {}) => {
+    const t = { appels: [], etapes: [], navigateur: [] };
+    const Filesystem = {
+      addListener: async (nom, fn) => { t.fn = fn; return { remove: async () => {} }; },
+      deleteFile: async o => { t.appels.push(['delete', o.path]); throw new Error('File does not exist'); },
+      downloadFile: async o => { t.appels.push(['download', o.path]); t.fn?.({ url: o.url, bytes: 3_450_000, contentLength: 6_900_000 });
+        if (panne) throw new Error('Unable to resolve host');
+        return { path: `/cache/${o.path}` }; },
+      stat: async o => { t.appels.push(['stat', o.path]); return { size: taille }; },
+    };
+    const FileOpener = { open: async o => { t.appels.push(['open', o.filePath]); } };
+    t.w = { Capacitor: { isNativePlatform: () => true, isPluginAvailable: () => true, Plugins: { Filesystem, FileOpener } } };
+    t.options = { w: t.w, build: 65, navigateurSiEchec: false, progres: e => t.etapes.push(e), navigateur: u => t.navigateur.push(u) };
+    return t;
+  };
+  const t = tel();
+  const r = await M.telechargerApk(URL_REL, t.options);
+  check('barre : fichier au nom de la version, l’ancien effacé avant', r === 'installateur'
+    && JSON.stringify(t.appels.map(a => a.join(':'))) === JSON.stringify(['delete:PlongeeJournal-65.apk', 'download:PlongeeJournal-65.apk', 'stat:PlongeeJournal-65.apk', 'open:/cache/PlongeeJournal-65.apk']),
+    JSON.stringify(t.appels));
+  check('barre : progression avec octets et total, puis vérification et installation',
+    t.etapes.some(e => e.pourcent === 50 && e.total === 6_900_000) && t.etapes.map(e => e.etape).slice(-2).join() === 'verification,installation',
+    JSON.stringify(t.etapes));
+  const t2 = tel({ taille: 9_000 });
+  check('fichier trop petit (page d’erreur) : pas ouvert, erreur affichée', (await M.telechargerApk(URL_REL, t2.options)) === 'erreur'
+    && !t2.appels.some(a => a[0] === 'open') && /incomplet/.test(t2.etapes.at(-1)?.message) && t2.navigateur.length === 0, JSON.stringify(t2.etapes.at(-1)));
+  const t3 = tel({ panne: true });
+  check('panne réseau : erreur dans la barre, pas de bascule automatique vers le navigateur',
+    (await M.telechargerApk(URL_REL, t3.options)) === 'erreur' && t3.etapes.at(-1)?.etape === 'erreur' && t3.navigateur.length === 0);
+}
+
 // ---------- Le build www embarque le numéro ----------
 {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'pj-www-'));

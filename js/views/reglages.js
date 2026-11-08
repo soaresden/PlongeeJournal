@@ -496,6 +496,7 @@ function carteMiseAJour() {
   const message = el('div.maj-message');
   const liste = el('ul.maj-nouveautes');
   const bouton = el('button.btn.block', { type: 'button', text: 'Vérifier les mises à jour' });
+  const progresZone = el('div');
   let installee = null;
 
   async function lancer() {
@@ -522,9 +523,11 @@ function carteMiseAJour() {
           : 'Impossible de savoir quelle version est installée — tu peux reprendre la dernière par sécurité.';
         bouton.className = 'btn primary block';
         bouton.textContent = `Télécharger la ${d.version}${d.taille ? ` (${taillePropre(d.taille)})` : ''}`;
-        bouton.onclick = () => {
-          telechargerApk(d.url);
-          toast('Téléchargement lancé : ouvre le fichier quand il est arrivé, puis « Installer ».');
+        bouton.onclick = async () => {
+          // Une vraie barre de chargement, à la place du bouton.
+          bouton.hidden = true;
+          const { lancerMiseAJour } = await import('./maj-progres.js');
+          lancerMiseAJour(progresZone, d, { surFin: r => { if (r === 'erreur') bouton.hidden = false; } });
         };
         if (res.etat === 'nouvelle') {
           const titres = await nouveautes(installee?.commit, d.commit);
@@ -558,7 +561,7 @@ function carteMiseAJour() {
       el('div.compte-sous', { style: { marginTop: 0 }, text: 'Appli Android' }),
       el('div.kv', {}, el('span.k', { text: 'Installée' }), vInstallee),
       el('div.kv', {}, el('span.k', { text: 'Dernière sur GitHub' }), vGitHub),
-      message, liste, bouton,
+      message, liste, bouton, progresZone,
       el('div.hint', { text: 'Le fichier se télécharge depuis ton dépôt GitHub ; Android te demande '
         + 'ensuite de confirmer l’installation. Ton carnet et tes réglages sont conservés.' }));
 }

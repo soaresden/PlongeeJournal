@@ -171,45 +171,63 @@ async function progresParDefaut(e) {
 }
 
 let enCours = null;
+const TAILLE_MINI = 1_000_000;   // un APK fait plusieurs Mo : en dessous, c'est une page d'erreur
 
 /**
  * Télécharge l'APK dans l'appli puis ouvre l'installateur d'Android.
- * Sans les modules natifs (site web, ancien APK), ou en cas d'échec,
- * ouvre le lien dans le navigateur.
+ * Sans les modules natifs (site web, ancien APK), ouvre le lien dans le
+ * navigateur.
  *
  * @param {string} url
  * @param {object} options
- *   - progres(e) : { etape: 'telechargement'|'installation'|'secours', pourcent, octets, message }
- * @returns {Promise<'installateur'|'navigateur'>}
+ *   - progres(e) : { etape: 'telechargement'|'verification'|'installation'|'secours'|'erreur',
+ *                    pourcent, octets, total, message }
+ *   - build : numéro de la version (le fichier porte son nom : jamais un vieux fichier rouvert)
+ *   - navigateurSiEchec : en cas d'échec, ouvrir le navigateur tout de suite (sinon : étape
+ *     'erreur', l'écran propose lui-même le navigateur)
+ * @returns {Promise<'installateur'|'navigateur'|'erreur'>}
  */
-export function telechargerApk(url = URL_APK, { progres = progresParDefaut, w, navigateur = ouvrirDansNavigateur } = {}) {
+export function telechargerApk(url = URL_APK, { progres = progresParDefaut, w, navigateur = ouvrirDansNavigateur,
+  build = null, navigateurSiEchec = true } = {}) {
   const natif = modulesNatifs(w);
   if (!natif) { navigateur(url); return Promise.resolve('navigateur'); }
   // Un deuxième appui pendant le téléchargement ne relance rien.
   if (enCours) return enCours;
 
   const signaler = e => { try { Promise.resolve(progres(e)).catch(() => {}); } catch { /* affichage seulement */ } };
+  const nom = build ? `PlongeeJournal-${build}.apk` : NOM_FICHIER;
 
   enCours = (async () => {
     let ecoute = null;
     try {
-      signaler({ etape: 'telechargement', pourcent: 0, octets: 0 });
+      signaler({ etape: 'telechargement', pourcent: 0, octets: 0, total: null });
+      // Un fichier resté d'un essai précédent (coupé, ou ancienne version)
+      // ne doit jamais être rouvert à la place du nouveau.
+      try { await natif.fs.deleteFile?.({ path: nom, directory: 'CACHE' }); } catch { /* pas de fichier */ }
       ecoute = await natif.fs.addListener?.('progress', ev => {
         if (ev?.url && ev.url !== url) return;
-        signaler({ etape: 'telechargement', pourcent: pourcentage(ev?.bytes, ev?.contentLength), octets: ev?.bytes || 0 });
+        signaler({ etape: 'telechargement', pourcent: pourcentage(ev?.bytes, ev?.contentLength),
+          octets: ev?.bytes || 0, total: ev?.contentLength || null });
       });
       // Dans le cache de l'appli : aucune permission de stockage à
       // demander, et Android le vide de lui-même au besoin.
       const r = await natif.fs.downloadFile({
-        url, path: NOM_FICHIER, directory: 'CACHE', progress: true,
-        connectTimeout: 20000, readTimeout: 120000,
+        url, path: nom, directory: 'CACHE', progress: true,
+        connectTimeout: 30000, readTimeout: 180000,
       });
       if (!r?.path) throw new Error('fichier introuvable après le téléchargement');
+      signaler({ etape: 'verification' });
+      try {
+        const st = await natif.fs.stat?.({ path: nom, directory: 'CACHE' });
+        if (st?.size != null && st.size < TAILLE_MINI) throw new Error(`fichier incomplet (${taillePropre(st.size) || `${st.size} o`})`);
+      } catch (e) { if (/incomplet/.test(e.message)) throw e; /* stat absent : on continue */ }
       signaler({ etape: 'installation' });
       await natif.opener.open({ filePath: r.path, contentType: TYPE_APK, openWithDefault: true });
       return 'installateur';
     } catch (e) {
-      signaler({ etape: 'secours', message: String(e?.message || e || 'erreur inconnue').slice(0, 120) });
+      const message = String(e?.message || e || 'erreur inconnue').slice(0, 160);
+      if (!navigateurSiEchec) { signaler({ etape: 'erreur', message }); return 'erreur'; }
+      signaler({ etape: 'secours', message });
       navigateur(url);
       return 'navigateur';
     } finally {

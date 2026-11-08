@@ -730,3 +730,16 @@ html.partage .donnees-bandeau, html.partage .donnees-recup, html.partage .donnee
 .video-selection.flottante { position: sticky; bottom: calc(var(--tabbar-h, 64px) + 8px); z-index: 5; background: var(--surface); box-shadow: var(--shadow); }
 .video-dossier.choisie { border-color: var(--accent); background: rgba(var(--accent-rgb), .08); }
 .video-dossiers { display: flex; flex-wrap: wrap; gap: 6px; }
+/* Mise à jour de l'APK : barre de chargement */
+.maj-progres { margin-top: 10px; }
+.maj-etat { font-weight: 600; font-size: 14px; }
+.maj-barre { position: relative; height: 10px; border-radius: 999px; background: rgba(var(--accent-rgb), .15); overflow: hidden; margin: 8px 0 4px; }
+.maj-rempli { height: 100%; width: 0; border-radius: inherit; background: var(--accent); transition: width .3s ease; }
+.maj-barre.indetermine .maj-rempli { width: 35% !important; animation: maj-va-vient 1.2s ease-in-out infinite; }
+.maj-barre.fini .maj-rempli { background: var(--ok); }
+.maj-barre.erreur .maj-rempli { background: var(--danger); width: 100%; }
+@keyframes maj-va-vient { 0% { transform: translateX(-100%); } 100% { transform: translateX(290%); } }
+.maj-detail { margin-top: 2px; }
+#maj-flottante { position: fixed; left: 12px; right: 12px; bottom: calc(var(--tabbar-h, 64px) + 12px); z-index: 60; padding-right: 36px;
+  box-shadow: var(--shadow); max-width: 520px; margin: 0 auto; }
+.maj-fermer { position: absolute; top: 6px; right: 8px; background: none; border: 0; color: var(--text-mute); font-size: 22px; cursor: pointer; }

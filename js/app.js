@@ -9,7 +9,7 @@ import { modeActuel, synchroniser, vider, erreurGitHub, activerPartage, enPartag
 import { configGitHub, estConfigure } from './github.js';
 import { appliquerTheme } from './theme.js';
 import * as sync from './sync.js';
-import { verifierEnFond, ecarter, telechargerApk } from './maj-apk.js';
+import { verifierEnFond, ecarter } from './maj-apk.js';
 import { envoyerEnAttente as envoyerPhotos } from './photos.js';
 
 import { divesView, diveView }            from './views/dives.js';
@@ -199,9 +199,9 @@ async function annoncerMiseAJour() {
     texte: `Tu as la ${res.installee.version}. Téléchargement depuis ton GitHub, Android te demandera de confirmer.`,
     action: { label: 'Mettre à jour', onclick: () => {
       bandeau.hidden = true;
-      // Téléchargée dans l'appli, puis l'installateur d'Android s'ouvre ;
-      // la progression s'affiche en bas de l'écran.
-      telechargerApk(d.url);
+      // Téléchargée dans l'appli (barre de chargement en bas de l'écran),
+      // puis l'installateur d'Android s'ouvre.
+      import('./views/maj-progres.js').then(m => m.miseAJourFlottante(d));
     } },
     duree: 0,
     surFermer: () => ecarter(d.build),
