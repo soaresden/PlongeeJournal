@@ -580,8 +580,9 @@ function carteMiseAJour() {
         if (res.etat === 'nouvelle') {
           const titres = await nouveautes(installee?.commit, d.commit);
           if (titres.length) {
-            liste.replaceChildren(...titres.slice(0, 8).map(t => el('li', { text: t })),
-              titres.length > 8 ? el('li.hint', { text: `… et ${titres.length - 8} autre${titres.length > 9 ? 's' : ''}` }) : null);
+            const lignes = titres.slice(0, 8).map(t => el('li', { text: t }));
+            if (titres.length > 8) lignes.push(el('li.hint', { text: `… et ${titres.length - 8} autre${titres.length > 9 ? 's' : ''}` }));
+            liste.replaceChildren(...lignes);
           }
         }
       }

@@ -9,7 +9,9 @@
 // toutes, les vides sont ignorés.
 if (typeof Element !== 'undefined' && !Element.prototype.__sansNull) {
   for (const nom of ['append', 'prepend', 'replaceChildren']) {
-    const original = Element.prototype[nom];
+    // (vieille WebView sans replaceChildren : on vide, puis on ajoute)
+    const original = Element.prototype[nom]
+      || function (...n) { while (this.firstChild) this.removeChild(this.firstChild); Element.prototype.append.apply(this, n); };
     Element.prototype[nom] = function (...n) { return original.apply(this, n.filter(x => x !== null && x !== undefined && x !== false)); };
   }
   Element.prototype.__sansNull = true;

@@ -317,6 +317,7 @@ check('APK : bouton de téléchargement de la nouvelle version',
   /Télécharger la 2\.0\.42 \(4,2 Mo\)/.test(boutonMaj()?.textContent || '') && boutonMaj().classList.contains('primary'),
   boutonMaj()?.textContent);
 check('APK : nouveautés listées', /Séances : fosse, piscine, apnée/.test(document.querySelector('.maj-nouveautes')?.textContent || ''), '');
+check('APK : pas de « null » en fin de liste des nouveautés', !/null/.test(document.querySelector('.maj-nouveautes')?.textContent || ''), document.querySelector('.maj-nouveautes')?.textContent);
 let ouvert = null;
 const clicOrigine = window.HTMLAnchorElement.prototype.click;
 window.HTMLAnchorElement.prototype.click = function () { ouvert = this.href; };
