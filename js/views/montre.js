@@ -104,7 +104,14 @@ export async function montreView() {
   const connues = () => [...dives, ...commePlongees(seances)];
 
   const statut = el('div.hint', { style: { margin: '10px 0 6px', minHeight: '1.4em' } });
-  const barre = el('progress', { max: 1, value: 0, style: { width: '100%', display: 'none' } });
+  // La progression du téléchargement : un panneau en bas de l'écran,
+  // visible où qu'on soit dans la page (la liste peut être longue).
+  const pTitre = el('div.maj-etat');
+  const pRempli = el('div.maj-rempli');
+  const pDetail = el('div.hint.maj-detail');
+  const barre = el('div#import-progres.card', { hidden: true },
+    pTitre, el('div.maj-barre', {}, pRempli), pDetail,
+    el('button.btn.sm', { type: 'button', style: { marginTop: '6px' }, text: '⏹ Arrêter', onclick: () => etat.abort?.abort() }));
   const zoneMontre = el('div');
   const liste = el('div');
   const actions = el('div');
@@ -114,9 +121,24 @@ export async function montreView() {
     statut.textContent = texte;
     statut.style.color = erreur ? 'var(--danger, #e5534b)' : '';
   };
-  const progres = (v, max) => {
-    barre.style.display = max ? '' : 'none';
-    if (max) { barre.max = max; barre.value = Math.min(v, max); }
+  const duree = s => (s >= 90 ? `${Math.round(s / 60)} min` : `${Math.max(1, Math.round(s))} s`);
+  /**
+   * @param {number} v      octets reçus (en tout)
+   * @param {number} max    octets attendus (0 : on cache)
+   * @param {{titre?:string, debut?:number}} info
+   */
+  const progres = (v, max, info = {}) => {
+    barre.hidden = !max;
+    if (!max) return;
+    const fait = Math.min(v, max);
+    const pourcent = Math.round(100 * fait / max);
+    pRempli.style.width = `${pourcent}%`;
+    if (info.titre) pTitre.textContent = `${info.titre} — ${pourcent} %`;
+    const ecoule = info.debut ? (Date.now() - info.debut) / 1000 : 0;
+    const vitesse = ecoule > 2 ? fait / ecoule : 0;
+    pDetail.textContent = [`${ko(fait)} sur ${ko(max)}`,
+      vitesse ? `${ko(vitesse)}/s` : null,
+      vitesse && fait < max ? `encore ~${duree((max - fait) / vitesse)}` : null].filter(Boolean).join(' · ');
   };
 
   // ---------- en-tête ----------
@@ -243,11 +265,14 @@ export async function montreView() {
     rendre();
     const total = aFaire.reduce((a, f) => a + (f.taille || 0), 0) || 1;
     let fait = 0;
+    const debut = Date.now();
     try {
       for (const [i, f] of aFaire.entries()) {
+        const titre = `Plongée ${i + 1}/${aFaire.length} · ${fmtDateHeure(new Date(f.id * 1000))}`;
         dire(`Téléchargement ${i + 1}/${aFaire.length} — ${fmtDateHeure(new Date(f.id * 1000))}…`);
+        progres(fait, total, { titre, debut });
         try {
-          const brut = await etat.session.telecharger(f, { progres: n => progres(fait + n, total) });
+          const brut = await etat.session.telecharger(f, { progres: n => progres(fait + n, total, { titre, debut }) });
           etat.bruts.set(f.id, brut);
           const dec = parseOcean(brut.sbem, { logId: f.id });
           const dive = oceanToDive(dec);

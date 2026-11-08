@@ -743,3 +743,7 @@ html.partage .donnees-bandeau, html.partage .donnees-recup, html.partage .donnee
 #maj-flottante { position: fixed; left: 12px; right: 12px; bottom: calc(var(--tabbar-h, 64px) + 12px); z-index: 60; padding-right: 36px;
   box-shadow: var(--shadow); max-width: 520px; margin: 0 auto; }
 .maj-fermer { position: absolute; top: 6px; right: 8px; background: none; border: 0; color: var(--text-mute); font-size: 22px; cursor: pointer; }
+/* Import depuis la montre : progression toujours visible */
+#import-progres { position: sticky; bottom: calc(var(--tabbar-h, 64px) + 10px); z-index: 20; box-shadow: var(--shadow);
+  border-color: var(--accent); margin-top: 10px; }
+.attente-montre { border-color: var(--accent); }
