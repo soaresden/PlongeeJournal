@@ -910,3 +910,16 @@ img.profil-av.photo { object-fit: cover; padding: 0; border-radius: 50%; }
   background: var(--surface-2); cursor: pointer; font-size: 18px; display: grid; place-items: center; }
 .avatar-option img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .avatar-option.on { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(var(--accent-rgb), .35); }
+
+/* --- Historique des visites : rangé par personne, repliable --------- */
+.visites-personne { border: 1px solid var(--line); border-radius: 14px; background: var(--surface); margin: 8px 0; overflow: hidden; }
+.visites-personne > summary { list-style: none; display: flex; align-items: center; gap: 10px; padding: 10px 12px; cursor: pointer; }
+.visites-personne > summary::-webkit-details-marker { display: none; }
+.visites-personne > summary::after { content: '▸'; margin-left: 4px; color: var(--text-mute); transition: transform .15s; }
+.visites-personne[open] > summary::after { transform: rotate(90deg); }
+.vp-ico { font-size: 20px; flex: none; }
+.vp-txt { flex: 1; min-width: 0; }
+.vp-neuf { margin-left: 6px; font-size: 10.5px; font-weight: 700; padding: 1px 6px; border-radius: 99px; background: var(--accent); color: var(--on-accent, #fff); }
+.vp-liste { padding: 0 10px 8px; }
+.vp-liste .card.visite { margin: 6px 0; }
+.visite-suppr { flex: none; padding: 4px 8px; }

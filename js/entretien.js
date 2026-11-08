@@ -150,7 +150,8 @@ export async function relireLesVisites({ relire = null } = {}) {
   const v = await import('./visites.js');
   const lues = await (relire || (c => v.relireToutesVisites({ canal: c, feuille, cle })))(canal);
   const avant = reglages.visites || [];
-  const connues = new Set(avant.map(x => x.id));
+  // Les visites que j'ai supprimées ne reviennent pas à la relecture
+  const connues = new Set([...avant.map(x => x.id), ...(reglages.visitesSupprimees || [])]);
   const nouvelles = lues.filter(x => !connues.has(x.id));
   if (nouvelles.length) await store.saveSettings({ visites: v.fusionnerVisites(avant, nouvelles) });
   return nouvelles;

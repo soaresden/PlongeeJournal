@@ -246,3 +246,29 @@ export function identifier(visite, buddies = [], dives = []) {
   if (dedans) return { buddy: dedans, sur: true };
   return candidats.length === 1 ? { buddy: candidats[0], sur: false } : { buddy: candidats[0], sur: false, plusieurs: candidats.length };
 }
+
+// ------------------------------------------------------------
+//  Le ménage : supprimer des visites (une, ou toutes celles d'une personne)
+// ------------------------------------------------------------
+
+/**
+ * Retire des messages gardés ceux d'une ou plusieurs visites (une visite =
+ * l'entrée, les essais ratés et le parcours, rassemblés par numéro de session).
+ * @param {Array} messages  les messages gardés (réglages.visites)
+ * @param {Iterable<string>} idsVisites  les id des visites (sessions) à retirer
+ * @returns {{restants:Array, supprimes:string[]}}  supprimes : les id de messages retirés,
+ *   à mémoriser pour qu'une relecture du canal ou de la feuille ne les ramène pas
+ */
+export function supprimerVisites(messages = [], idsVisites = []) {
+  const cibles = new Set(idsVisites);
+  const supprimes = [];
+  const restants = messages.filter(m => {
+    const ok = !(cibles.has(m.id) || (m.sid && cibles.has(m.sid)));
+    if (!ok) supprimes.push(m.id);
+    return ok;
+  });
+  return { restants, supprimes };
+}
+
+/** La personne derrière une visite : un de mes plongeurs, ou le prénom donné. */
+export const clePersonne = v => (v.qui ? `b:${v.qui.buddy.id}` : `p:${String(v.prenom || '?').trim().toLowerCase()}`);

@@ -65,6 +65,18 @@ check('canal : difficile à deviner', /^pj-[a-z2-9]{20}$/.test(V.nouveauCanal())
   check('un essai raté puis réussi : une visite, l’essai raté gardé', deux.length === 1 && deux[0].ok && deux[0].rates?.[0] === 'Bretagne, 01/06/2025', JSON.stringify(deux));
 }
 
+{
+  // Le ménage : supprimer une visite retire l'entrée, les essais ratés et le parcours (même session)
+  const msgs = [
+    { id: 'm1', sid: 's1', genre: 'entree', ok: false }, { id: 'm2', sid: 's1', genre: 'entree', ok: true },
+    { id: 'm3', sid: 's1', genre: 'parcours' }, { id: 'm4', sid: 's2', genre: 'entree', ok: true }, { id: 'm5', genre: 'entree', ok: true },
+  ];
+  const r = V.supprimerVisites(msgs, ['s1', 'm5']);
+  check('supprimer une visite : toute sa session part (entrée, essais, parcours)', r.restants.map(m => m.id).join() === 'm4' && r.supprimes.sort().join() === 'm1,m2,m3,m5', JSON.stringify(r));
+  check('par personne : un de mes plongeurs, sinon le prénom (sans majuscules)',
+    V.clePersonne({ qui: { buddy: { id: 'b1' } } }) === 'b:b1' && V.clePersonne({ prenom: ' Léa ' }) === 'p:léa');
+}
+
 console.log(results.join('\n'));
 const ko = results.filter(r => r.startsWith(' FAIL'));
 console.log(`\n${results.length - ko.length}/${results.length} vérifications visites`);
