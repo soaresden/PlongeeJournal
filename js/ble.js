@@ -31,6 +31,9 @@ const memo = {
 export const oublierMontre = () => memo.oublier();
 export const montreMemorisee = () => memo.lire();
 
+/** Suunto Oy dans la liste des fabricants du Bluetooth SIG. */
+export const FABRICANT_SUUNTO = '0x009F';
+
 const estOcean = nom => !!nom && OCEAN_NOMS.some(n => nom.startsWith(n));
 
 function pluginNatif() {
@@ -117,7 +120,7 @@ export function chercherMontre(ble, id, ms, journal) {
       if (!vu) {
         const liste = [...vus.values()].sort((a, b) => (b.rssi ?? -999) - (a.rssi ?? -999)).slice(0, 12);
         journal(`appareils vus pendant la recherche : ${liste.length
-          ? liste.map(v => `${v.nom || 'sans nom'} [${v.id}${v.rssi != null ? `, ${v.rssi} dBm` : ''}${v.suunto ? ', service Suunto' : ''}]`).join(' ; ')
+          ? liste.map(v => `${v.nom || 'sans nom'} [${v.id}${v.rssi != null ? `, ${v.rssi} dBm` : ''}${v.suunto ? ', service Suunto' : ''}${v.fab.length ? `, fabricant ${v.fab.join('/')}` : ''}]`).join(' ; ')
           : 'aucun (Bluetooth ou autorisation « Appareils à proximité » ?)'}`);
       }
       resolve(vu);
@@ -127,8 +130,12 @@ export function chercherMontre(ble, id, ms, journal) {
       const d = r?.device || {};
       const nom = d.name || r?.localName || '';
       const uuids = (r?.uuids || []).map(u => String(u).toLowerCase());
-      const suunto = uuids.includes(OCEAN_SERVICE);
-      if (d.deviceId) vus.set(d.deviceId, { id: d.deviceId, nom, rssi: r?.rssi, suunto });
+      // Identifiant du fabricant dans l'annonce (Bluetooth SIG) : 0x009F
+      // pour Suunto. Une montre appairée s'annonce souvent sans nom ni
+      // service : c'est alors le seul moyen de la reconnaître.
+      const fab = Object.keys(r?.manufacturerData || {}).map(k => `0x${Number(k).toString(16).padStart(4, '0').toUpperCase()}`);
+      const suunto = uuids.includes(OCEAN_SERVICE) || fab.includes(FABRICANT_SUUNTO);
+      if (d.deviceId) vus.set(d.deviceId, { id: d.deviceId, nom, rssi: r?.rssi, suunto, fab });
       if (d.deviceId === id || estOcean(nom) || suunto) {
         journal(`→ montre vue : ${nom || d.deviceId}${r?.rssi != null ? ` (signal ${r.rssi} dBm)` : ''}${d.deviceId !== id ? ` à l’adresse ${d.deviceId}` : ''}`);
         finir(d.deviceId ? { deviceId: d.deviceId, name: nom } : { deviceId: id, name: nom });

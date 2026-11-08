@@ -91,6 +91,17 @@ const montre = { deviceId: 'AA', name: 'Suunto Ocean 2425' };
     && journal.some(t => /ne s’annonce pas/.test(t)), `${ble.appels.join()} | ${journal.join(' | ')}`);
 }
 
+{
+  // Sans nom, sans service, adresse aléatoire : reconnue à l'identifiant de fabricant Suunto (0x009F).
+  const ble = fauxPlugin({ repondAu: 1, visible: false });
+  let ecouteur = null;
+  ble.addListener = async (nom, cb) => { if (nom === 'onScanResult') ecouteur = cb; return { remove: async () => {} }; };
+  ble.requestLEScan = async function () { this.appels.push('scan');
+    setTimeout(() => { ecouteur?.({ device: { deviceId: '4B:4F' }, manufacturerData: { 76: {} }, rssi: -52 }); ecouteur?.({ device: { deviceId: '59:FA' }, manufacturerData: { 159: {} }, rssi: -54 }); }, 20); };
+  const id = await B.connecterNatif(ble, montre, j, { delai: 50, recherche: 200, chercherAvant: 300 });
+  check('reconnue au fabricant Suunto (0x009F)', id === '59:FA', `${id} ${ble.appels.join()}`);
+}
+
 const ko = results.filter(r => r.startsWith(' FAIL'));
 console.log(results.join('\n'));
 console.log(ko.length ? `\n${ko.length} test(s) en échec` : `\n${results.length}/${results.length} vérifications Bluetooth`);
