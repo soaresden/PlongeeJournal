@@ -50,10 +50,11 @@ export async function montreAideView() {
         + 'cet ancien appairage ne marche plus : la connexion échoue (« Connection timeout »).' }),
       liste(
         'Sur la tablette : Réglages Android → Bluetooth → Suunto Ocean → « Oublier » (seulement sur la tablette : le téléphone garde « MobileApp »).',
-        'Sur la montre : menu des appareils appairés → mode appairage.',
+        'Sur la montre : menu des appareils appairés → mode appairage. Reste sur cet écran (celui où l’on voit « MobileApp ») tant que le carnet cherche : c’est là que la montre s’annonce et que la tablette la détecte.',
         'Dans le carnet, sur la tablette : Importer depuis la montre → « Choisir une autre montre » (ou « Chercher la montre ») → Suunto Ocean.',
         'Accepte l’association et vérifie que le code est le même sur la tablette et sur la montre. La montre affiche alors une nouvelle entrée, à côté de « MobileApp ».',
-      )),
+      ),
+      el('div.hint', { style: { marginTop: '8px' }, text: 'Aux imports suivants sur la tablette, si la montre n’est pas trouvée : remets-la sur l’écran des appareils appairés (« MobileApp ») pendant la recherche.' })),
 
     bloc('3. L’import',
       liste(
@@ -67,7 +68,7 @@ export async function montreAideView() {
     bloc('En cas de souci',
       liste(
         'Montre introuvable : réveille-la, rapproche-la, vérifie que le Bluetooth du téléphone est allumé. Puis « Choisir une autre montre ».',
-        'Toujours rien : sur la montre, ouvre le menu des appareils appairés (là où l’appli Suunto apparaît sous le nom « MobileApp ») et mets-la en mode appairage : elle s’annonce alors et le carnet la trouve. N’efface pas « MobileApp ».',
+        'Toujours rien : sur la montre, ouvre le menu des appareils appairés (là où l’appli Suunto apparaît sous le nom « MobileApp ») et mets-la en mode appairage, et laisse-la sur cet écran pendant que le carnet cherche : elle s’annonce alors et le carnet la trouve. N’efface pas « MobileApp ».',
         'Ferme l’appli Suunto avant l’import si elle est en train de synchroniser : la montre ne parle qu’à une appli à la fois.',
         'Ouvre « Journal Bluetooth (diagnostic) » en bas de l’écran d’import, puis « Copier le journal » et envoie-le. Il ne contient ni ton carnet ni tes identifiants.',
         '« Données brutes » enregistre les octets reçus de la montre : de quoi rejouer le décodage sans la montre.',

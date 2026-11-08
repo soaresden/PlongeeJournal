@@ -87,7 +87,7 @@ const avecDelai = (p, ms, quoi) => Promise.race([
 /** Le message quand la montre ne répond vraiment pas : quoi faire, concrètement. */
 export const MONTRE_MUETTE = 'La montre ne répond pas. Réveille-la (écran allumé, sur le cadran), vérifie que son Bluetooth '
   + 'est actif (pas en mode avion), garde-la près du téléphone, puis réessaie. Encore mieux : sur la montre, ouvre le menu '
-  + 'des appareils appairés (là où l’on voit « MobileApp ») et mets-la en mode appairage pendant que le carnet la cherche. '
+  + 'des appareils appairés (là où l’on voit « MobileApp ») et mets-la en mode appairage : laisse-la sur cet écran pendant que le carnet la cherche, c’est là qu’elle se laisse détecter. '
   + 'Sur une tablette ou un 2e téléphone : la montre doit l’avoir dans sa liste ; sinon « Oublier » la montre dans le Bluetooth '
   + 'd’Android, puis « Choisir une autre montre » avec la montre en mode appairage (voir le mode d’emploi). '
   + 'Si ça ne passe toujours pas : ouvre '
