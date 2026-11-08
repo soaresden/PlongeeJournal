@@ -390,6 +390,7 @@ export async function fusionnerAvec(garderId, apres = () => {}) {
 export async function apercuPlongeur(id, { onClose = null } = {}) {
   const b = structuredClone(await store.getBuddy(id));
   if (!b) return toast('Plongeur introuvable', true);
+  window.dispatchEvent(new CustomEvent('pj-vue', { detail: `fiche de ${b.prenom || '?'}` }));
   const diverId = await store.getActiveDiverId();
   const ensemble = diverId ? (await store.listDives(diverId)).filter(d => (d.buddyIds || []).includes(b.id)) : [];
   const tous = await store.listBuddies();

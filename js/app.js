@@ -71,6 +71,7 @@ route('setup',            reglagesView);   // ancien lien
 route('suunto',           suuntoView);
 route('suunto-cloud',     suuntoCloudView);
 route('montre',           montreView);
+route('visites',          async () => (await import('./views/visites.js')).visitesView());
 route('videos',           async () => (await import('./views/videos.js')).videosView());
 route('montre-aide',      montreAideView);
 route('urgence',          urgenceView);
@@ -259,7 +260,8 @@ async function ouvrirPartage() {
     signatureVisite = moi?.prenom || '';
     // « Qui es-tu ? » : prénom, et une plongée faite ensemble (le mot de passe).
     const { accueilVisiteur } = await import('./views/accueil-visiteur.js');
-    await accueilVisiteur({ id: PARTAGE_ID, proprio: moi?.prenom || 'moi', dives: donnees.dives || [], canal: donnees.partage?.canal || '' });
+    await accueilVisiteur({ id: PARTAGE_ID, proprio: moi?.prenom || 'moi', dives: donnees.dives || [], buddies: donnees.buddies || [],
+      canal: donnees.partage?.canal || '' });
     afficherBandeau({ classe: 'partage', icone: 'i-carte', duree: 7000,
       titre: `Carnet de ${moi?.prenom || 'plongée'}`, texte: 'Partagé en lecture seule : tu peux tout regarder, rien n’est modifiable.' });
   } catch (e) {
@@ -272,21 +274,68 @@ async function ouvrirPartage() {
 
 /** Numéros dans l'ordre des dates, eau douce / salée d'après le GPS. */
 function entretienDeFond() {
+  // Qui a regardé mon carnet partagé depuis la dernière fois : tout de
+  // suite, sans attendre le reste de l'entretien (qui peut être long).
   import('./entretien.js')
-    .then(m => m.entretenir())
+    .then(m => m.relireLesVisites())
+    .then(nouvelles => annoncerVisites(nouvelles || []))
+    .catch(() => majOeil())
+    .finally(() => suivreLesVisites());
+  import('./entretien.js')
+    .then(m => m.entretenir({ visites: false }))
     .then(r => {
       if ((r.numeros || r.lieux) && ['dives', 'stats'].includes(currentPath())) navigate(currentPath(), true);
-      // Qui a regardé mon carnet partagé depuis la dernière fois.
-      const vues = (r.visites || []).filter(v => v.ok);
-      if (vues.length) {
-        const noms = [...new Set(vues.map(v => v.prenom).filter(Boolean))];
-        afficherBandeau({ classe: 'ok', icone: 'i-buddies', duree: 12000,
-          titre: `👀 ${noms.slice(0, 3).join(', ')}${noms.length > 3 ? '…' : ''} ${noms.length > 1 ? 'ont' : 'a'} regardé ton carnet`,
-          texte: 'Toutes les visites : Réglages → Partager mon carnet.',
-          action: { label: 'Voir', onclick: () => navigate('reglages') } });
-      }
     })
     .catch(() => {});
+}
+
+// ------------------------------------------------------------
+//  Les visites de mon carnet partagé : le 👀 de la barre du haut
+//  (nombre de visites pas encore vues), un pop-up à chaque nouvelle
+//  visite, et une relecture toutes les 2 minutes tant que l'appli est
+//  ouverte.
+// ------------------------------------------------------------
+
+let oeil = null;
+async function majOeil() {
+  if (PARTAGE_ID) return;
+  try {
+    const { store } = await import('./store.js');
+    if (!(await store.getSettings()).partage?.canal && !oeil) return;
+    const { visitesNonVues } = await import('./views/visites.js');
+    const n = await visitesNonVues();
+    if (!oeil) {
+      oeil = document.createElement('button');
+      oeil.className = 'icon-btn btn-visites';
+      oeil.type = 'button';
+      oeil.title = 'Historique des visites de ton carnet partagé';
+      oeil.onclick = () => navigate('visites');
+      document.getElementById('topbar')?.insertBefore(oeil, document.getElementById('topActions'));
+    }
+    oeil.innerHTML = `👀${n ? `<span class="pastille-compte">${n}</span>` : ''}`;
+  } catch { /* jamais bloquant */ }
+}
+document.addEventListener('pj-visites-vues', () => majOeil());
+
+async function annoncerVisites(nouvelles) {
+  await majOeil();
+  const entrees = nouvelles.filter(v => v.genre !== 'parcours');
+  if (!entrees.length) return;
+  const { popupNouvellesVisites } = await import('./views/visites.js');
+  // La visite (= la session) de chaque nouveau message d'entrée.
+  popupNouvellesVisites(new Set(entrees.map(v => v.sid || v.id)));
+}
+
+let suiviVisites = null;
+function suivreLesVisites() {
+  if (suiviVisites || PARTAGE_ID) return;
+  suiviVisites = setInterval(async () => {
+    if (document.hidden) return;
+    try {
+      const { relireLesVisites } = await import('./entretien.js');
+      annoncerVisites(await relireLesVisites());
+    } catch { /* hors ligne */ }
+  }, 120000);
 }
 
 /**
@@ -385,7 +434,7 @@ onRender(async path => {
     dives: 'dives', dive: path === 'dive/new' ? 'dive/new' : 'dives',
     divers: 'divers', diver: 'divers',
     buddies: 'buddies', buddy: 'buddies', stats: 'stats',
-    reglages: 'reglages', mn90: 'mn90', cv: 'divers', suunto: 'divers', 'suunto-cloud': 'divers', montre: 'divers', 'montre-aide': 'divers', videos: 'divers', urgence: 'divers',
+    reglages: 'reglages', mn90: 'mn90', cv: 'divers', suunto: 'divers', 'suunto-cloud': 'divers', montre: 'divers', 'montre-aide': 'divers', videos: 'divers', visites: 'divers', urgence: 'divers',
     seances: 'dives', seance: 'dives',
   }[root];
   $$('#tabbar .tab').forEach(t => t.classList.toggle('active', t.dataset.route === tabFor));

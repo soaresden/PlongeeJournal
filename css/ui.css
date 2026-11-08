@@ -817,3 +817,17 @@ html.partage .donnees-bandeau, html.partage .donnees-recup, html.partage .donnee
 .cv-urgence-tel { color: var(--danger); text-decoration: none; font-size: 15px; }
 html.partage .partage-visites { display: none; }
 .btn-langue { font-size: 20px; padding: 4px 6px; }
+/* Historique des visites */
+.btn-visites { position: relative; font-size: 19px; padding: 4px 6px; }
+.btn-visites .pastille-compte { position: absolute; top: -2px; right: -4px; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 9px;
+  background: var(--danger); color: #fff; font-size: 11px; font-weight: 700; line-height: 17px; text-align: center; }
+html.partage .btn-visites { display: none !important; }
+.visite { padding: 12px 14px; }
+.visite.refusee { opacity: .75; border-style: dashed; }
+.visite-tete { display: flex; align-items: flex-start; gap: 10px; }
+.visite-tete > div { flex: 1; min-width: 0; }
+.visite-ico { font-size: 22px; }
+.visite-qui { color: var(--ok); font-weight: 600; }
+.visite-qui.inconnu { color: var(--text-mute); font-weight: 400; }
+.visite-ligne { font-size: 13px; margin-top: 6px; color: var(--text-dim); overflow-wrap: anywhere; }
+.visites-popup { max-height: 60vh; overflow: auto; }

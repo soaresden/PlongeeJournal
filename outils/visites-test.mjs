@@ -40,6 +40,31 @@ const f = V.fusionnerVisites([lues[0]], lues);
 check('fusion : sans doublon, plus récentes d’abord', f.length === 2 && f[0].id === 'm2');
 check('canal : difficile à deviner', /^pj-[a-z2-9]{20}$/.test(V.nouveauCanal()));
 
+// Parcours, sessions, identification
+{
+  const e = V.message({ prenom: 'Alison', date: '2025-09-03', lieu: 'Malte', plongee: { id: 'm', numero: 55, lieuNom: 'Popeye Malta' }, ok: true, sid: 's1' });
+  const p1 = V.messageParcours({ prenom: 'Alison', sid: 's1', pages: ['Plongées', 'n°55 Popeye Malta'] });
+  const p2 = V.messageParcours({ prenom: 'Alison', sid: 's1', pages: ['Plongées', 'n°55 Popeye Malta', 'Stats'] });
+  const ko = V.message({ prenom: 'Bob', date: '2025-01-01', lieu: 'Brest', ok: false, sid: 's2' });
+  const msgs = [[e, 100], [p1, 160], [p2, 400], [ko, 50]].map(([m, t], i) => V.lireMessage({ id: `x${i}`, time: 1794200000 + t, message: m.corps, tags: m.tags }));
+  check('parcours relu : les écrans dans l’ordre', msgs[2].genre === 'parcours' && msgs[2].pages.join('|') === 'Plongées|n°55 Popeye Malta|Stats');
+  const sessions = V.regrouperVisites(msgs);
+  const a = sessions.find(v => v.id === 's1');
+  check('une visite = l’entrée + le dernier parcours', sessions.length === 2 && a.ok && a.pages.length === 3 && a.plongeeId === 'm' && a.fin > a.at, JSON.stringify(a));
+  check('plus récente d’abord ; le refus est là aussi', sessions[0].id === 's1' && sessions[1].ok === false);
+  const buddies = [{ id: 'b1', prenom: 'Alison', nom: 'Hocq' }, { id: 'b2', prenom: 'Alison', nom: 'Martin' }, { id: 'b3', prenom: 'Jean-Marie' }];
+  const dives = [{ id: 'm', buddyIds: ['b1'] }];
+  const q = V.identifier(a, buddies, dives);
+  check('identifiée : l’Alison de cette plongée, à coup sûr', q?.buddy.id === 'b1' && q.sur);
+  check('prénom inconnu : pas identifiée (mais entrée quand même)', V.identifier({ prenom: 'Zoé' }, buddies, dives) === null);
+  check('« jean marie » = « Jean-Marie » (tirets, majuscules)', V.identifier({ prenom: 'jean marie' }, buddies, [])?.buddy.id === 'b3');
+  check('prénom + nom donnés', V.identifier({ prenom: 'Alison Martin' }, buddies, [])?.buddy.id === 'b2');
+  const deux = V.regrouperVisites([
+    { id: 'k', at: '2025-01-01T10:00:00Z', genre: 'entree', ok: false, prenom: 'Léa', date: '2025-06-01', lieu: 'Bretagne', sid: 's9' },
+    { id: 'o', at: '2025-01-01T10:01:00Z', genre: 'entree', ok: true, prenom: 'Léa', date: '2025-03-29', lieu: 'Egypte', sid: 's9' }]);
+  check('un essai raté puis réussi : une visite, l’essai raté gardé', deux.length === 1 && deux[0].ok && deux[0].rates?.[0] === 'Bretagne, 01/06/2025', JSON.stringify(deux));
+}
+
 console.log(results.join('\n'));
 const ko = results.filter(r => r.startsWith(' FAIL'));
 console.log(`\n${results.length - ko.length}/${results.length} vérifications visites`);

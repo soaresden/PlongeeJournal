@@ -47,7 +47,7 @@ export function paliersACorriger(dives) {
   return out;
 }
 
-export async function entretenir({ analyser = null, nommer = null } = {}) {
+export async function entretenir({ analyser = null, nommer = null, visites: relire = true } = {}) {
   const diverId = await store.getActiveDiverId();
   if (!diverId) return { numeros: 0, eaux: 0, chefs: 0, lieux: 0 };
   const numeros = await store.numeroterAuto(diverId).catch(() => 0);
@@ -134,7 +134,7 @@ export async function entretenir({ analyser = null, nommer = null } = {}) {
   if (modifiees.length) await store.savePlongees(modifiees);
   eaux = modifiees.filter(d => d.eau).length;
   const partage = await majPartage().catch(() => false);
-  const visites = await relireLesVisites().catch(() => []);
+  const visites = relire ? await relireLesVisites().catch(() => []) : [];
   return { numeros, eaux, chefs: chefs.length, lieux, partage, visites };
 }
 

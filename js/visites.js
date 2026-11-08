@@ -53,11 +53,11 @@ export function verifierVisiteur({ date, lieu }, dives, autresNoms = () => []) {
 const fmt = iso => (iso ? iso.split('-').reverse().join('/') : '?');
 
 /** Le message envoyé sur le canal (lisible tel quel dans l'appli ntfy). */
-export function message({ prenom, date, lieu, plongee, ok }) {
+export function message({ prenom, date, lieu, plongee, ok, sid = null }) {
   return {
     titre: ok ? `👀 ${prenom} regarde ton carnet` : `❓ ${prenom || 'Quelqu’un'} n’a pas trouvé la plongée`,
     corps: [prenom || '?', fmt(date), lieu || '?', plongee ? `n°${plongee.numero ?? '?'} ${plongee.lieuNom || ''}`.trim() : ''].filter(Boolean).join(' · '),
-    tags: [ok ? 'eyes' : 'question', ok ? 'pj-ok' : 'pj-ko', ...(plongee ? [`pj-plongee-${plongee.id}`] : [])],
+    tags: [ok ? 'eyes' : 'question', ok ? 'pj-ok' : 'pj-ko', ...(plongee ? [`pj-plongee-${plongee.id}`] : []), ...(sid ? [`pj-s-${sid}`] : [])],
   };
 }
 
@@ -77,14 +77,19 @@ export async function annoncerVisite(canal, visite, f = fetch) {
 
 /** Le message ntfy relu → une visite. */
 export function lireMessage(m) {
-  const [prenom = '', date = '', lieu = '', plongee = ''] = String(m.message || '').split(' · ');
   const tags = m.tags || [];
+  const s = tags.find(t => t.startsWith('pj-s-'))?.slice(5) || null;
+  if (tags.includes('pj-parcours')) {
+    const [prenom = '', , pages = ''] = String(m.message || '').split(' · ');
+    return { id: m.id, at: new Date((m.time || 0) * 1000).toISOString(), genre: 'parcours', prenom, sid: s, pages: pages ? pages.split(' › ') : [] };
+  }
+  const [prenom = '', date = '', lieu = '', plongee = ''] = String(m.message || '').split(' · ');
   const d = /^(\d\d)\/(\d\d)\/(\d{4})$/.exec(date);
   return {
     id: m.id, at: new Date((m.time || 0) * 1000).toISOString(),
     prenom, date: d ? `${d[3]}-${d[2]}-${d[1]}` : '', lieu, plongee,
     plongeeId: (tags.find(t => t.startsWith('pj-plongee-')) || '').slice(11) || null,
-    ok: tags.includes('pj-ok'),
+    ok: tags.includes('pj-ok'), genre: 'entree', sid: s,
   };
 }
 
@@ -103,4 +108,115 @@ export function fusionnerVisites(anciennes = [], nouvelles = [], max = 500) {
   const parId = new Map(anciennes.map(v => [v.id, v]));
   for (const v of nouvelles) if (v?.id && !parId.has(v.id)) parId.set(v.id, v);
   return [...parId.values()].sort((a, b) => String(b.at).localeCompare(String(a.at))).slice(0, max);
+}
+
+// ------------------------------------------------------------
+//  Le parcours du visiteur : ce qu'il regarde (côté visiteur)
+// ------------------------------------------------------------
+
+/** Un numéro de visite (pour rassembler l'entrée et le parcours). */
+export const nouvelleSession = () => Math.random().toString(36).slice(2, 10);
+
+/** Le message « parcours » : les écrans vus, dans l'ordre. */
+export function messageParcours({ prenom, sid, pages }) {
+  return {
+    titre: `🧭 ${prenom || 'Un visiteur'} a regardé`,
+    corps: [prenom || '?', 'parcours', pages.join(' › ')].join(' · '),
+    tags: ['compass', 'pj-parcours', `pj-s-${sid}`],
+  };
+}
+
+/**
+ * Suit ce que regarde le visiteur (changements d'écran et fiches ouvertes,
+ * signalées par l'évènement « pj-vue ») et l'envoie de temps en temps, et
+ * quand il quitte la page.
+ * @param {{canal, prenom, sid, nommer:(chemin)=>string}} o
+ */
+export function suivreParcours({ canal, prenom, sid, nommer }) {
+  if (!canal || typeof window === 'undefined') return () => {};
+  const pages = [];
+  let envoyees = 0;
+  const noter = libelle => {
+    if (!libelle || pages.at(-1) === libelle) return;
+    pages.push(libelle);
+    if (pages.length > 60) pages.splice(0, pages.length - 60);
+  };
+  const envoyer = (aLaFin = false) => {
+    if (pages.length === envoyees) return;
+    envoyees = pages.length;
+    const m = messageParcours({ prenom, sid, pages });
+    const url = `${NTFY}/${encodeURIComponent(canal)}?title=${encodeURIComponent(m.titre)}&tags=${encodeURIComponent(m.tags.join(','))}`;
+    try {
+      if (aLaFin && navigator.sendBeacon) navigator.sendBeacon(url, m.corps);
+      else fetch(url, { method: 'POST', body: m.corps, keepalive: true }).catch(() => {});
+    } catch { /* tant pis */ }
+  };
+  const surChemin = () => noter(nommer(location.hash.replace(/^#\/?/, '') || 'dives'));
+  const surVue = e => noter(e.detail);
+  window.addEventListener('hashchange', surChemin);
+  window.addEventListener('pj-vue', surVue);
+  const tic = setInterval(() => envoyer(), 90000);
+  const cache = () => { if (document.hidden) envoyer(true); };
+  document.addEventListener('visibilitychange', cache);
+  window.addEventListener('pagehide', () => envoyer(true));
+  surChemin();
+  return () => { clearInterval(tic); window.removeEventListener('hashchange', surChemin); window.removeEventListener('pj-vue', surVue); };
+}
+
+// ------------------------------------------------------------
+//  Côté propriétaire : les visites rassemblées et identifiées
+// ------------------------------------------------------------
+
+/**
+ * Les messages relus → des visites : une entrée (réussie ou non), et ce
+ * qui a été regardé ensuite. Les plus récentes d'abord.
+ */
+export function regrouperVisites(messages = []) {
+  const parSession = new Map(), seules = [];
+  const tri = [...messages].sort((a, b) => String(a.at).localeCompare(String(b.at)));
+  for (const m of tri) {
+    const s = m.sid || null;
+    if (m.genre === 'parcours') {
+      const v = s && parSession.get(s);
+      if (v) { v.pages = m.pages; v.fin = m.at; }
+      else if (s) parSession.set(s, { id: s, prenom: m.prenom, at: m.at, fin: m.at, ok: true, pages: m.pages, sansEntree: true });
+      continue;
+    }
+    const v = { id: s || m.id, prenom: m.prenom, at: m.at, fin: m.at, ok: m.ok, date: m.date, lieu: m.lieu, plongee: m.plongee,
+      plongeeId: m.plongeeId, retour: /\(retour\)/.test(m.lieu || ''), pages: [] };
+    const avant = s && parSession.get(s);
+    if (avant && !avant.sansEntree && !avant.ok) {
+      // Des essais ratés avant d'entrer : gardés pour savoir ce qu'il a tenté.
+      v.rates = [...(avant.rates || []), [avant.lieu, fmt(avant.date)].filter(Boolean).join(', ')];
+      v.at = avant.at;
+    }
+    if (s) parSession.set(s, Object.assign(avant || {}, v, { pages: avant?.pages || [] }));
+    else seules.push(v);
+  }
+  return [...parSession.values(), ...seules].sort((a, b) => String(b.at).localeCompare(String(a.at)));
+}
+
+/**
+ * Qui est-ce ? Un de mes plongeurs dont le prénom (ou le nom complet)
+ * correspond ; de préférence quelqu'un de la palanquée de la plongée donnée.
+ * @returns {{buddy, sur:boolean}|null}  sur : il était dans cette plongée
+ */
+export function identifier(visite, buddies = [], dives = []) {
+  // « Jean-Marie », « jean marie », « JEAN MARIE » : la même chose.
+  const norm = x => sansAccent(x).replace(/[^a-z]+/g, ' ').trim();
+  const n = norm(visite.prenom);
+  if (!n) return null;
+  const possibles = buddies.filter(b => {
+    if (b.structure) return false;
+    const p = norm(b.prenom), complet = norm(`${b.prenom || ''} ${b.nom || ''}`);
+    return p && (p === n || complet === n || n.startsWith(`${p} `));
+  });
+  if (!possibles.length) return null;
+  // Prénom + nom donnés en entier : c'est lui, pas un homonyme.
+  const exacts = possibles.filter(b => b.nom && norm(`${b.prenom} ${b.nom}`) === n);
+  const candidats = exacts.length ? exacts : possibles;
+  const plongee = dives.find(d => d.id === visite.plongeeId);
+  const dedans = candidats.find(b => (plongee?.buddyIds || []).includes(b.id));
+  if (dedans) return { buddy: dedans, sur: true };
+  return candidats.length === 1 ? { buddy: candidats[0], sur: false } : { buddy: candidats[0], sur: false, plusieurs: candidats.length };
 }

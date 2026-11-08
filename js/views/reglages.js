@@ -287,6 +287,7 @@ async function sectionPartage() {
           : el('div.hint', { text: 'Personne pour l’instant.' }),
         p.canal ? el('div.hint', { text: `Pour être prévenu tout de suite (et ne rien perdre) : installe l’appli « ntfy » et abonne-toi au canal « ${p.canal} ». `
           + 'Sinon, les visites des 12 dernières heures sont relues à chaque ouverture du carnet.' }) : null,
+        el('button.btn.sm', { type: 'button', text: '👀 Historique des visites', onclick: () => navigate('visites') }),
         el('button.btn.sm.ghost', { type: 'button', text: '↻ Relire les visites', onclick: async e => {
           e.currentTarget.disabled = true;
           try {

@@ -25,6 +25,8 @@ globalThis.Node = window.Node;
 globalThis.Image = window.Image;
 globalThis.FileReader = window.FileReader;
 globalThis.Blob = window.Blob;
+globalThis.CustomEvent = window.CustomEvent;
+globalThis.Event = window.Event;
 globalThis.URL = window.URL;
 globalThis.requestAnimationFrame = cb => setTimeout(cb, 0);
 Object.defineProperty(globalThis, 'crypto', { configurable: true, value: {

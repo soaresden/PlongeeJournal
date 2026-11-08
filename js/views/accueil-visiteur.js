@@ -9,7 +9,7 @@
 // ============================================================
 
 import { el } from '../lib.js';
-import { verifierVisiteur, annoncerVisite } from '../visites.js';
+import { verifierVisiteur, annoncerVisite, nouvelleSession, suivreParcours } from '../visites.js';
 import { paysPlongee } from './cv.js';
 
 const cle = id => `plongee-journal:visiteur:${id}`;
@@ -34,16 +34,31 @@ async function apresSplash() {
  * @param {{id:string, proprio:string, dives:Array, canal:string}} o
  * @returns {Promise<void>} quand le visiteur est entré
  */
-export async function accueilVisiteur({ id, proprio, dives, canal }) {
+/** Le nom d'un écran, tel qu'il apparaîtra dans mon historique des visites. */
+function nommeur(dives, buddies) {
+  return chemin => {
+    const [racine, x] = chemin.split('/');
+    if (racine === 'dive' && x) { const d = dives.find(v => v.id === x); return d ? `n°${d.numero ?? '?'} ${d.lieuNom || ''}`.trim() : 'une plongée'; }
+    if (racine === 'buddy' && x) { const b = buddies.find(v => v.id === x); return b ? `fiche de ${b.prenom || '?'}` : 'un plongeur'; }
+    return { dives: 'Plongées', stats: 'Stats', buddies: 'Plongeurs', divers: 'Profil', cv: 'Qui je suis', mn90: 'MN90',
+      seances: 'Séances', calendar: 'Agenda', carte: 'Carte', reglages: 'Réglages' }[racine] || racine;
+  };
+}
+
+export async function accueilVisiteur({ id, proprio, dives, canal, buddies = [] }) {
   const deja = lire(id);
+  // Une visite = une session : l'entrée, puis ce qui est regardé.
+  const sid = nouvelleSession();
+  const suivre = prenom => suivreParcours({ canal, prenom, sid, nommer: nommeur(dives, buddies) });
   if (deja?.prenom) {
     // Déjà entré : une visite notée, au plus une fois par jour.
     const aujourdhui = new Date().toISOString().slice(0, 10);
     if (deja.vuLe !== aujourdhui) {
       const plongee = dives.find(d => d.id === deja.plongeeId) || null;
-      annoncerVisite(canal, { prenom: deja.prenom, date: deja.date, lieu: `${deja.lieu} (retour)`, plongee, ok: true });
+      annoncerVisite(canal, { prenom: deja.prenom, date: deja.date, lieu: `${deja.lieu} (retour)`, plongee, ok: true, sid });
       ecrire(id, { ...deja, vuLe: aujourdhui });
     }
+    suivre(deja.prenom);
     return;
   }
   await apresSplash();
@@ -63,13 +78,14 @@ export async function accueilVisiteur({ id, proprio, dives, canal }) {
         const { ok, plongee } = verifierVisiteur(saisie, dives, nomsPays);
         essais++;
         // Je suis prévenu dans les deux cas (une tentative ratée aussi, trois au plus).
-        if (ok || essais <= 3) annoncerVisite(canal, { ...saisie, plongee, ok });
+        if (ok || essais <= 3) annoncerVisite(canal, { ...saisie, plongee, ok, sid });
         if (!ok) {
           bouton.disabled = false;
           message.textContent = `Je ne retrouve pas cette plongée avec ${proprio}. Vérifie la date (à quelques jours près) et le lieu, ou essaie le pays.`;
           return;
         }
         ecrire(id, { ...saisie, plongeeId: plongee.id, vuLe: new Date().toISOString().slice(0, 10) });
+        suivre(saisie.prenom);
         voile.classList.add('part');
         setTimeout(() => { voile.remove(); resolve(); }, 350);
       },

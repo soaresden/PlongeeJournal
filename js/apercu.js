@@ -159,6 +159,8 @@ const courbe = (samples, dive = {}) => samples?.length
 export async function apercuPlongee(id, { retour = null, onClose = null } = {}) {
   const d = structuredClone(await store.getDive(id));
   if (!d) return toast('Plongée introuvable', true);
+  // (Carnet partagé : noté dans le parcours du visiteur.)
+  window.dispatchEvent(new CustomEvent('pj-vue', { detail: `n°${d.numero ?? '?'} ${d.lieuNom || ''}`.trim() }));
   const certifs = await store.listCertifications(d.diverId);
   const buddies = await store.listBuddies();
 
@@ -315,6 +317,7 @@ export function niveauDeLaPlongee(d, certifs) {
 export async function apercuSeance(id, { retour = null, onClose = null } = {}) {
   const s = structuredClone(await store.getSeance(id));
   if (!s) return toast('Séance introuvable', true);
+  window.dispatchEvent(new CustomEvent('pj-vue', { detail: `séance ${s.type || ''} du ${s.date || '?'}` }));
   const t = typeSeance(s.type);
 
   const temoin = el('span.apercu-temoin');
