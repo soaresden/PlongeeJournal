@@ -303,15 +303,24 @@ async function sectionPartage() {
         } })),
       visites,
       // La feuille Google qui garde toutes les visites (ntfy : 12 h seulement).
+      // (une erreur de publication remonte : elle est affichée, et l'appli réessaiera à l'ouverture)
       blocFeuille(p, async actuel => {
         try {
           const { publierPartage } = await import('../partage.js');
           const moi = await store.getDiver(await store.getActiveDiverId());
-          const n = await publierPartage(await store.raw(), actuel, { auteur: moi?.prenom || '' });
-          await store.saveSettings({ partage: { ...actuel, siteId: n.siteId, majLe: n.majLe, canal: n.canal } });
-        } catch (e) { toast(e.message, true); }
-        rendre();
-      }));
+          const { lien: _l, ...publie } = await publierPartage(await store.raw(), actuel, { auteur: moi?.prenom || '' });
+          await store.saveSettings({ partage: { ...actuel, ...publie } });
+        } finally { rendre(); }
+      }),
+      // Les vidéos dans le carnet partagé : à moi de choisir (le lien pCloud devient lisible)
+      reglages.videos?.lien ? el('label.partage-videos', {},
+        el('input', { type: 'checkbox', checked: !!reglages.videosPartagees, onchange: async e => {
+          await store.saveSettings({ videosPartagees: e.target.checked });
+          await publier(e.target, p);
+        } }),
+        el('span', {}, el('b', { text: '🎬 Montrer mes vidéos dans le carnet partagé' }),
+          el('span.hint', { style: { display: 'block', margin: '2px 0 0' }, text: 'Les visiteurs voient et lisent les vidéos de chaque plongée. '
+            + 'Ton lien pCloud devient lisible dans la copie publiée (dépôt public).' }))) : null);
   };
   async function publier(bouton, actuel) {
     bouton.disabled = true;
@@ -321,7 +330,8 @@ async function sectionPartage() {
       const { publierPartage } = await import('../partage.js');
       const moi = await store.getDiver(await store.getActiveDiverId());
       const p = await publierPartage(await store.raw(), actuel || {}, { auteur: moi?.prenom || '' });
-      await store.saveSettings({ partage: { ...(actuel || {}), siteId: p.siteId, majLe: p.majLe, canal: p.canal } });
+      const { lien: _l, ...publie } = p;
+      await store.saveSettings({ partage: { ...(actuel || {}), ...publie } });
       toast(actuel ? 'Lien mis à jour' : 'Lien créé : copie-le et envoie-le');
       rendre();
     } catch (e) {

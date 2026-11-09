@@ -923,3 +923,12 @@ img.profil-av.photo { object-fit: cover; padding: 0; border-radius: 50%; }
 .vp-liste { padding: 0 10px 8px; }
 .vp-liste .card.visite { margin: 6px 0; }
 .visite-suppr { flex: none; padding: 4px 8px; }
+.partage-videos { display: flex; gap: 10px; align-items: flex-start; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); cursor: pointer; }
+.partage-videos input { margin-top: 3px; width: 18px; height: 18px; flex: none; }
+
+/* Qui je suis, en portrait (tablette) : la carte sous le contact d'urgence, pleine largeur */
+@media (min-width: 760px) and (orientation: portrait) {
+  .cv .cv-carte { flex-direction: column; }
+  .cv-infos { flex: 0 0 auto; overflow: visible; }
+  .cv-geo { flex: 1; min-height: 260px; }
+}

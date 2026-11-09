@@ -122,9 +122,10 @@ export async function relireVisites(canal, f = fetch) {
  * (tout l'historique), sans doublon. Lève seulement si rien n'a pu être lu.
  */
 export async function relireToutesVisites({ canal = '', feuille = '', cle = '' } = {}, f = fetch) {
-  // La feuille garde tout : quand elle est branchée, plus besoin de ntfy
+  // La feuille garde tout ; ntfy est encore relu (12 h) pour les visiteurs qui ont
+  // une ancienne copie du carnet, sans l'adresse de la feuille.
   const avecFeuille = !!(feuille && cle);
-  const sources = [canal && !avecFeuille ? relireVisites(canal, f) : null, avecFeuille ? lireFeuille(feuille, cle, f).then(l => l.map(lireMessage)) : null].filter(Boolean);
+  const sources = [canal ? relireVisites(canal, f) : null, avecFeuille ? lireFeuille(feuille, cle, f).then(l => l.map(lireMessage)) : null].filter(Boolean);
   const res = await Promise.allSettled(sources);
   const lues = res.filter(r => r.status === 'fulfilled').flatMap(r => r.value);
   if (sources.length && !res.some(r => r.status === 'fulfilled')) throw res[0].reason;

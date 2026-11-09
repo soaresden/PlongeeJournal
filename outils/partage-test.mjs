@@ -30,6 +30,12 @@ check('rien de privé : adresse, groupe sanguin, licences des autres, notes, pho
   ['B-', '76 avenue', 'L-9', 'secret', 'photos/p.jpg', 'CARTE-123'].filter(m => texte.includes(m)).join());
 // Demandé exprès : mon numéro de licence est montré.
 check('mon numéro de licence est montré (demandé)', texte.includes('A-20-1'));
+{
+  const avec = { ...carnet, settings: { ...carnet.settings, videos: { lien: 'https://e.pcloud.link/publink/show?code=SECRET1' } } };
+  check('vidéos : le lien pCloud ne part pas sans mon accord', !JSON.stringify(P.instantane(avec, {})).includes('SECRET1'));
+  avec.settings.videosPartagees = true;
+  check('vidéos : avec mon accord, le lien est dans la copie', JSON.stringify(P.instantane(avec, {})).includes('SECRET1'));
+}
 // Demandé exprès : le contact à appeler en cas d'urgence est montré.
 check('le contact d’urgence est montré (demandé)', texte.includes('0600000000') && texte.includes('Maman'));
 {

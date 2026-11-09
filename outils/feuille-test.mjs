@@ -80,7 +80,7 @@ const versFeuille = envois.find(([u]) => u.startsWith(URL_OK));
 check('visite écrite dans la feuille (sans clé, sans lire la réponse)', versFeuille && versFeuille[1].mode === 'no-cors' && !versFeuille[0].includes('cle='), JSON.stringify(envois));
 check('feuille branchée : plus rien sur ntfy (superflu)', !envois.some(([u]) => u.startsWith(V.NTFY)), JSON.stringify(envois));
 const lus2 = []; await V.relireToutesVisites({ canal: 'pj-x', feuille: URL_OK, cle }, async u => { lus2.push(u); return reponse('[]'); });
-check('feuille branchée : on ne relit que la feuille', lus2.length === 1 && lus2[0].startsWith(URL_OK), JSON.stringify(lus2));
+check('feuille branchée : relue, et ntfy aussi (anciennes copies du carnet)', lus2.some(u => u.startsWith(URL_OK)) && lus2.some(u => u.startsWith(V.NTFY)), JSON.stringify(lus2));
 V.brancherFeuille('');
 envois.length = 0;
 await V.annoncerVisite('pj-x', { prenom: 'Léa', date: '2025-03-29', lieu: 'Egypte', ok: true, sid: 's3' }, globalThis.fetch);

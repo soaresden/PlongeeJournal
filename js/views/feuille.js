@@ -35,12 +35,20 @@ export async function ouvrirBranchementFeuille(brancher) {
       valider.disabled = true; message.textContent = 'Vérification…';
       try {
         await lireFeuille(url, cle);
-        message.textContent = 'Feuille trouvée ✓ Mise à jour du lien de partage…';
+      } catch (e) {
+        message.textContent = `La feuille ne répond pas comme prévu : ${e.message}. Vérifie « Qui a accès : Tout le monde », et que le script collé est bien le dernier.`;
+        valider.disabled = false;
+        return;
+      }
+      message.textContent = 'Feuille trouvée ✓ Mise à jour du lien de partage…';
+      try {
         await brancher(url);
         toast('📒 Feuille Google branchée : les visites y sont gardées');
         close();
       } catch (e) {
-        message.textContent = `La feuille ne répond pas comme prévu : ${e.message}. Vérifie « Qui a accès : Tout le monde », et que le script collé est bien le dernier.`;
+        // La feuille est bien enregistrée ; c'est la copie partagée qui n'a pas suivi
+        message.textContent = `Feuille branchée ✓, mais le lien de partage n’a pas pu être mis à jour : ${e.message} `
+          + '— l’appli réessaiera à la prochaine ouverture (ou « ↻ Mettre à jour » dans Réglages).';
         valider.disabled = false;
       }
     } });

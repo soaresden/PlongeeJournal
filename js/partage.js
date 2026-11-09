@@ -54,7 +54,9 @@ export function instantane(carnet, { auteur = '', canal = '', feuille = '' } = {
     dives: (carnet.dives || []).filter(d => d.diverId === moi).map(sansPhoto),
     certifs: (carnet.certifs || []).filter(c => c.diverId === moi).map(c => garder(c, GARDER_BREVET)),
     seances: (carnet.seances || []).filter(s => s.diverId === moi),
-    settings: { activeDiverId: moi },
+    // Les vidéos pCloud : seulement si je l'ai choisi (le lien devient lisible dans la copie publiée)
+    settings: { activeDiverId: moi, ...(carnet.settings?.videosPartagees && carnet.settings?.videos?.lien
+      ? { videos: { lien: carnet.settings.videos.lien, autres: carnet.settings.videos.autres || {} } } : {}) },
     _supprimes: {},
   };
 }
@@ -168,7 +170,8 @@ export async function publierPartage(carnet, actuel = {}, { auteur = '' } = {}) 
     if ([403, 404].includes(e.status) || /introuvable|droit/i.test(e.message)) throw new Error(AIDE_JETON);
     throw e;
   }
-  const p = { siteId, majLe: new Date().toISOString(), canal };
+  // Ce qui est publié : la feuille des visites et le choix des vidéos (pour savoir quand republier)
+  const p = { siteId, majLe: new Date().toISOString(), canal, feuillePubliee: actuel.feuille || '', videosPubliees: !!carnet.settings?.videosPartagees };
   return { ...p, lien: lienPartage(p) };
 }
 

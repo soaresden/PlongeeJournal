@@ -169,11 +169,15 @@ export async function majPartage() {
   const derniere = ['dives', 'buddies', 'seances', 'certifs', 'divers']
     .flatMap(t => (carnet[t] || []).map(x => x.updatedAt || ''))
     .reduce((a, b) => (b > a ? b : a), '');
-  // Un ancien partage sans canal de visites : republié une fois pour l'avoir.
-  if (!derniere || (derniere <= p.majLe && p.canal)) return false;
+  // Republier si le carnet a changé, s'il manque le canal, si la feuille des
+  // visites ou le choix des vidéos ne sont pas ceux de la copie publiée.
+  const aJour = derniere && derniere <= p.majLe && p.canal
+    && (p.feuille || '') === (p.feuillePubliee || '') && !!reglages.videosPartagees === !!p.videosPubliees;
+  if (aJour) return false;
   const { publierPartage } = await import('./partage.js');
   const moi = (carnet.divers || []).find(d => d.id === carnet.settings?.activeDiverId);
   const nouveau = await publierPartage(carnet, p, { auteur: moi?.prenom || '' });
-  await store.saveSettings({ partage: { ...p, siteId: nouveau.siteId, majLe: nouveau.majLe, canal: nouveau.canal } });
+  const { lien, ...publie } = nouveau;
+  await store.saveSettings({ partage: { ...p, ...publie } });
   return true;
 }
