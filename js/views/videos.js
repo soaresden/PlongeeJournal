@@ -89,15 +89,41 @@ function lire(cfg, fichiers, i) {
     const zone = el('div.video-zone');
     const titre = el('div.hint', { style: { marginTop: '6px' } });
     let courant = i;
+    let video = null;
+    // Sauter de 5 s (en arrière ou en avant)
+    const sauter = d => {
+      if (!video) return;
+      video.currentTime = Math.max(0, Math.min((video.duration || Infinity) - 0.1, video.currentTime + d));
+      const bulle = el('div.video-saut', { text: d > 0 ? '5 s ⏩' : '⏪ 5 s' });
+      bulle.classList.add(d > 0 ? 'droite' : 'gauche');
+      zone.append(bulle); setTimeout(() => bulle.remove(), 600);
+    };
+    const sauts = el('div.btn-row.video-sauts', { hidden: true },
+      el('button.btn.sm', { type: 'button', text: '⏪ 5 s', title: 'Reculer de 5 secondes', onclick: () => sauter(-5) }),
+      el('button.btn.sm', { type: 'button', text: '5 s ⏩', title: 'Avancer de 5 secondes', onclick: () => sauter(5) }));
     const montrer = async () => {
       const f = fichiers[courant];
       titre.textContent = `${courant + 1}/${fichiers.length} · ${f.nom}`;
       zone.replaceChildren(el('div.hint', { text: 'Chargement…' }));
       try {
         const url = await urlLecture(cfg, f);
-        zone.replaceChildren(f.video
+        video = f.video
           ? el('video', { src: url, controls: true, autoplay: true, playsinline: true, preload: 'metadata', poster: urlMiniature(cfg, f.fileid, '640x480') })
-          : el('img', { src: url, alt: f.nom }));
+          : null;
+        sauts.hidden = !video;
+        // Double-toucher à gauche / à droite de l'image : −5 s / +5 s
+        if (video) {
+          let dernier = 0;
+          video.addEventListener('pointerup', e => {
+            const t = Date.now();
+            if (t - dernier < 320) {
+              const r = video.getBoundingClientRect(), x = e.clientX - r.left;
+              if (x < r.width * 0.35) sauter(-5); else if (x > r.width * 0.65) sauter(5);
+              dernier = 0;
+            } else dernier = t;
+          });
+        }
+        zone.replaceChildren(video || el('img', { src: url, alt: f.nom }));
       } catch (e) {
         zone.replaceChildren(el('img', { src: urlMiniature(cfg, f.fileid, '1024x768'), alt: f.nom }),
           el('div.hint', { text: `Lecture impossible ici (${e.message}) : ouvre-la dans pCloud.` }));
@@ -105,7 +131,7 @@ function lire(cfg, fichiers, i) {
     };
     montrer();
     return el('div.video-lecteur', {},
-      zone, titre,
+      zone, sauts, titre,
       el('div.btn-row', {},
         fichiers.length > 1 ? el('button.btn.sm', { type: 'button', text: '‹', onclick: () => { courant = (courant - 1 + fichiers.length) % fichiers.length; montrer(); } }) : null,
         fichiers.length > 1 ? el('button.btn.sm', { type: 'button', text: '›', onclick: () => { courant = (courant + 1) % fichiers.length; montrer(); } }) : null,
