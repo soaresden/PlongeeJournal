@@ -319,6 +319,14 @@ async function majOeil() {
 }
 document.addEventListener('pj-visites-vues', () => majOeil());
 
+// Un thème choisi : l'écran affiché se redessine aussitôt (graphiques, carte,
+// pastilles prennent les nouvelles couleurs) — sauf un formulaire en cours.
+document.addEventListener('theme-change', () => {
+  const ch = currentPath();
+  if (/\/edit$|\/new$|^dive\/ancienne/.test(ch)) return;
+  navigate(ch, true);
+});
+
 async function annoncerVisites(nouvelles) {
   await majOeil();
   const entrees = nouvelles.filter(v => v.genre !== 'parcours');

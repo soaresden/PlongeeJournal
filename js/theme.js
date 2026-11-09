@@ -7,46 +7,55 @@
 // ============================================================
 
 const CLE = 'plongee-journal:theme';
+const CLE_MN90 = 'mn90-theme';   // le thème de MN90 Mobile : les deux applis partagent le même
 
-/** id, nom, et trois couleurs pour la pastille d'aperçu (fond, surface, accent). */
+/**
+ * Les thèmes de MN90 Mobile, à l'identique (couleurs : css/themes.css,
+ * générées depuis le style.css de MN90). id, nom, emoji, sombre ou clair.
+ */
 export const THEMES = [
-  { id: 'auto',      nom: 'Automatique',   sous: 'Suit le réglage clair / sombre de l’appareil', apercu: ['#f4f8fb', '#0b1f33', '#1aa3c4'] },
-  { id: 'plongee',   nom: 'Plongée',       sous: 'Bleu nuit, reflets cyan',        apercu: ['#06131f', '#102a41', '#24c6dc'] },
-  { id: 'abysse',    nom: 'Abysse',        sous: 'Noir profond, bioluminescence',   apercu: ['#020409', '#0a0f1c', '#7af0ff'] },
-  { id: 'clair',     nom: 'Clair',         sous: 'Blanc, net, lisible en plein soleil', apercu: ['#f4f7fa', '#ffffff', '#0a7bc2'] },
-  { id: 'cousteau',  nom: 'Cousteau',      sous: 'Bonnet rouge, pont de la Calypso', apercu: ['#f3ecdc', '#fffaf0', '#c8102e'] },
-  { id: 'plage',     nom: 'Plage',         sous: 'Sable chaud, coucher de soleil',  apercu: ['#fbf3e6', '#fffdf8', '#f26b3a'] },
-  { id: 'lagon',     nom: 'Eau turquoise', sous: 'Lagon clair, fond de sable blanc', apercu: ['#e7f8f6', '#ffffff', '#0aa79c'] },
-  { id: 'corail',    nom: 'Récif corallien', sous: 'Nuit tropicale, corail et anémone', apercu: ['#1a0f1d', '#2a1830', '#ff6f61'] },
-  { id: 'epave',     nom: 'Épave',         sous: 'Acier rouillé, laiton, eau verte', apercu: ['#0f1512', '#1b2420', '#d99a3d'] },
-  { id: 'kelp',      nom: 'Forêt de kelp', sous: 'Vert océan, lumière filtrée',     apercu: ['#071612', '#0f2620', '#5fd39a'] },
-  { id: 'dauphin',   nom: 'Dauphin',       sous: 'Coucher de soleil : rose, violet, orangé', apercu: ['#f4f1fb', '#ffffff', '#f0427a'], barre: 'linear-gradient(105deg, #6e48f0, #ec4886 58%, #ff9254)' },
-  { id: 'tortue',    nom: 'Tortue',        sous: 'Carapace verte et ambrée, eau turquoise', apercu: ['#f1f4e3', '#fffef6', '#1f8f5b'], barre: 'linear-gradient(105deg, #19684a, #4a843a 55%, #b87c22)' },
-  { id: 'holi',      nom: 'Holi',          sous: 'La fête des couleurs : poudres magenta, safran, vert, indigo', apercu: ['#fff8f2', '#ffffff', '#e0157f'], barre: 'linear-gradient(105deg, #d6157f, #ef6c00 34%, #10965a 68%, #2d55dc)' },
-  { id: 'clown',     nom: 'Poisson-clown', sous: 'Orange vif et blanc, dans son anémone', apercu: ['#fff6ee', '#ffffff', '#f2600c'], barre: 'linear-gradient(105deg, #ff7a1f, #f05a00)' },
-  { id: 'nudibranche', nom: 'Nudibranche', sous: 'Nuit violette, orange fluo, bleu électrique', apercu: ['#140a24', '#22133b', '#ff8a1f'], barre: 'linear-gradient(105deg, #461a96, #2448cd)' },
+  { id: 'submarine-light', emoji: '☀️', nom: 'Sous-marin clair' },
+  { id: 'dark', emoji: '🌑', nom: 'Nuit', sombre: true },
+  { id: 'deep-ocean', emoji: '🌊', nom: 'Grands fonds', sombre: true },
+  { id: 'sunset', emoji: '🌅', nom: 'Coucher de soleil' },
+  { id: 'octobre-rose', emoji: '🎗️', nom: 'Octobre rose' },
+  { id: 'ouistreham', emoji: '⛵', nom: 'Ouistreham' },
+  { id: 'tortue', emoji: '🐢', nom: 'Tortue' },
+  { id: 'hippocampe', emoji: '🐉', nom: 'Hippocampe', sombre: true },
+  { id: 'crevette', emoji: '🦐', nom: 'Crevette' },
+  { id: 'nudibranche', emoji: '🐌', nom: 'Nudibranche', sombre: true },
+  { id: 'poisson-globe', emoji: '🐡', nom: 'Poisson-globe' },
+  { id: 'poisson-clown', emoji: '🐠', nom: 'Poisson-clown' },
+  { id: 'axolotl', emoji: '🦎', nom: 'Axolotl' },
+  { id: 'abysses', emoji: '🦑', nom: 'Créature des abysses', sombre: true },
+  { id: 'lochness', emoji: '🦕', nom: 'Loch Ness', sombre: true },
 ];
+const DEFAUT = 'nudibranche';
 
-const SOMBRES = new Set(['plongee', 'abysse', 'corail', 'epave', 'kelp', 'nudibranche']);
+// Les anciens thèmes du carnet → le plus proche de MN90.
+const ANCIENS = { auto: 'submarine-light', plongee: 'dark', abysse: 'abysses', clair: 'submarine-light', cousteau: 'ouistreham',
+  plage: 'sunset', lagon: 'submarine-light', corail: 'octobre-rose', epave: 'lochness', kelp: 'lochness', dauphin: 'octobre-rose',
+  holi: 'axolotl', clown: 'poisson-clown' };
 
 export function themeChoisi() {
   // Sans choix sur cet appareil (et pour qui ouvre un lien de partage) : Nudibranche.
-  try { return localStorage.getItem(CLE) || 'nudibranche'; } catch { return 'nudibranche'; }
+  let id = null;
+  try { id = localStorage.getItem(CLE) || localStorage.getItem(CLE_MN90); } catch { /* navigation privée */ }
+  id = ANCIENS[id] || id;
+  return THEMES.some(t => t.id === id) ? id : DEFAUT;
 }
 
-const systemeSombre = () => window.matchMedia?.('(prefers-color-scheme: dark)').matches;
-
-/** Thème réellement appliqué (« auto » résolu). */
+/** Thème réellement appliqué. */
 export function themeEffectif(id = themeChoisi()) {
-  if (id === 'auto') return systemeSombre() ? 'plongee' : 'clair';
-  return THEMES.some(t => t.id === id) ? id : 'nudibranche';
+  id = ANCIENS[id] || id;
+  return THEMES.some(t => t.id === id) ? id : DEFAUT;
 }
 
 export function appliquerTheme(id = themeChoisi()) {
   const eff = themeEffectif(id);
   const racine = document.documentElement;
   racine.dataset.theme = eff;
-  racine.style.colorScheme = SOMBRES.has(eff) ? 'dark' : 'light';
+  racine.style.colorScheme = THEMES.find(t => t.id === eff)?.sombre ? 'dark' : 'light';
 
   // Couleur de la barre d'état Android / iOS : celle du fond du thème.
   requestAnimationFrame(() => {
@@ -59,11 +68,20 @@ export function appliquerTheme(id = themeChoisi()) {
 }
 
 export function choisirTheme(id) {
-  try { localStorage.setItem(CLE, id); } catch { /* mémoire pleine */ }
+  try { localStorage.setItem(CLE, id); localStorage.setItem(CLE_MN90, id); } catch { /* mémoire pleine */ }
   appliquerTheme(id);
+  // L'onglet MN90 ouvert (même origine) change aussi, en direct
+  document.querySelectorAll('iframe.mn90-cadre').forEach(f => { try { f.contentWindow?.MN90Theme?.apply(id); } catch { /* autre origine */ } });
+}
+
+// Choisi dans MN90 (l'onglet MN90, ou MN90 dans un autre onglet) : le carnet suit.
+if (typeof window !== 'undefined') {
+  window.addEventListener('storage', e => {
+    if (e.key !== CLE_MN90 || !e.newValue || !THEMES.some(t => t.id === e.newValue) || e.newValue === themeChoisi()) return;
+    try { localStorage.setItem(CLE, e.newValue); } catch { /* */ }
+    appliquerTheme(e.newValue);
+    document.dispatchEvent(new CustomEvent('theme-change', { detail: e.newValue }));
+  });
 }
 
 
-// « Automatique » suit l'appareil en direct.
-window.matchMedia?.('(prefers-color-scheme: dark)')
-  .addEventListener?.('change', () => { if (themeChoisi() === 'auto') appliquerTheme(); });

@@ -13,15 +13,17 @@ import { THEMES, themeChoisi, choisirTheme, appliquerTheme } from './theme.js';
 
 let volet = null;
 
-/** La pastille d'aperçu d'un thème (fond, carte, accent, barre). */
+/**
+ * La vignette d'aperçu d'un thème : elle porte data-theme, elle s'affiche
+ * donc avec les vraies couleurs de son thème (fond, décor, barre, carte, accent).
+ */
 export function pastilleTheme(t) {
-  const [fond, surface, accent] = t.apercu;
-  return el('span.theme-apercu', { style: { background: fond } },
-    t.barre ? el('span.theme-barre', { style: { background: t.barre } }) : null,
-    el('span.theme-carte', { style: { background: surface } },
-      el('span.theme-trait', { style: { background: accent } }),
-      el('span.theme-trait.court', { style: { background: accent, opacity: '.45' } })),
-    el('span.theme-rond', { style: { background: accent } }));
+  const v = el('span.theme-apercu', {},
+    el('span.theme-barre'),
+    el('span.theme-carte', {}, el('span.theme-trait'), el('span.theme-trait.court')),
+    el('span.theme-rond'));
+  v.dataset.theme = t.id;
+  return v;
 }
 
 export const estOuvert = () => !!volet?.classList.contains('ouvert');
@@ -59,9 +61,9 @@ export function ouvrirVoletTheme() {
   };
 
   THEMES.forEach(t => {
-    const b = el('button.theme-choix', { type: 'button', title: t.sous,
+    const b = el('button.theme-choix', { type: 'button', title: t.nom,
       onclick: () => { choisirTheme(t.id); marquer(); document.dispatchEvent(new window.CustomEvent('theme-change', { detail: t.id })); } },
-      pastilleTheme(t), el('span.theme-nom', { text: t.nom }));
+      pastilleTheme(t), el('span.theme-nom', { text: `${t.emoji} ${t.nom}` }));
     b.dataset.id = t.id;
     // À la souris : un aperçu au survol, sans rien enregistrer.
     b.addEventListener('pointerenter', e => { if (e.pointerType === 'mouse') appliquerTheme(t.id); });

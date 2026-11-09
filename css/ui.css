@@ -932,3 +932,16 @@ img.profil-av.photo { object-fit: cover; padding: 0; border-radius: 50%; }
   .cv-infos { flex: 0 0 auto; overflow: visible; }
   .cv-geo { flex: 1; min-height: 260px; }
 }
+
+/* --- Thèmes MN90 : vignettes vivantes (data-theme sur la vignette) et décor en filigrane --- */
+.theme-apercu { background-color: var(--bg); background-image: var(--deco, none), var(--bg-image);
+  background-size: 70px 70px, cover; border: 1px solid var(--line); }
+.theme-apercu .theme-barre { background: var(--bar); border-bottom: 1px solid var(--line); height: 10px; }
+.theme-apercu .theme-carte { background: var(--surface); border: 1px solid var(--line); top: 16px; box-shadow: var(--shadow); }
+.theme-apercu .theme-trait { background: var(--text-dim); }
+.theme-apercu .theme-trait:first-child { background: var(--accent); width: 60%; }
+.theme-apercu .theme-rond { background: linear-gradient(135deg, var(--accent), var(--accent-2)); }
+.theme-choix[aria-pressed="true"] .theme-apercu::after { content: '✓'; position: absolute; top: 3px; right: 4px; width: 17px; height: 17px; border-radius: 50%;
+  background: var(--accent); color: var(--on-accent); font-size: 11px; font-weight: 900; display: grid; place-items: center; }
+/* Le décor du thème (emojis en filigrane) sur le fond de l'appli */
+body { background-image: var(--deco, none), var(--bg-image); background-size: 200px 200px, cover; background-attachment: fixed, fixed; }

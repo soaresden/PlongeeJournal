@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="fr" data-theme="plongee">
+<html lang="fr" data-theme="nudibranche">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=5">
-<meta name="theme-color" content="#06131f">
+<meta name="theme-color" content="#170d2b">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -15,9 +15,11 @@
 <script>
   // Thème posé avant le premier rendu : pas d'éclair blanc ou bleu.
   try {
-    var t = localStorage.getItem('plongee-journal:theme') || 'plongee';
-    if (t === 'auto') t = matchMedia('(prefers-color-scheme: dark)').matches ? 'plongee' : 'clair';
-    document.documentElement.dataset.theme = t;
+    // (les anciens thèmes du carnet → les thèmes de MN90 : voir js/theme.js)
+    var A = { auto: 'submarine-light', plongee: 'dark', abysse: 'abysses', clair: 'submarine-light', cousteau: 'ouistreham', plage: 'sunset',
+      lagon: 'submarine-light', corail: 'octobre-rose', epave: 'lochness', kelp: 'lochness', dauphin: 'octobre-rose', holi: 'axolotl', clown: 'poisson-clown' };
+    var t = localStorage.getItem('plongee-journal:theme') || localStorage.getItem('mn90-theme') || 'nudibranche';
+    document.documentElement.dataset.theme = A[t] || t;
   } catch (e) {}
 </script>
 <link rel="stylesheet" href="./css/themes.css">

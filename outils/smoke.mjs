@@ -281,7 +281,7 @@ check('réglages : l’état du stockage est expliqué',
   check('thème : le volet s’ouvre, tous les thèmes dedans', v?.classList.contains('ouvert') && v.querySelectorAll('.theme-choix').length >= 10, String(v?.querySelectorAll('.theme-choix').length));
   check('thème : sans voile sombre (la page reste visible)', !document.querySelector('.apercu-fond.ouvert'), '');
   const avant = document.documentElement.dataset.theme;
-  const autre = [...v.querySelectorAll('.theme-choix')].find(b => !['auto', avant].includes(b.dataset.id));
+  const autre = [...v.querySelectorAll('.theme-choix')].find(b => b.dataset.id !== avant);
   autre.click();
   check('thème : appliqué tout de suite, volet toujours ouvert', document.documentElement.dataset.theme === autre.dataset.id && v.classList.contains('ouvert')
     && autre.getAttribute('aria-pressed') === 'true', document.documentElement.dataset.theme);
