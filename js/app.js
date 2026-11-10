@@ -72,6 +72,7 @@ route('suunto',           suuntoView);
 route('suunto-cloud',     suuntoCloudView);
 route('montre',           montreView);
 route('visites',          async () => (await import('./views/visites.js')).visitesView());
+route('corps',            async () => (await import('./views/corps.js')).corpsView());
 route('videos',           async () => (await import('./views/videos.js')).videosView());
 route('montre-aide',      montreAideView);
 route('urgence',          urgenceView);
@@ -444,7 +445,7 @@ onRender(async path => {
     dives: 'dives', dive: path === 'dive/new' ? 'dive/new' : 'dives',
     divers: 'divers', diver: 'divers',
     buddies: 'buddies', buddy: 'buddies', stats: 'stats',
-    reglages: 'reglages', mn90: 'mn90', cv: 'divers', suunto: 'divers', 'suunto-cloud': 'divers', montre: 'divers', 'montre-aide': 'divers', videos: 'divers', visites: 'divers', urgence: 'divers',
+    reglages: 'reglages', mn90: 'mn90', cv: 'divers', suunto: 'divers', 'suunto-cloud': 'divers', montre: 'divers', 'montre-aide': 'divers', videos: 'divers', visites: 'divers', urgence: 'divers', corps: 'stats',
     seances: 'dives', seance: 'dives',
   }[root];
   $$('#tabbar .tab').forEach(t => t.classList.toggle('active', t.dataset.route === tabFor));

@@ -951,3 +951,41 @@ body { background-image: var(--deco, none), var(--bg-image); background-size: 20
   color: #fff; font-weight: 700; pointer-events: none; animation: video-saut .6s ease-out forwards; }
 .video-saut.gauche { left: 12%; } .video-saut.droite { right: 12%; }
 @keyframes video-saut { from { opacity: 1; } to { opacity: 0; } }
+
+/* --- Azote & oxygène ------------------------------------------------- */
+.corps-place { padding: 0 !important; background: none !important; border: 0 !important; box-shadow: none !important; }
+.corps-carte { display: block; width: 100%; text-align: left; cursor: pointer; font: inherit; color: inherit; margin: 0; }
+.corps-carte-tete { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 8px; }
+.corps-feux { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; margin-bottom: 12px; }
+.corps-feux.compact { grid-template-columns: repeat(4, 1fr); margin-bottom: 6px; }
+.corps-feu { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: 14px; background: var(--surface); border: 1px solid var(--line); }
+.corps-feux.compact .corps-feu { padding: 6px 8px; align-items: center; gap: 7px; }
+.corps-feu-txt { display: flex; flex-direction: column; gap: 2px; font-size: 13px; line-height: 1.35; min-width: 0; }
+.corps-feu-txt span { color: var(--text-dim); }
+.corps-lampe { flex: none; width: 16px; height: 16px; border-radius: 50%; margin-top: 2px; }
+.corps-feux.compact .corps-lampe { width: 12px; height: 12px; margin: 0; }
+.corps-feu.vert .corps-lampe { background: #22c55e; box-shadow: 0 0 10px #22c55e; }
+.corps-feu.orange .corps-lampe { background: #f59e0b; box-shadow: 0 0 10px #f59e0b; }
+.corps-feu.rouge .corps-lampe { background: #ef4444; box-shadow: 0 0 12px #ef4444; animation: corps-clign 1.6s ease-in-out infinite; }
+@keyframes corps-clign { 50% { opacity: .55; } }
+.corps-courbe, .corps-comp { width: 100%; height: auto; display: block; }
+.corps-titre { margin: 0 0 6px; font-size: 15px; }
+.corps-lbl { font-size: 11px; fill: var(--text-mute); }
+.corps-jour { stroke: var(--line); stroke-width: 1; }
+.corps-limite { stroke: var(--danger); stroke-width: 1.5; stroke-dasharray: 6 4; }
+.corps-prudence { stroke: var(--warn); stroke-width: 1.2; stroke-dasharray: 3 4; }
+.corps-repere { stroke: var(--line); stroke-width: 1; stroke-dasharray: 2 5; }
+.corps-limite-txt { fill: var(--danger); } .corps-prudence-txt { fill: var(--warn); }
+.corps-aire { fill: rgba(var(--accent-rgb), .18); }
+.corps-ligne { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; }
+.corps-case { fill: var(--surface-2); }
+.corps-chiffres { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.corps-chiffres > div { background: var(--surface-2); border-radius: 12px; padding: 8px 10px; display: flex; flex-direction: column; }
+.corps-chiffres b { font-size: 20px; } .corps-chiffres span { font-size: 11.5px; color: var(--text-mute); }
+.corps-ligne { display: flex; gap: 10px; align-items: center; padding: 8px 0; border-top: 1px solid var(--line); }
+.corps-pastille { flex: none; width: 12px; height: 12px; border-radius: 50%; }
+@media (max-width: 520px) { .corps-feux.compact { grid-template-columns: repeat(2, 1fr); } .corps-chiffres b { font-size: 17px; } }
+.corps-lbl { font-size: 19px; } .corps-lbl.petit { font-size: 16px; }
+.corps-carte .corps-lbl { font-size: 11px; }
+.corps-zoom-boutons { display: flex; gap: 6px; margin: 4px 0 8px; }
+.corps-zoom-boutons .chip.on { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }

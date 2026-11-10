@@ -145,7 +145,10 @@ export async function statsView() {
       text: 'D’après la courbe de la montre, sous 1,2 m, relevée toutes les 10 s : à 10 s près. La statique en surface ne se mesure pas.' }))
     : el('div.hint', { text: 'Aucune séance avec la courbe de la montre pour l’instant.' });
 
+  // Azote & oxygène sur 7 jours : en tête, c'est ce qui sert avant la prochaine plongée
+  const corps = await (await import('./corps.js')).carteCorps().catch(() => null);
   const tb = el('div.tb', {},
+    corps ? el('div.tb-carte.plein.corps-place', {}, corps) : null,
     tuiles,
     carte('Par année', histo, { aide: 'touche une année', classe: '.plein' }),
     niveaux.length ? carte('Par niveau', barres(niveaux), { aide: st.niveau ? `aujourd’hui : ${st.niveau}` : '' }) : null,
