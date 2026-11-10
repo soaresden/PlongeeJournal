@@ -9,7 +9,7 @@
 import { el, fmtDate } from '../lib.js';
 import { store } from '../store.js';
 import { navigate } from '../router.js';
-import { bilanCorps, feux, conseils, ZHL16C, saturation } from '../corps.js';
+import { bilanCorps, conseils, zonesDuCorps, prochainePlongee, LIMITES_O2 } from '../corps.js';
 
 const NS = 'http://www.w3.org/2000/svg';
 const s = (tag, attrs = {}, ...enfants) => {
@@ -27,22 +27,61 @@ async function bilan() {
   return bilanCorps(dives);
 }
 
-/** L'assistant : le verdict et ses raisons. */
-function assistant(b, { compact = false } = {}) {
-  const a = conseils(b);
-  const ico = { stop: '⛔', attention: '⚠️', ok: '✅', info: '✈️' };
-  return el(`div.corps-assistant.${a.niveau}${compact ? '.compact' : ''}`, {},
-    el('div.corps-verdict', { text: a.titre }),
-    compact
-      ? el('div.corps-raison', { text: a.points[0]?.texte || '' })
-      : el('ul.corps-raisons', {}, ...a.points.map(p => el(`li.${p.niveau}`, {}, el('span', { text: ico[p.niveau] || '•' }), el('span', { text: p.texte })))));
+// Les couleurs d'état (vert / orange / rouge)
+const niveauAzote = v => (v >= 50 ? 'rouge' : v >= 20 ? 'orange' : 'vert');
+const niveauCns = v => (v >= LIMITES_O2.cnsPrudence ? 'rouge' : v >= 40 ? 'orange' : 'vert');
+const niveauOtu = m => { const r = Math.max(m.otu24 / LIMITES_O2.otu24, m.otu7 / LIMITES_O2.otu7); return r >= 0.85 ? 'rouge' : r >= 0.5 ? 'orange' : 'vert'; };
+const pire = (...n) => (n.includes('rouge') ? 'rouge' : n.includes('orange') ? 'orange' : 'vert');
+const COUL = { vert: '#22c55e', orange: '#f59e0b', rouge: '#ef4444' };
+const quand = ms => {
+  const d = new Date(ms), auj = new Date();
+  const j = d.toDateString() === auj.toDateString() ? '' : `${d.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric' })} `;
+  return `${j}${d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`;
+};
+
+/** Le bonhomme plongeur : chaque zone colorée selon son état. */
+function bonhomme(etat, { taille = 130 } = {}) {
+  const c = k => COUL[etat[k]];
+  const svg = s('svg', { viewBox: '0 0 120 230', width: taille, height: taille * 230 / 120, class: 'corps-bonhomme', role: 'img', 'aria-label': 'Mon corps par zones' });
+  svg.append(
+    s('rect', { x: 43, y: 50, width: 34, height: 74, rx: 10, fill: '#6b7280' }),                       // le bloc, derrière
+    // jambes et bras : les muscles
+    s('rect', { x: 41, y: 128, width: 16, height: 62, rx: 7, fill: c('muscles') }),
+    s('rect', { x: 63, y: 128, width: 16, height: 62, rx: 7, fill: c('muscles') }),
+    s('rect', { x: 19, y: 58, width: 13, height: 60, rx: 6, fill: c('muscles'), transform: 'rotate(8 25 58)' }),
+    s('rect', { x: 88, y: 58, width: 13, height: 60, rx: 6, fill: c('muscles'), transform: 'rotate(-8 95 58)' }),
+    // les palmes
+    s('path', { d: 'M38 188 L60 188 L64 222 L30 222 Z', fill: 'var(--text-mute)' }),
+    s('path', { d: 'M60 188 L82 188 L90 222 L56 222 Z', fill: 'var(--text-mute)' }),
+    // le tronc : poumons (OTU), ventre et hanches (graisses)
+    s('rect', { x: 34, y: 52, width: 52, height: 46, rx: 14, fill: c('poumons') }),
+    s('rect', { x: 37, y: 96, width: 46, height: 34, rx: 12, fill: c('graisses') }),
+    // les articulations : épaules, coudes, genoux
+    ...[[33, 58], [87, 58], [26, 92], [94, 92], [49, 160], [71, 160]].map(([cx, cy]) => s('circle', { cx, cy, r: 6.5, fill: c('articulations'), stroke: 'var(--surface)', 'stroke-width': 2 })),
+    // la tête : sang & cerveau, et le masque
+    s('circle', { cx: 60, cy: 28, r: 20, fill: c('tete') }),
+    s('rect', { x: 46, y: 20, width: 28, height: 12, rx: 5, fill: '#bfe7ff', stroke: '#1f2937', 'stroke-width': 2 }),
+    s('path', { d: 'M66 38 q10 2 12 10', fill: 'none', stroke: '#1f2937', 'stroke-width': 3, 'stroke-linecap': 'round' }));
+  return svg;
 }
 
-/** Les quatre feux. */
-function rangeeFeux(b, { compact = false } = {}) {
-  return el(`div.corps-feux${compact ? '.compact' : ''}`, {}, ...feux(b).map(f => el(`div.corps-feu.${f.couleur}`, {},
-    el('span.corps-lampe'),
-    el('span.corps-feu-txt', {}, el('b', { text: f.titre }), compact ? null : el('span', { text: f.texte })))));
+/** L'état de chaque zone, et le verdict. */
+function lecture(b) {
+  const m = b.maintenant, zones = zonesDuCorps(b), z = id => zones.find(x => x.id === id);
+  const etat = {
+    tete: pire(niveauAzote(z('sang').charge), niveauCns(m.cns)),
+    poumons: niveauOtu(m),
+    muscles: niveauAzote(z('muscles').charge),
+    graisses: niveauAzote(z('graisses').charge),
+    articulations: niveauAzote(z('articulations').charge),
+  };
+  return { m, zones, etat, verdict: conseils(b), suite: prochainePlongee(b) };
+}
+
+/** Le verdict, sur une ligne. */
+function verdict(L) {
+  return el(`div.corps-verdict.${L.verdict.niveau}`, {}, el('b', { text: L.verdict.titre }),
+    L.verdict.points[0] ? el('span', { text: L.verdict.points[0].texte }) : null);
 }
 
 /** La courbe : charge en azote (compartiment le plus chargé) sur 7 jours, limites, plongées. */
@@ -116,30 +155,67 @@ function compartiments(b) {
   return svg;
 }
 
-/** La carte de l'onglet Stats : les feux et la courbe en petit ; un toucher ouvre l'écran. */
+/** La carte de l'onglet Stats : le verdict et le bonhomme ; un toucher ouvre l'écran. */
 export async function carteCorps() {
   const b = await bilan();
+  const L = lecture(b);
   return el('button.card.corps-carte', { type: 'button', onclick: () => navigate('corps') },
-    el('div.corps-carte-tete', {}, el('b', { text: '🫁 Azote & oxygène' }), el('span.hint', { style: { margin: 0 }, text: '7 jours · voir le détail ›' })),
-    assistant(b, { compact: true }),
-    rangeeFeux(b, { compact: true }),
-    b.plongees.length ? courbe(b, { hauteur: 70, mini: true }) : el('div.hint', { style: { margin: '6px 0 0' }, text: 'Aucune plongée ces 7 derniers jours : tout est au vert.' }));
+    el('div.corps-carte-tete', {}, el('b', { text: '🫁 Mon corps · 7 jours' }), el('span.hint', { style: { margin: 0 }, text: 'détail ›' })),
+    el('div.corps-carte-corps', {}, bonhomme(L.etat, { taille: 54 }), verdict(L)));
 }
 
 export async function corpsView() {
   const b = await bilan();
-  const m = b.maintenant;
-  const liste = b.plongees.slice().reverse().map(p => el('div.corps-ligne', {},
-    el('span.corps-pastille', { style: { background: couleurCharge(p.pic) } }),
-    el('div', { style: { flex: 1, minWidth: 0 } },
-      el('b', { text: `${fmtDate(p.d.date)} · ${heure(p.debut)}` }), ` ${p.d.lieuNom || ''}`,
-      el('div.hint', { style: { margin: 0 }, text: [
-        p.d.profMax ? `${p.d.profMax} m` : null, p.d.dureeMin ? `${p.d.dureeMin} min` : null,
-        p.fo2 > 0.215 ? `nitrox ${Math.round(p.fo2 * 100)} %` : 'air',
-        `pic ${Math.round(p.pic)} %`, p.deco ? 'paliers obligatoires' : null, p.estime ? 'profil estimé (pas de courbe)' : null,
-      ].filter(Boolean).join(' · ') })),
-    el('button.btn.sm.ghost', { type: 'button', text: 'Voir', onclick: () => navigate(`dive/${p.d.id}`) })));
-  // Le zoom : 7 jours, 3 jours, 24 h
+  const L = lecture(b), m = L.m, n = L.suite;
+  const pastille = niv => el(`span.corps-pt.${niv}`);
+  const sous20 = h => (h > 0 ? `OK à ${quand(b.fin + h * 36e5)}` : 'OK');
+
+  // 1. Le bonhomme et ses zones
+  const zones = el('div.corps-zones', {},
+    ...[['tete', 'Tête', `sang & cerveau · azote ${Math.round(L.zones[0].charge)} % · CNS ${Math.round(m.cns)} %`],
+      ['poumons', 'Poumons', `oxygène · ${Math.round(m.otu24)} OTU sur 24 h`],
+      ['muscles', 'Muscles', `azote ${Math.round(L.zones[1].charge)} % · ${sous20(L.zones[1].heuresSous20)}`],
+      ['graisses', 'Peau & graisses', `azote ${Math.round(L.zones[2].charge)} % · ${sous20(L.zones[2].heuresSous20)}`],
+      ['articulations', 'Articulations & os', `azote ${Math.round(L.zones[3].charge)} % · ${sous20(L.zones[3].heuresSous20)}`]]
+      .map(([k, nom, txt]) => el('div.corps-zone', {}, pastille(L.etat[k]), el('div', {}, el('b', { text: nom }), el('span', { text: txt })))));
+
+  // 2. Relevé · limite · conseil
+  const ligne = (niv, quoi, releve, limite, conseil) => el('tr', {}, el('td', {}, pastille(niv), el('b', { text: quoi })),
+    el('td', { text: releve }), el('td', { text: limite }), el('td', { text: conseil }));
+  const azoteNiv = niveauAzote(m.sat);
+  const tableau = el('table.corps-table', {},
+    el('thead', {}, el('tr', {}, ...['', 'Relevé', 'Limite', 'Conseil'].map(t => el('th', { text: t })))),
+    el('tbody', {},
+      ligne(azoteNiv, 'Azote', `${Math.round(m.sat)} %`, '100 % · prudence 85',
+        m.sat >= 20 ? `Sous 20 % à ${quand(n.aPartirDe)}` : m.sat >= 5 ? `Désaturé à ${quand(b.fin + m.desatH * 36e5)}` : 'Désaturé'),
+      ligne(niveauCns(m.cns), 'CNS · cerveau', `${Math.round(m.cns)} %`, `100 % · prudence ${LIMITES_O2.cnsPrudence}`,
+        m.cns >= 40 ? 'Évite le nitrox riche pour la prochaine' : 'RAS · se divise par 2 toutes les 90 min'),
+      ligne(niveauOtu(m), 'OTU · poumons', `${Math.round(m.otu24)}/24 h · ${Math.round(m.otu7)}/7 j`,
+        `${LIMITES_O2.otu24}/24 h · ${LIMITES_O2.otu7}/7 j`,
+        niveauOtu(m) === 'vert' ? 'RAS' : 'Moins de nitrox, plongées moins longues')));
+
+  // 3. La prochaine plongée
+  const prochaine = el('div.corps-bloc', {},
+    el('div.corps-bloc-titre', { text: '🤿 Prochaine plongée' }),
+    el('div', { text: n.reposConseille ? `Demain plutôt : journée de repos conseillée (${b.rythme.sur24h} plongées en 24 h, ${b.rythme.joursDAffilee} jour(s) d’affilée).`
+      : n.attenteH > 0 ? `À partir de ${quand(n.aPartirDe)} (azote sous 20 %).` : 'Possible dès maintenant.' }),
+    el('div.corps-ndl', {}, ...n.ndl.map(x => el('span.chip', { text: `${x.prof} m : ${x.min >= 120 ? '> 2 h' : `${x.min} min`}` }))),
+    el('div.hint', { style: { margin: '4px 0 0' }, text: `Sans palier, ${n.fo2 > 0.215 ? `au nitrox ${Math.round(n.fo2 * 100)}` : 'à l’air'}, à cette heure-là — palier de sécurité de 3 min à 3-5 m en plus.` }));
+
+  // 4. Les conseils
+  const avion = m.avion?.attente > 0 ? `✈️ Ni avion ni altitude avant ${quand(m.avion.jusqua)}.` : null;
+  const charge = m.sat >= 20 || b.rythme.sur24h >= 2;
+  const conseilsListe = [
+    ...L.verdict.points.filter(p => p.niveau !== 'info' && p.niveau !== 'ok').map(p => `⚠️ ${p.texte}`),
+    charge ? '💧 Bois de l’eau (1,5 à 2 L dans la journée) : un plongeur déshydraté élimine moins bien l’azote.' : null,
+    charge ? '😴 Repose-toi : pas d’effort, d’apnée ni de sauna dans les 3 h après la plongée.' : null,
+    avion,
+    !charge && !avion ? '✅ Rien à signaler : bonne plongée !' : null,
+  ].filter(Boolean);
+  const conseilsBloc = el('div.corps-bloc', {}, el('div.corps-bloc-titre', { text: '💡 Conseils' }),
+    el('ul.corps-conseils', {}, ...conseilsListe.map(t => el('li', { text: t }))));
+
+  // 5. Le détail, replié
   const zoom = el('div.corps-zoom');
   const montrerZoom = h => {
     zoom.replaceChildren(
@@ -148,25 +224,21 @@ export async function corpsView() {
       courbe(b, { debut: b.fin - h * 36e5 }));
   };
   montrerZoom(168);
+  const liste = b.plongees.slice().reverse().map(p => el('div.corps-ligne', {},
+    el('span.corps-pastille', { style: { background: couleurCharge(p.pic) } }),
+    el('div', { style: { flex: 1, minWidth: 0 } },
+      el('b', { text: `${fmtDate(p.d.date)} · ${heure(p.debut)}` }), ` ${p.d.lieuNom || ''}`,
+      el('div.hint', { style: { margin: 0 }, text: [p.d.profMax ? `${p.d.profMax} m` : null, p.d.dureeMin ? `${p.d.dureeMin} min` : null,
+        p.fo2 > 0.215 ? `nitrox ${Math.round(p.fo2 * 100)} %` : 'air', `pic ${Math.round(p.pic)} %`].filter(Boolean).join(' · ') })),
+    el('button.btn.sm.ghost', { type: 'button', text: 'Voir', onclick: () => navigate(`dive/${p.d.id}`) })));
+
   const node = el('div.corps', {},
-    assistant(b),
-    rangeeFeux(b),
-    el('div.card', {},
-      el('h3.corps-titre', { text: 'Charge en azote · 7 derniers jours' }),
-      el('div.hint', { style: { marginTop: 0 }, text: 'Le tissu le plus chargé, en % de sa marge : 0 % = revenu à l’équilibre, 100 % = à la limite. En dessous, tes plongées (couleur : le pic atteint).' }),
-      zoom),
-    el('div.card', {},
-      el('h3.corps-titre', { text: `Mes 16 compartiments maintenant${m.sat >= 5 ? ` · désaturation dans ~${m.desatH >= 1 ? `${Math.round(m.desatH)} h` : `${Math.round(m.desatH * 60)} min`}` : ' · désaturé'}` }),
-      compartiments(b)),
-    el('div.card', {},
-      el('h3.corps-titre', { text: 'Oxygène' }),
-      el('div.corps-chiffres', {},
-        el('div', {}, el('b', { text: `${Math.round(m.cns)} %` }), el('span', { text: 'CNS maintenant (s’efface de moitié toutes les 90 min)' })),
-        el('div', {}, el('b', { text: `${Math.round(m.otu24)}` }), el('span', { text: 'OTU sur 24 h' })),
-        el('div', {}, el('b', { text: `${Math.round(m.otu7)}` }), el('span', { text: 'OTU sur 7 jours' })))),
-    b.plongees.length ? el('div.card', {}, el('h3.corps-titre', { text: `Mes plongées des 7 derniers jours (${b.plongees.length})` }), ...liste) : null,
-    el('div.hint', { text: 'Estimation pour comprendre et anticiper : modèle Bühlmann ZHL-16C sur les courbes de tes plongées (air ou nitrox), '
-      + 'CNS (tables NOAA) et OTU ; avion selon les recommandations DAN (12 h, 18 h après des plongées successives, 24 h après des paliers obligatoires). '
-      + 'Ton ordinateur de plongée fait foi.' }));
-  return { title: 'Azote & oxygène', node, back: true };
+    verdict(L),
+    el('div.card.corps-haut', {}, bonhomme(L.etat), zones),
+    el('div.card', {}, tableau),
+    el('div.corps-deux', {}, el('div.card', {}, prochaine), el('div.card', {}, conseilsBloc)),
+    el('details.card.corps-plie', {}, el('summary', { text: '📈 La charge en azote sur 7 jours, avec ses limites' }), zoom),
+    b.plongees.length ? el('details.card.corps-plie', {}, el('summary', { text: `🤿 Mes plongées des 7 jours (${b.plongees.length})` }), ...liste) : null,
+    el('div.hint', { text: 'Estimation pour comprendre et anticiper (Bühlmann ZHL-16C sur les courbes de tes plongées, CNS : tables NOAA, OTU : REPEX, avion : DAN). Ton ordinateur fait foi.' }));
+  return { title: 'Mon corps · azote & oxygène', node, back: true };
 }

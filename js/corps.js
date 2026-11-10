@@ -270,6 +270,79 @@ export function conseils(b, { maintenant = b.fin } = {}) {
   return { niveau, titre, points: pts.sort((a, c) => ordre[a.niveau] - ordre[c.niveau]) };
 }
 
+// ------------------------------------------------------------
+//  Le corps par zones, et la prochaine plongée
+// ------------------------------------------------------------
+
+/** Les compartiments rangés par zone du corps (des tissus rapides aux lents). */
+export const ZONES = [
+  { id: 'sang', nom: 'Sang & cerveau', comps: [0, 1, 2] },
+  { id: 'muscles', nom: 'Muscles', comps: [3, 4, 5, 6] },
+  { id: 'graisses', nom: 'Peau & graisses', comps: [7, 8, 9, 10] },
+  { id: 'articulations', nom: 'Articulations & os', comps: [11, 12, 13, 14, 15] },
+];
+
+/** La charge de chaque zone maintenant (le plus chargé de ses compartiments) et quand elle repasse sous 20 %. */
+export function zonesDuCorps(b) {
+  const T = b.maintenant.T;
+  return ZONES.map(z => {
+    const charge = Math.max(...z.comps.map(i => saturation(T[i], i)));
+    const sous = Math.max(0, ...z.comps.map(i => {
+      const exces = T[i] - EQUILIBRE, cible = 0.2 * (M0[i] - EQUILIBRE);
+      return exces > cible ? Math.log(exces / cible) / K[i] : 0;
+    })) / 60;
+    return { ...z, charge, heuresSous20: sous };
+  });
+}
+
+/** Les tissus après une surface de « heures » (on respire de l'air à 1 bar). */
+function apresSurface(T, heures) {
+  const R = T.slice();
+  charger(R, 1, 1, heures * 60, AIR_N2);
+  return R;
+}
+
+/**
+ * Le temps sans palier (min) d'une plongée carrée à « prof » m, en partant
+ * de ces tissus : on reste tant que tous les compartiments peuvent remonter
+ * sous 85 % de leur limite (descente 20 m/min, remontée 10 m/min).
+ */
+export function tempsSansPalier(T0, prof, fo2 = 0.21) {
+  const fn2 = 1 - fo2, p = pAmb(prof), desc = prof / 20, montee = prof / 10;
+  const ok = min => {
+    const T = T0.slice();
+    charger(T, 1, p, desc, fn2);
+    charger(T, p, p, Math.max(0, min - desc), fn2);
+    charger(T, p, 1, montee, fn2);
+    return T.every((Ti, i) => (Ti - 1) / (M0[i] - 1) <= 0.85);
+  };
+  if (!ok(desc)) return 0;
+  let bas = desc, haut = 120;
+  if (ok(haut)) return 120;
+  for (let n = 0; n < 20; n++) { const mi = (bas + haut) / 2; if (ok(mi)) bas = mi; else haut = mi; }
+  return Math.floor(bas);
+}
+
+/** La prochaine plongée : à partir de quand, et combien de temps sans palier à 12, 20, 30 m. */
+export function prochainePlongee(b) {
+  const m = b.maintenant;
+  const attente = heuresAvant(m.T, 20);                 // repasser sous 20 % de charge
+  const repos = b.rythme.sur24h >= 4 || b.rythme.joursDAffilee >= 5;
+  const derniere = b.plongees[b.plongees.length - 1];
+  const fo2 = derniere ? derniere.fo2 : 0.21;
+  const T = attente > 0 ? apresSurface(m.T, attente) : m.T;
+  return {
+    attenteH: attente,
+    aPartirDe: b.fin + attente * 36e5,
+    reposConseille: repos,
+    fo2,
+    ndl: [12, 20, 30].map(prof => ({ prof, min: tempsSansPalier(T, prof, fo2), maintenant: tempsSansPalier(m.T, prof, fo2) })),
+  };
+}
+
+/** Les limites de l'oxygène : CNS (cerveau) 100 % (prudence 80 %), OTU (poumons) 850 sur 24 h, 2 660 sur 7 jours (REPEX). */
+export const LIMITES_O2 = { cns: 100, cnsPrudence: 80, otu24: 850, otu7: 2660 };
+
 /** Les feux : 'vert' | 'orange' | 'rouge', avec une phrase. */
 export function feux(b) {
   const m = b.maintenant, r = b.rythme;

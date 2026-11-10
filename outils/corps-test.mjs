@@ -42,6 +42,17 @@ check('assistant : une remontée à 25 m/min est signalée', a3.points.some(p =>
 const inverse = [plongee('2026-06-01', '09:00', 18, 40), plongee('2026-06-01', '14:00', 32, 25)];
 check('assistant : profil inversé dans la journée', C.conseils(C.bilanCorps(inverse, { maintenant: t('2026-06-01T15:00:00') })).points.some(p => /plus profonde d’abord/.test(p.texte)));
 
+// Le corps par zones, la prochaine plongée
+const bz = C.bilanCorps(deux, { maintenant: t('2026-06-01T16:00:00') });
+const zz = C.zonesDuCorps(bz);
+check('quatre zones du corps, les articulations (tissus lents) se vident en dernier', zz.length === 4 && zz[3].heuresSous20 >= zz[0].heuresSous20);
+const vide = C.ZHL16C.map(() => C.EQUILIBRE);
+const ndl20 = C.tempsSansPalier(vide, 20), ndl30 = C.tempsSansPalier(vide, 30);
+check('temps sans palier, tissus vides, à l’air : proche des tables (20 m ~35-45 min, 30 m ~12-20 min)', ndl20 >= 30 && ndl20 <= 50 && ndl30 >= 10 && ndl30 <= 22, `${ndl20} / ${ndl30}`);
+check('tissus chargés : moins de temps sans palier', C.tempsSansPalier(bz.maintenant.T, 20) < ndl20);
+const pp = C.prochainePlongee(bz);
+check('prochaine plongée : une heure, et les temps à 12 / 20 / 30 m', pp.aPartirDe >= bz.fin && pp.ndl.length === 3);
+
 console.log(results.join('\n'));
 const ko = results.filter(r => r.startsWith(' FAIL'));
 console.log(`\n${results.length - ko.length}/${results.length} vérifications azote & oxygène`);

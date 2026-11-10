@@ -1001,3 +1001,33 @@ body { background-image: var(--deco, none), var(--bg-image); background-size: 20
 .corps-raisons li { display: flex; gap: 8px; font-size: 14px; line-height: 1.4; }
 .corps-raisons li > span:first-child { flex: none; }
 .corps-raisons li.info, .corps-raisons li.ok { color: var(--text-dim); }
+
+/* --- Mon corps : version compacte (bonhomme, tableau, conseils) ------ */
+.corps-verdict { display: flex; flex-direction: column; gap: 2px; padding: 9px 12px; border-radius: 12px; border: 1.5px solid; margin-bottom: 10px; font-size: 13px; line-height: 1.35; }
+.corps-verdict b { font-size: 15px; }
+.corps-verdict span { color: var(--text-dim); }
+.corps-verdict.ok { border-color: #22c55e; background: rgba(34,197,94,.10); }
+.corps-verdict.attention { border-color: #f59e0b; background: rgba(245,158,11,.11); }
+.corps-verdict.stop { border-color: #ef4444; background: rgba(239,68,68,.11); }
+.corps-carte .corps-verdict { margin: 0; flex: 1; min-width: 0; }
+.corps-carte-corps { display: flex; gap: 10px; align-items: center; }
+.corps-haut { display: flex; gap: 14px; align-items: center; }
+.corps-bonhomme { flex: none; }
+.corps-zones { display: flex; flex-direction: column; gap: 9px; min-width: 0; }
+.corps-zone { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; line-height: 1.3; }
+.corps-zone b { display: block; font-size: 13.5px; } .corps-zone span { color: var(--text-dim); }
+.corps-pt { flex: none; display: inline-block; width: 11px; height: 11px; border-radius: 50%; margin: 3px 6px 0 0; }
+.corps-pt.vert { background: #22c55e; } .corps-pt.orange { background: #f59e0b; } .corps-pt.rouge { background: #ef4444; }
+.corps-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.corps-table th { text-align: left; font-size: 11px; color: var(--text-mute); font-weight: 600; padding: 0 4px 6px; }
+.corps-table td { padding: 7px 4px; border-top: 1px solid var(--line); vertical-align: top; }
+.corps-table td:first-child { white-space: nowrap; }
+.corps-deux { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.corps-bloc-titre { font-weight: 700; margin-bottom: 6px; }
+.corps-bloc { font-size: 13.5px; line-height: 1.4; }
+.corps-ndl { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
+.corps-conseils { margin: 0; padding-left: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.corps-plie > summary { cursor: pointer; font-weight: 650; }
+.corps-plie[open] > summary { margin-bottom: 8px; }
+@media (max-width: 640px) { .corps-deux { grid-template-columns: 1fr; } }
+@media (max-width: 420px) { .corps-table { font-size: 11.5px; } .corps-table td { padding: 6px 3px; } }
