@@ -21,10 +21,16 @@ const s = (tag, attrs = {}, ...enfants) => {
 const couleurCharge = v => (v >= 85 ? 'var(--danger)' : v >= 50 ? 'var(--warn)' : 'var(--ok)');
 const heure = ms => new Date(ms).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
 
-async function bilan() {
+async function plongeesDuCarnet() {
   const diverId = await store.getActiveDiverId();
-  const dives = diverId ? await store.listDives(diverId) : [];
-  return bilanCorps(dives);
+  return diverId ? store.listDives(diverId) : [];
+}
+async function bilan() { return bilanCorps(await plongeesDuCarnet()); }
+
+/** « lun. 09/11/26 17:00 » */
+export function fmtInstant(ms) {
+  const d = new Date(ms), z = n => String(n).padStart(2, '0');
+  return `${d.toLocaleDateString('fr-FR', { weekday: 'short' })} ${z(d.getDate())}/${z(d.getMonth() + 1)}/${String(d.getFullYear()).slice(2)} ${z(d.getHours())}:${z(d.getMinutes())}`;
 }
 
 // Les couleurs d'état (vert / orange / rouge)
@@ -164,7 +170,8 @@ export async function carteCorps() {
 }
 
 export async function corpsView() {
-  const b = await bilan();
+  const dives = await plongeesDuCarnet();
+  const b = bilanCorps(dives);
   const L = lecture(b), m = L.m, n = L.suite;
   const pastille = niv => el(`span.corps-pt.${niv}`);
   const jauge = pct => el('span.corps-jauge.mini', {}, el(`span.${niveauDe(pct)}`, { style: { width: `${Math.min(100, pct)}%` } }));
@@ -172,7 +179,9 @@ export async function corpsView() {
     el('span', {}, pastille('vert'), 'moins de 50 %'), el('span', {}, pastille('orange'), '50 à 85 %'), el('span', {}, pastille('rouge'), '85 % et plus'),
     el('span.hint', { style: { margin: 0 }, text: 'du seuil' }));
 
-  // 1. Le bonhomme et ses zones (mêmes couleurs que partout)
+  // 1. Le bonhomme et ses zones (mêmes couleurs que partout) — et 2. Où j'en suis :
+  //    redessinés à l'heure choisie sur la timeline.
+  const dessiner = L => {
   const zones = el('div.corps-zones', {},
     ...[['tete', 'Tête', 'sang & cerveau'], ['poumons', 'Poumons', 'oxygène (OTU)'], ['muscles', 'Muscles', 'azote'],
       ['graisses', 'Peau & graisses', 'azote'], ['articulations', 'Articulations & os', 'azote, tissus lents']]
@@ -187,6 +196,55 @@ export async function corpsView() {
       jauge(r.pct),
       el('div.corps-risque-txt', {}, el('span', { text: `Relevé : ${r.releve}` }), el('span', { text: `Limite : ${r.seuil}` })),
       el('div.corps-risque-effet', { text: r.effet }))));
+  return { haut: el('div.corps-haut', {}, bonhomme(L.etat), zones), tableau };
+  };
+
+  // La timeline : de 7 jours en arrière à 48 h devant, par quarts d'heure
+  const maintenant = b.fin, debutT = maintenant - 7 * 864e5, finT = maintenant + 48 * 36e5;
+  const zoneHaut = el('div'), zoneTableau = el('div');
+  const etiquette = el('div.corps-instant');
+  const curseur = el('input.corps-curseur', { type: 'range', min: debutT, max: finT, step: 15 * 60e3, value: maintenant });
+  const relatif = t => {
+    const dh = (t - maintenant) / 36e5;
+    if (Math.abs(dh) < 0.13) return 'maintenant';
+    const txt = Math.abs(dh) >= 48 ? `${Math.round(Math.abs(dh) / 24)} j` : `${Math.round(Math.abs(dh))} h`;
+    return dh > 0 ? `dans ${txt}` : `il y a ${txt}`;
+  };
+  let attendu = null;
+  const sauts = [['−24 h', -24], ['maintenant', 0], ['+6 h', 6], ['+12 h', 12], ['+24 h', 24], ['+48 h', 48]]
+    .map(([txt, hh]) => el('button.chip', { type: 'button', text: txt, 'data-h': hh, onclick: () => { arreter(); montrerA(maintenant + hh * 36e5); } }));
+  const montrerA = t => {
+    t = Math.max(debutT, Math.min(finT, +t));
+    curseur.value = t;
+    const bb = t === maintenant ? b : bilanCorps(dives, { maintenant: t });
+    const D = dessiner(t === maintenant ? L : lecture(bb));
+    zoneHaut.replaceChildren(D.haut);
+    zoneTableau.replaceChildren(D.tableau);
+    sauts.forEach(c => c.classList.toggle('on', Math.abs(t - (maintenant + +c.dataset.h * 36e5)) < 60e3));
+    etiquette.replaceChildren(el('b', { text: fmtInstant(t) }), el('span', { text: ` · ${relatif(t)}` }),
+      bb.maintenant.sat >= 5 ? el('span', { text: ` · azote ${Math.round(bb.maintenant.sat)} %` }) : el('span', { text: ' · désaturé' }));
+  };
+  curseur.addEventListener('input', () => {
+    if (attendu) return;
+    attendu = requestAnimationFrame(() => { attendu = null; montrerA(curseur.value); });
+  });
+  let lecteur = null;
+  const lire = el('button.btn.sm', { type: 'button', text: '▶', title: 'Faire défiler le temps' });
+  const arreter = () => { clearInterval(lecteur); lecteur = null; lire.textContent = '▶'; };
+  lire.onclick = () => {
+    if (lecteur) return arreter();
+    if (+curseur.value >= finT) montrerA(maintenant);
+    lire.textContent = '⏸';
+    lecteur = setInterval(() => {
+      if (!lire.isConnected || +curseur.value >= finT) return arreter();
+      montrerA(+curseur.value + 30 * 60e3);
+    }, 90);
+  };
+  const timeline = el('div.corps-timeline', {},
+    el('div.corps-timeline-tete', {}, el('b', { text: '⏱ Timeline' }), etiquette),
+    el('div.corps-timeline-ligne', {}, lire, curseur),
+    el('div.corps-timeline-sauts', {}, ...sauts));
+  montrerA(maintenant);
 
   // 3. Ta prochaine plongée : quand, et combien de temps au fond
   const h = x => (x >= 1 ? `${Math.round(x)} h` : `${Math.max(1, Math.round(x * 60))} min`);
@@ -252,8 +310,8 @@ export async function corpsView() {
 
   const node = el('div.corps', {},
     verdict(L),
-    el('div.card', {}, el('div.corps-haut', {}, bonhomme(L.etat), zones), legende),
-    tableau,
+    el('div.card', {}, timeline, zoneHaut, legende),
+    zoneTableau,
     prochaine,
     recos,
     el('details.card.corps-plie', {}, el('summary', { text: '📈 La charge en azote sur 7 jours, avec ses limites' }), zoom),

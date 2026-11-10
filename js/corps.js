@@ -383,8 +383,9 @@ export function risques(b, { maintenant = b.fin } = {}) {
       seuil: '100 % : la limite du tissu',
       effet: 'Bulles d’azote : douleurs articulaires, puces et moutons sur la peau, fatigue, troubles neurologiques.' },
     { id: 'paul-bert', nom: 'Effet Paul Bert', zone: 'tete',
-      // 0 % : pas d'effet sous 0,5 bar de PpO2 ; 100 % : 1,6 bar (ou CNS 100 %)
-      pct: Math.max(m.cns, ppo2 > 0.5 ? (ppo2 - 0.5) / 1.1 * 100 : 0),
+      // 0 % : pas d'effet sous 0,5 bar de PpO2 ; 100 % : 1,6 bar (ou CNS 100 %).
+      // L'effet de la PpO2 s'efface en surface comme le CNS (demi-vie 90 min).
+      pct: Math.max(m.cns, ppo2 > 0.5 ? (ppo2 - 0.5) / 1.1 * 100 * Math.pow(0.5, Math.max(0, maintenant - plusO2.fin) / 60e3 / 90) : 0),
       releve: `CNS ${Math.round(m.cns)} %${plusO2 ? ` · PpO2 max ${bar(ppo2)} (${Math.round(plusO2.prof)} m, ${Math.round(plusO2.fo2 * 100)} % O2)` : ''}`,
       seuil: 'CNS 100 % · PpO2 1,6 bar',
       effet: 'Oxygène sur le système nerveux : secousses, troubles visuels, puis crise convulsive (hyperoxie).' },
