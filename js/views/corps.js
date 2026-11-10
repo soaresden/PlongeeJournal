@@ -9,7 +9,7 @@
 import { el, fmtDate } from '../lib.js';
 import { store } from '../store.js';
 import { navigate } from '../router.js';
-import { bilanCorps, conseils, zonesDuCorps, prochainePlongee, risques, LIMITES_O2 } from '../corps.js';
+import { bilanCorps, conseils, zonesDuCorps, prochainePlongee, risques, niveauDe } from '../corps.js';
 
 const NS = 'http://www.w3.org/2000/svg';
 const s = (tag, attrs = {}, ...enfants) => {
@@ -28,10 +28,7 @@ async function bilan() {
 }
 
 // Les couleurs d'état (vert / orange / rouge)
-const niveauAzote = v => (v >= 50 ? 'rouge' : v >= 20 ? 'orange' : 'vert');
-const niveauCns = v => (v >= LIMITES_O2.cnsPrudence ? 'rouge' : v >= 40 ? 'orange' : 'vert');
-const niveauOtu = m => { const r = Math.max(m.otu24 / LIMITES_O2.otu24, m.otu7 / LIMITES_O2.otu7); return r >= 0.85 ? 'rouge' : r >= 0.5 ? 'orange' : 'vert'; };
-const pire = (...n) => (n.includes('rouge') ? 'rouge' : n.includes('orange') ? 'orange' : 'vert');
+// (une seule échelle partout : vert < 50 %, orange 50-85 %, rouge ≥ 85 % du seuil — voir niveauDe)
 const COUL = { vert: '#22c55e', orange: '#f59e0b', rouge: '#ef4444' };
 const quand = ms => {
   const d = new Date(ms), auj = new Date();
@@ -68,14 +65,16 @@ function bonhomme(etat, { taille = 130 } = {}) {
 /** L'état de chaque zone, et le verdict. */
 function lecture(b) {
   const m = b.maintenant, zones = zonesDuCorps(b), z = id => zones.find(x => x.id === id);
-  const etat = {
-    tete: pire(niveauAzote(z('sang').charge), niveauCns(m.cns)),
-    poumons: niveauOtu(m),
-    muscles: niveauAzote(z('muscles').charge),
-    graisses: niveauAzote(z('graisses').charge),
-    articulations: niveauAzote(z('articulations').charge),
+  const rq = risques(b), r = id => rq.find(x => x.id === id);
+  const pct = {
+    tete: Math.max(z('sang').charge, r('paul-bert').pct),
+    poumons: r('lorrain-smith').pct,
+    muscles: z('muscles').charge,
+    graisses: z('graisses').charge,
+    articulations: z('articulations').charge,
   };
-  return { m, zones, etat, verdict: conseils(b), suite: prochainePlongee(b) };
+  const etat = Object.fromEntries(Object.entries(pct).map(([k, v]) => [k, niveauDe(v)]));
+  return { m, zones, rq, pct, etat, verdict: conseils(b), suite: prochainePlongee(b) };
 }
 
 /** Le verdict, sur une ligne. */
@@ -168,70 +167,79 @@ export async function corpsView() {
   const b = await bilan();
   const L = lecture(b), m = L.m, n = L.suite;
   const pastille = niv => el(`span.corps-pt.${niv}`);
-  const sous20 = h => (h > 0 ? `OK à ${quand(b.fin + h * 36e5)}` : 'OK');
+  const jauge = pct => el('span.corps-jauge.mini', {}, el(`span.${niveauDe(pct)}`, { style: { width: `${Math.min(100, pct)}%` } }));
+  const legende = el('div.corps-legende', {},
+    el('span', {}, pastille('vert'), 'moins de 50 %'), el('span', {}, pastille('orange'), '50 à 85 %'), el('span', {}, pastille('rouge'), '85 % et plus'),
+    el('span.hint', { style: { margin: 0 }, text: 'du seuil' }));
 
-  // 1. Le bonhomme et ses zones
+  // 1. Le bonhomme et ses zones (mêmes couleurs que partout)
   const zones = el('div.corps-zones', {},
-    ...[['tete', 'Tête', `sang & cerveau · azote ${Math.round(L.zones[0].charge)} % · CNS ${Math.round(m.cns)} %`],
-      ['poumons', 'Poumons', `oxygène · ${Math.round(m.otu24)} OTU sur 24 h`],
-      ['muscles', 'Muscles', `azote ${Math.round(L.zones[1].charge)} % · ${sous20(L.zones[1].heuresSous20)}`],
-      ['graisses', 'Peau & graisses', `azote ${Math.round(L.zones[2].charge)} % · ${sous20(L.zones[2].heuresSous20)}`],
-      ['articulations', 'Articulations & os', `azote ${Math.round(L.zones[3].charge)} % · ${sous20(L.zones[3].heuresSous20)}`]]
-      .map(([k, nom, txt]) => el('div.corps-zone', {}, pastille(L.etat[k]), el('div', {}, el('b', { text: nom }), el('span', { text: txt })))));
+    ...[['tete', 'Tête', 'sang & cerveau'], ['poumons', 'Poumons', 'oxygène (OTU)'], ['muscles', 'Muscles', 'azote'],
+      ['graisses', 'Peau & graisses', 'azote'], ['articulations', 'Articulations & os', 'azote, tissus lents']]
+      .map(([k, nom, quoi]) => el('div.corps-zone', {}, pastille(L.etat[k]),
+        el('div', { style: { flex: 1, minWidth: 0 } }, el('b', { text: `${nom} · ${Math.round(L.pct[k])} %` }), el('span', { text: quoi }), jauge(L.pct[k])))));
 
-  // 2. Relevé · limite · conseil
-  const ligne = (niv, quoi, releve, limite, conseil) => el('tr', {}, el('td', {}, pastille(niv), el('b', { text: quoi })),
-    el('td', { text: releve }), el('td', { text: limite }), el('td', { text: conseil }));
-  const azoteNiv = niveauAzote(m.sat);
-  const tableau = el('table.corps-table', {},
-    el('thead', {}, el('tr', {}, ...['', 'Relevé', 'Limite', 'Conseil'].map(t => el('th', { text: t })))),
-    el('tbody', {},
-      ligne(azoteNiv, 'Azote', `${Math.round(m.sat)} %`, '100 % · prudence 85',
-        m.sat >= 20 ? `Sous 20 % à ${quand(n.aPartirDe)}` : m.sat >= 5 ? `Désaturé à ${quand(b.fin + m.desatH * 36e5)}` : 'Désaturé'),
-      ligne(niveauCns(m.cns), 'CNS · cerveau', `${Math.round(m.cns)} %`, `100 % · prudence ${LIMITES_O2.cnsPrudence}`,
-        m.cns >= 40 ? 'Évite le nitrox riche pour la prochaine' : 'RAS · se divise par 2 toutes les 90 min'),
-      ligne(niveauOtu(m), 'OTU · poumons', `${Math.round(m.otu24)}/24 h · ${Math.round(m.otu7)}/7 j`,
-        `${LIMITES_O2.otu24}/24 h · ${LIMITES_O2.otu7}/7 j`,
-        niveauOtu(m) === 'vert' ? 'RAS' : 'Moins de nitrox, plongées moins longues')));
-
-  // 2 bis. Vers quoi je vais : chaque effet, jusqu'à son seuil
-  const versQuoi = el('div.card', {},
-    el('div.corps-bloc-titre', { text: '🧭 Vers quoi je vais' }),
-    ...risques(b).map(r => el('div.corps-risque', {},
-      el('div.corps-risque-tete', {}, el(`span.corps-pt.${r.niveau}`), el('b', { text: r.nom }),
-        el('span.corps-risque-pct', { text: `${Math.round(r.pct)} % du seuil` })),
-      el('div.corps-jauge', {}, el(`span.${r.niveau}`, { style: { width: `${Math.min(100, r.pct)}%` } })),
-      el('div.corps-risque-txt', { text: `${r.releve} · seuil : ${r.seuil}` }),
+  // 2. Où j'en suis : un effet par ligne — relevé, limite, jauge
+  const tableau = el('div.card', {},
+    el('div.corps-bloc-titre', { text: '🧭 Où j’en suis, et vers quoi je vais' }),
+    ...L.rq.map(r => el('div.corps-risque', {},
+      el('div.corps-risque-tete', {}, pastille(r.niveau), el('b', { text: r.nom }), el('span.corps-risque-pct', { text: `${Math.round(r.pct)} %` })),
+      jauge(r.pct),
+      el('div.corps-risque-txt', {}, el('span', { text: `Relevé : ${r.releve}` }), el('span', { text: `Limite : ${r.seuil}` })),
       el('div.corps-risque-effet', { text: r.effet }))));
 
-  // 3. La prochaine plongée
-  const prochaine = el('div.corps-bloc', {},
-    el('div.corps-bloc-titre', { text: '🤿 Prochaine plongée' }),
-    el('div', { text: n.reposConseille ? `Demain plutôt : journée de repos conseillée (${b.rythme.sur24h} plongées en 24 h, ${b.rythme.joursDAffilee} jour(s) d’affilée).`
-      : n.attenteH > 0 ? `À partir de ${quand(n.aPartirDe)} (azote sous 20 %).` : 'Possible dès maintenant.' }),
-    el('div.corps-ndl', {}, ...n.ndl.map(x => el('span.chip', { text: `${x.prof} m : ${x.min >= 120 ? '> 2 h' : `${x.min} min`}` }))),
-    el('div.hint', { style: { margin: '4px 0 0' }, text: `Sans palier, ${n.fo2 > 0.215 ? `au nitrox ${Math.round(n.fo2 * 100)}` : 'à l’air'}, à cette heure-là — palier de sécurité de 3 min à 3-5 m en plus.` }));
+  // 3. Ta prochaine plongée : quand, et combien de temps au fond
+  const h = x => (x >= 1 ? `${Math.round(x)} h` : `${Math.max(1, Math.round(x * 60))} min`);
+  const quandPlonger = n.reposConseille
+    ? { titre: `Pas avant demain, ${new Date(n.aPartirDe).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`, pourquoi: `${b.rythme.sur24h} plongées en 24 h, ${b.rythme.joursDAffilee} jour(s) d’affilée : une journée de repos.` }
+    : n.attenteH > 0
+      ? { titre: `À partir de ${quand(n.aPartirDe)}`, pourquoi: `dans ${h(n.attenteH)}, quand ton azote sera repassé sous 20 %.` }
+      : { titre: 'Possible maintenant', pourquoi: 'ton azote est sous 20 %.' };
+  const heurePlongee = n.reposConseille || n.attenteH > 0 ? `à ${quand(n.aPartirDe)}` : 'maintenant';
+  const prochaine = el('div.card.corps-prochaine', {},
+    el('div.corps-bloc-titre', { text: '🤿 Ta prochaine plongée' }),
+    el('div.corps-quand', { text: quandPlonger.titre }),
+    el('div.hint', { style: { margin: '0 0 8px' }, text: quandPlonger.pourquoi }),
+    el('table.corps-table', {},
+      el('thead', {}, el('tr', {}, el('th', { text: 'Profondeur' }), el('th', { text: `Temps max au fond sans palier (${heurePlongee})` }))),
+      el('tbody', {}, ...n.ndl.map(x => el('tr', {}, el('td', {}, el('b', { text: `${x.prof} m` })),
+        el('td', { text: x.min >= 120 ? 'plus de 2 h (le bloc s’arrêtera avant)' : `${x.min} min` }))))),
+    el('div.hint', { style: { margin: '6px 0 0' }, text: `${n.fo2 > 0.215 ? `Au nitrox ${Math.round(n.fo2 * 100)}` : 'À l’air'} (ton dernier mélange), en gardant une marge (85 % de la limite). Palier de sécurité en plus.` }));
 
-  // 4. Les conseils
-  const avion = m.avion?.attente > 0 ? `✈️ Ni avion ni altitude avant ${quand(m.avion.jusqua)}.` : null;
-  const charge = m.sat >= 20 || b.rythme.sur24h >= 2;
-  const conseilsListe = [
-    ...L.verdict.points.filter(p => p.niveau !== 'info' && p.niveau !== 'ok').map(p => `⚠️ ${p.texte}`),
-    charge ? '💧 Bois de l’eau (1,5 à 2 L dans la journée) : un plongeur déshydraté élimine moins bien l’azote.' : null,
-    charge ? '😴 Repose-toi : pas d’effort, d’apnée ni de sauna dans les 3 h après la plongée.' : null,
-    avion,
-    !charge && !avion ? '✅ Rien à signaler : bonne plongée !' : null,
-  ].filter(Boolean);
-  const conseilsBloc = el('div.corps-bloc', {}, el('div.corps-bloc-titre', { text: '💡 Conseils' }),
-    el('ul.corps-conseils', {}, ...conseilsListe.map(t => el('li', { text: t }))));
+  // 4. Les recommandations, en trois temps
+  const recentH = b.plongees.length ? (b.fin - b.plongees[b.plongees.length - 1].fin) / 36e5 : Infinity;
+  const mod14 = n.fo2 > 0.215 ? Math.floor((1.4 / n.fo2 - 1) * 10) : null;
+  const alertes = L.verdict.points.filter(p => p.niveau === 'attention' || p.niveau === 'stop').map(p => p.texte)
+    .filter(t => !/plongées en 24 h|azote en réserve|très chargés/.test(t));     // déjà dit plus haut
+  const temps = [
+    ['🕐 Maintenant', [
+      recentH < 6 ? '😴 Repos : pas d’effort, d’apnée, de sauna ni de bain chaud dans les 3 h après la plongée.' : null,
+      recentH < 24 ? '💧 Bois 1,5 à 2 L d’eau dans la journée (pas d’alcool) : l’azote s’élimine mieux.' : null,
+      m.avion?.attente > 0 ? `✈️ Ni avion ni altitude (col, montagne) avant ${quand(m.avion.jusqua)}.` : null,
+      '🆘 Douleur, fourmillements, fatigue anormale ? Oxygène et secours (112) : c’est peut-être un accident de décompression.',
+    ]],
+    ['🗓 Avant de replonger', [
+      n.reposConseille ? '🛑 Une journée sans plonger : tes tissus lents en ont besoin.' : n.attenteH > 0 ? `⏳ Attends ${quand(n.aPartirDe)}.` : null,
+      'La plus profonde en premier, puis de moins en moins profond ; au moins 2 h de surface entre deux plongées.',
+      ...alertes,
+    ]],
+    ['🌊 Pendant la plongée', [
+      'Reste sous les temps du tableau, avec 5 min de marge.',
+      'Remontée à 10-15 m/min, palier de sécurité de 3 à 5 min à 3-5 m.',
+      mod14 ? `Au nitrox ${Math.round(n.fo2 * 100)} : pas plus bas que ${mod14} m (PpO2 1,4 bar).` : 'À l’air, au-delà de 30 m : attention à la narcose.',
+    ]],
+  ];
+  const recos = el('div.card', {}, el('div.corps-bloc-titre', { text: '💡 Recommandations' }),
+    ...temps.map(([titre, liste]) => el('div.corps-temps', {}, el('b', { text: titre }),
+      el('ul.corps-conseils', {}, ...liste.filter(Boolean).map(t => el('li', { text: t }))))));
 
   // 5. Le détail, replié
   const zoom = el('div.corps-zoom');
-  const montrerZoom = h => {
+  const montrerZoom = hh => {
     zoom.replaceChildren(
-      el('div.corps-zoom-boutons', {}, ...[[168, '7 jours'], [72, '3 jours'], [24, '24 h']].map(([hh, txt]) =>
-        el(`button.chip${hh === h ? '.on' : ''}`, { type: 'button', text: txt, onclick: () => montrerZoom(hh) }))),
-      courbe(b, { debut: b.fin - h * 36e5 }));
+      el('div.corps-zoom-boutons', {}, ...[[168, '7 jours'], [72, '3 jours'], [24, '24 h']].map(([x, txt]) =>
+        el(`button.chip${x === hh ? '.on' : ''}`, { type: 'button', text: txt, onclick: () => montrerZoom(x) }))),
+      courbe(b, { debut: b.fin - hh * 36e5 }));
   };
   montrerZoom(168);
   const liste = b.plongees.slice().reverse().map(p => el('div.corps-ligne', {},
@@ -244,10 +252,10 @@ export async function corpsView() {
 
   const node = el('div.corps', {},
     verdict(L),
-    el('div.card.corps-haut', {}, bonhomme(L.etat), zones),
-    el('div.card', {}, tableau),
-    versQuoi,
-    el('div.corps-deux', {}, el('div.card', {}, prochaine), el('div.card', {}, conseilsBloc)),
+    el('div.card', {}, el('div.corps-haut', {}, bonhomme(L.etat), zones), legende),
+    tableau,
+    prochaine,
+    recos,
     el('details.card.corps-plie', {}, el('summary', { text: '📈 La charge en azote sur 7 jours, avec ses limites' }), zoom),
     b.plongees.length ? el('details.card.corps-plie', {}, el('summary', { text: `🤿 Mes plongées des 7 jours (${b.plongees.length})` }), ...liste) : null,
     el('div.hint', { text: 'Estimation pour comprendre et anticiper (Bühlmann ZHL-16C sur les courbes de tes plongées, CNS : tables NOAA, OTU : REPEX, avion : DAN). Ton ordinateur fait foi.' }));

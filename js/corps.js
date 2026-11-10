@@ -221,8 +221,9 @@ export function conseils(b, { maintenant = b.fin } = {}) {
   const recentes = b.plongees.filter(p => p.fin > maintenant - 48 * 36e5);
 
   // L'azote en réserve, et la prochaine plongée
-  if (m.sat >= 50) dit('stop', `Tes tissus sont encore très chargés (${Math.round(m.sat)} %) : pas de nouvelle plongée tout de suite. Sous 20 % dans ~${h(heuresAvant(m.T, 20))}.`);
-  else if (m.sat >= 20) dit('attention', `Tu as encore de l’azote en réserve (${Math.round(m.sat)} %). Si tu replonges, fais plus court et moins profond, ou attends ~${h(heuresAvant(m.T, 20))} pour repasser sous 20 %.`);
+  if (m.sat >= 85) dit('stop', `Tes tissus sont encore très chargés (${Math.round(m.sat)} %) : pas de nouvelle plongée tout de suite. Sous 20 % dans ~${h(heuresAvant(m.T, 20))}.`);
+  else if (m.sat >= 50) dit('attention', `Tu as encore de l’azote en réserve (${Math.round(m.sat)} %). Si tu replonges, fais plus court et moins profond, ou attends ~${h(heuresAvant(m.T, 20))} pour repasser sous 20 %.`);
+  else if (m.sat >= 20) dit('ok', `Il te reste de l’azote (${Math.round(m.sat)} %) : il repasse sous 20 % dans ~${h(heuresAvant(m.T, 20))}.`);
   else if (m.sat >= 5) dit('ok', `Il te reste un peu d’azote (${Math.round(m.sat)} %) : une plongée raisonnable est possible. Désaturation complète dans ~${h(m.desatH)}.`);
   else if (b.plongees.length) dit('ok', 'Tu es désaturé : tes tissus sont revenus à l’équilibre.');
 
@@ -330,10 +331,17 @@ export function prochainePlongee(b) {
   const repos = b.rythme.sur24h >= 4 || b.rythme.joursDAffilee >= 5;
   const derniere = b.plongees[b.plongees.length - 1];
   const fo2 = derniere ? derniere.fo2 : 0.21;
-  const T = attente > 0 ? apresSurface(m.T, attente) : m.T;
+  // Repos conseillé : la prochaine, c'est demain matin (8 h) au plus tôt
+  let aPartirDe = b.fin + attente * 36e5;
+  if (repos) {
+    const demain = new Date(b.fin); demain.setDate(demain.getDate() + 1); demain.setHours(8, 0, 0, 0);
+    aPartirDe = Math.max(aPartirDe, demain.getTime());
+  }
+  const surfaceH = (aPartirDe - b.fin) / 36e5;
+  const T = surfaceH > 0 ? apresSurface(m.T, surfaceH) : m.T;
   return {
     attenteH: attente,
-    aPartirDe: b.fin + attente * 36e5,
+    aPartirDe,
     reposConseille: repos,
     fo2,
     ndl: [12, 20, 30].map(prof => ({ prof, min: tempsSansPalier(T, prof, fo2), maintenant: tempsSansPalier(m.T, prof, fo2) })),
@@ -342,6 +350,9 @@ export function prochainePlongee(b) {
 
 /** Les limites de l'oxygène : CNS (cerveau) 100 % (prudence 80 %), OTU (poumons) 850 sur 24 h, 2 660 sur 7 jours (REPEX). */
 export const LIMITES_O2 = { cns: 100, cnsPrudence: 80, otu24: 850, otu7: 2660 };
+
+/** L'échelle commune : vert sous 50 % du seuil, orange de 50 à 85 %, rouge à partir de 85 %. */
+export const niveauDe = pct => (pct >= 85 ? 'rouge' : pct >= 50 ? 'orange' : 'vert');
 
 // ------------------------------------------------------------
 //  Vers quoi je vais : les effets, avec leur seuil
@@ -367,29 +378,28 @@ export function risques(b, { maintenant = b.fin } = {}) {
   const bar = x => `${x.toFixed(2).replace('.', ',')} bar`;
   return [
     { id: 'add', nom: 'Accident de décompression', zone: 'articulations',
-      pct: m.sat, niveau: m.sat >= 50 ? 'rouge' : m.sat >= 20 ? 'orange' : 'vert',
+      pct: m.sat,
       releve: `azote ${Math.round(m.sat)} % maintenant${picAzote ? ` · pic ${Math.round(picAzote.pic)} % (${jour(picAzote.debut)})` : ''}`,
       seuil: '100 % : la limite du tissu',
       effet: 'Bulles d’azote : douleurs articulaires, puces et moutons sur la peau, fatigue, troubles neurologiques.' },
     { id: 'paul-bert', nom: 'Effet Paul Bert', zone: 'tete',
-      pct: Math.max(m.cns, ppo2 / 1.6 * 100),
-      niveau: m.cns >= 80 || ppo2 > 1.6 ? 'rouge' : m.cns >= 40 || ppo2 > 1.4 ? 'orange' : 'vert',
+      // 0 % : pas d'effet sous 0,5 bar de PpO2 ; 100 % : 1,6 bar (ou CNS 100 %)
+      pct: Math.max(m.cns, ppo2 > 0.5 ? (ppo2 - 0.5) / 1.1 * 100 : 0),
       releve: `CNS ${Math.round(m.cns)} %${plusO2 ? ` · PpO2 max ${bar(ppo2)} (${Math.round(plusO2.prof)} m, ${Math.round(plusO2.fo2 * 100)} % O2)` : ''}`,
       seuil: 'CNS 100 % · PpO2 1,6 bar',
       effet: 'Oxygène sur le système nerveux : secousses, troubles visuels, puis crise convulsive (hyperoxie).' },
     { id: 'lorrain-smith', nom: 'Effet Lorrain Smith', zone: 'poumons',
       pct: Math.max(m.otu24 / LIMITES_O2.otu24, m.otu7 / LIMITES_O2.otu7) * 100,
-      niveau: Math.max(m.otu24 / LIMITES_O2.otu24, m.otu7 / LIMITES_O2.otu7) >= 0.85 ? 'rouge'
-        : Math.max(m.otu24 / LIMITES_O2.otu24, m.otu7 / LIMITES_O2.otu7) >= 0.5 ? 'orange' : 'vert',
       releve: `${Math.round(m.otu24)} OTU / 24 h · ${Math.round(m.otu7)} / 7 j`,
       seuil: `${LIMITES_O2.otu24} / 24 h · ${LIMITES_O2.otu7} / 7 j`,
       effet: 'Oxygène sur les poumons, à force d’heures de nitrox : toux, gêne, brûlure en respirant.' },
     { id: 'narcose', nom: 'Narcose', zone: 'tete',
-      pct: ppn2 / 3.2 * 100, niveau: ppn2 >= 3.9 ? 'rouge' : ppn2 >= 3.2 ? 'orange' : 'vert',
+      // 0 % en surface (0,79 bar), 100 % vers 4 bar (40 m à l'air) : narcose franche
+      pct: ppn2 > 0.79 ? (ppn2 - 0.79) / (4 - 0.79) * 100 : 0,
       releve: plusProfonde ? `PpN2 max ${bar(ppn2)} (${Math.round(plusProfonde.prof)} m, ${plusProfonde.fo2 > 0.215 ? `nitrox ${Math.round(plusProfonde.fo2 * 100)}` : 'air'})` : '—',
-      seuil: '≈ 3,2 bar (30 m à l’air)',
+      seuil: '≈ 4 bar (40 m à l’air)',
       effet: 'L’azote sous pression : euphorie, lenteur, erreurs de lecture. Ça passe en remontant de quelques mètres.' },
-  ].map(r => ({ ...r, pct: Math.max(0, r.pct) }));
+  ].map(r => ({ ...r, pct: Math.max(0, r.pct), niveau: niveauDe(Math.max(0, r.pct)) }));
 }
 
 /** Les feux : 'vert' | 'orange' | 'rouge', avec une phrase. */
@@ -398,8 +408,8 @@ export function feux(b) {
   const f = (couleur, titre, texte) => ({ couleur, titre, texte });
   const h = x => (x >= 1 ? `${Math.round(x)} h` : `${Math.round(x * 60)} min`);
   return [
-    m.sat >= 50 ? f('rouge', 'Azote', `Très chargé (${Math.round(m.sat)} %) : désaturation dans ~${h(m.desatH)}.`)
-      : m.sat >= 20 ? f('orange', 'Azote', `De l’azote en réserve (${Math.round(m.sat)} %) : désaturation dans ~${h(m.desatH)}.`)
+    m.sat >= 85 ? f('rouge', 'Azote', `Très chargé (${Math.round(m.sat)} %) : désaturation dans ~${h(m.desatH)}.`)
+      : m.sat >= 50 ? f('orange', 'Azote', `De l’azote en réserve (${Math.round(m.sat)} %) : désaturation dans ~${h(m.desatH)}.`)
         : f('vert', 'Azote', m.sat >= 5 ? `Presque vide (${Math.round(m.sat)} %) : désaturation dans ~${h(m.desatH)}.` : 'Désaturé.'),
     r.sur24h >= 4 || r.joursDAffilee >= 5 ? f('rouge', 'Rythme', `${r.sur24h} plongée(s) en 24 h, ${r.joursDAffilee} jour(s) d’affilée : une journée sans plonger s’impose.`)
       : r.sur24h >= 3 || r.joursDAffilee >= 3 ? f('orange', 'Rythme', `${r.sur24h} plongée(s) en 24 h, ${r.joursDAffilee} jour(s) d’affilée : pense à une journée de repos.`)

@@ -1040,3 +1040,12 @@ body { background-image: var(--deco, none), var(--bg-image); background-size: 20
 .corps-jauge .vert { background: #22c55e; } .corps-jauge .orange { background: #f59e0b; } .corps-jauge .rouge { background: #ef4444; }
 .corps-risque-txt { font-size: 12.5px; }
 .corps-risque-effet { font-size: 12px; color: var(--text-mute); line-height: 1.35; margin-top: 2px; }
+.corps-jauge.mini { display: block; height: 6px; margin: 4px 0 0; }
+.corps-zone { align-items: center; } .corps-zone .corps-pt { margin-top: 0; }
+.corps-zone span { display: block; font-size: 12px; }
+.corps-legende { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; font-size: 12px; margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--line); }
+.corps-legende > span { display: inline-flex; align-items: center; }
+.corps-risque-txt { display: flex; flex-direction: column; }
+.corps-quand { font-size: 20px; font-weight: 800; }
+.corps-temps { margin: 8px 0 4px; } .corps-temps > b { display: block; margin-bottom: 4px; font-size: 13.5px; }
+.corps-temps .corps-conseils li { font-size: 13px; }
