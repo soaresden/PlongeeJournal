@@ -343,6 +343,55 @@ export function prochainePlongee(b) {
 /** Les limites de l'oxygène : CNS (cerveau) 100 % (prudence 80 %), OTU (poumons) 850 sur 24 h, 2 660 sur 7 jours (REPEX). */
 export const LIMITES_O2 = { cns: 100, cnsPrudence: 80, otu24: 850, otu7: 2660 };
 
+// ------------------------------------------------------------
+//  Vers quoi je vais : les effets, avec leur seuil
+// ------------------------------------------------------------
+
+/**
+ * Les risques, chacun rapporté à son seuil (pct = 100 : on y est) :
+ * - accident de décompression (ADD) : la charge en azote (maintenant, et le pic récent) ;
+ * - effet Paul Bert (O2, système nerveux : crise hyperoxique) : CNS % et PpO2 max (1,6 bar) ;
+ * - effet Lorrain Smith (O2, poumons) : OTU sur 24 h (850) et sur 7 jours (2 660) ;
+ * - narcose (azote sous pression) : PpN2 au plus profond, sensible vers 3,2 bar (30 m à l'air).
+ */
+export function risques(b, { maintenant = b.fin } = {}) {
+  const m = b.maintenant;
+  const recentes = b.plongees.filter(p => p.fin > maintenant - 48 * 36e5);
+  const pp = p => pAmb(p.prof, p.d.eau === 'douce');
+  const plusProfonde = recentes.reduce((x, p) => (!x || pp(p) * (1 - p.fo2) > pp(x) * (1 - x.fo2) ? p : x), null);
+  const plusO2 = recentes.reduce((x, p) => (!x || pp(p) * p.fo2 > pp(x) * x.fo2 ? p : x), null);
+  const picAzote = recentes.reduce((x, p) => (!x || p.pic > x.pic ? p : x), null);
+  const ppn2 = plusProfonde ? pp(plusProfonde) * (1 - plusProfonde.fo2) : 0;
+  const ppo2 = plusO2 ? pp(plusO2) * plusO2.fo2 : 0;
+  const jour = ms => new Date(ms).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric' });
+  const bar = x => `${x.toFixed(2).replace('.', ',')} bar`;
+  return [
+    { id: 'add', nom: 'Accident de décompression', zone: 'articulations',
+      pct: m.sat, niveau: m.sat >= 50 ? 'rouge' : m.sat >= 20 ? 'orange' : 'vert',
+      releve: `azote ${Math.round(m.sat)} % maintenant${picAzote ? ` · pic ${Math.round(picAzote.pic)} % (${jour(picAzote.debut)})` : ''}`,
+      seuil: '100 % : la limite du tissu',
+      effet: 'Bulles d’azote : douleurs articulaires, puces et moutons sur la peau, fatigue, troubles neurologiques.' },
+    { id: 'paul-bert', nom: 'Effet Paul Bert', zone: 'tete',
+      pct: Math.max(m.cns, ppo2 / 1.6 * 100),
+      niveau: m.cns >= 80 || ppo2 > 1.6 ? 'rouge' : m.cns >= 40 || ppo2 > 1.4 ? 'orange' : 'vert',
+      releve: `CNS ${Math.round(m.cns)} %${plusO2 ? ` · PpO2 max ${bar(ppo2)} (${Math.round(plusO2.prof)} m, ${Math.round(plusO2.fo2 * 100)} % O2)` : ''}`,
+      seuil: 'CNS 100 % · PpO2 1,6 bar',
+      effet: 'Oxygène sur le système nerveux : secousses, troubles visuels, puis crise convulsive (hyperoxie).' },
+    { id: 'lorrain-smith', nom: 'Effet Lorrain Smith', zone: 'poumons',
+      pct: Math.max(m.otu24 / LIMITES_O2.otu24, m.otu7 / LIMITES_O2.otu7) * 100,
+      niveau: Math.max(m.otu24 / LIMITES_O2.otu24, m.otu7 / LIMITES_O2.otu7) >= 0.85 ? 'rouge'
+        : Math.max(m.otu24 / LIMITES_O2.otu24, m.otu7 / LIMITES_O2.otu7) >= 0.5 ? 'orange' : 'vert',
+      releve: `${Math.round(m.otu24)} OTU / 24 h · ${Math.round(m.otu7)} / 7 j`,
+      seuil: `${LIMITES_O2.otu24} / 24 h · ${LIMITES_O2.otu7} / 7 j`,
+      effet: 'Oxygène sur les poumons, à force d’heures de nitrox : toux, gêne, brûlure en respirant.' },
+    { id: 'narcose', nom: 'Narcose', zone: 'tete',
+      pct: ppn2 / 3.2 * 100, niveau: ppn2 >= 3.9 ? 'rouge' : ppn2 >= 3.2 ? 'orange' : 'vert',
+      releve: plusProfonde ? `PpN2 max ${bar(ppn2)} (${Math.round(plusProfonde.prof)} m, ${plusProfonde.fo2 > 0.215 ? `nitrox ${Math.round(plusProfonde.fo2 * 100)}` : 'air'})` : '—',
+      seuil: '≈ 3,2 bar (30 m à l’air)',
+      effet: 'L’azote sous pression : euphorie, lenteur, erreurs de lecture. Ça passe en remontant de quelques mètres.' },
+  ].map(r => ({ ...r, pct: Math.max(0, r.pct) }));
+}
+
 /** Les feux : 'vert' | 'orange' | 'rouge', avec une phrase. */
 export function feux(b) {
   const m = b.maintenant, r = b.rythme;

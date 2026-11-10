@@ -56,6 +56,8 @@ export async function statsView() {
   const parProf = (a, b) => (Number(b.profMax) || 0) - (Number(a.profMax) || 0);
   const parDuree = (a, b) => (Number(b.dureeMin) || 0) - (Number(a.dureeMin) || 0);
   const nuit = d => (d.type || '').toLowerCase().includes('nuit');
+  const formation = d => /enseign|formation/i.test(d.type || '') || (d.objectifs || []).some(o => /formation/i.test(o));
+  const exploJour = d => /exploration de jour/i.test(d.type || '') || (/explor/i.test(d.type || '') && !nuit(d));
 
   const tuiles = el('div.tuiles.plein', {},
     tuile(st.count, 'plongées', () => montrer('Toutes les plongées', () => true)),
@@ -63,6 +65,8 @@ export async function statsView() {
     tuile(st.maxDepth ? `${st.maxDepth} m` : '—', 'profondeur max', () => montrer('Les plus profondes', d => d.profMax, parProf)),
     tuile(st.avgDepth ? `${Math.round(st.avgDepth)} m` : '—', 'profondeur moyenne', () => montrer('Par profondeur', d => d.profMax, parProf)),
     tuile(fmtDuration(Math.round(st.avgDuration)), 'durée moyenne', () => montrer('Par durée', d => d.dureeMin, parDuree)),
+    tuile(dives.filter(formation).length, 'en formation', () => montrer('Plongées en formation', formation)),
+    tuile(dives.filter(exploJour).length, 'explo de jour', () => montrer('Explorations de jour', exploJour)),
     tuile(st.nuit, 'de nuit', () => montrer('Plongées de nuit', nuit)),
     tuile(st.salee, 'en mer', () => montrer('En mer', d => d.eau === 'salee')),
     tuile(st.douce, 'en eau douce', () => montrer('En eau douce', d => d.eau === 'douce')),

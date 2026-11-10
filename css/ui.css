@@ -1031,3 +1031,12 @@ body { background-image: var(--deco, none), var(--bg-image); background-size: 20
 .corps-plie[open] > summary { margin-bottom: 8px; }
 @media (max-width: 640px) { .corps-deux { grid-template-columns: 1fr; } }
 @media (max-width: 420px) { .corps-table { font-size: 11.5px; } .corps-table td { padding: 6px 3px; } }
+.corps-risque { padding: 8px 0; border-top: 1px solid var(--line); }
+.corps-risque:first-of-type { border-top: 0; }
+.corps-risque-tete { display: flex; align-items: center; gap: 4px; font-size: 14px; }
+.corps-risque-pct { margin-left: auto; font-size: 12px; color: var(--text-mute); }
+.corps-jauge { height: 7px; border-radius: 4px; background: var(--surface-2); overflow: hidden; margin: 5px 0 4px; }
+.corps-jauge span { display: block; height: 100%; border-radius: 4px; }
+.corps-jauge .vert { background: #22c55e; } .corps-jauge .orange { background: #f59e0b; } .corps-jauge .rouge { background: #ef4444; }
+.corps-risque-txt { font-size: 12.5px; }
+.corps-risque-effet { font-size: 12px; color: var(--text-mute); line-height: 1.35; margin-top: 2px; }

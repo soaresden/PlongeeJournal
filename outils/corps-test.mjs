@@ -53,6 +53,13 @@ check('tissus chargés : moins de temps sans palier', C.tempsSansPalier(bz.maint
 const pp = C.prochainePlongee(bz);
 check('prochaine plongée : une heure, et les temps à 12 / 20 / 30 m', pp.aPartirDe >= bz.fin && pp.ndl.length === 3);
 
+// Vers quoi je vais : ADD, Paul Bert, Lorrain Smith, narcose
+const rq = C.risques(C.bilanCorps([plongee('2026-06-01', '10:00', 40, 15)], { maintenant: t('2026-06-01T10:20:00') }));
+check('quatre effets suivis (ADD, Paul Bert, Lorrain Smith, narcose)', rq.map(r => r.id).join() === 'add,paul-bert,lorrain-smith,narcose');
+check('40 m à l’air : narcose en rouge (PpN2 > 4 bar)', rq.find(r => r.id === 'narcose').niveau === 'rouge', JSON.stringify(rq.find(r => r.id === 'narcose')));
+const rqN = C.risques(C.bilanCorps([plongee('2026-06-01', '10:00', 40, 15, 40)], { maintenant: t('2026-06-01T10:20:00') }));
+check('40 m au nitrox 40 : PpO2 2 bar → Paul Bert en rouge', rqN.find(r => r.id === 'paul-bert').niveau === 'rouge');
+
 console.log(results.join('\n'));
 const ko = results.filter(r => r.startsWith(' FAIL'));
 console.log(`\n${results.length - ko.length}/${results.length} vérifications azote & oxygène`);

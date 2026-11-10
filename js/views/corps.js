@@ -9,7 +9,7 @@
 import { el, fmtDate } from '../lib.js';
 import { store } from '../store.js';
 import { navigate } from '../router.js';
-import { bilanCorps, conseils, zonesDuCorps, prochainePlongee, LIMITES_O2 } from '../corps.js';
+import { bilanCorps, conseils, zonesDuCorps, prochainePlongee, risques, LIMITES_O2 } from '../corps.js';
 
 const NS = 'http://www.w3.org/2000/svg';
 const s = (tag, attrs = {}, ...enfants) => {
@@ -194,6 +194,16 @@ export async function corpsView() {
         `${LIMITES_O2.otu24}/24 h · ${LIMITES_O2.otu7}/7 j`,
         niveauOtu(m) === 'vert' ? 'RAS' : 'Moins de nitrox, plongées moins longues')));
 
+  // 2 bis. Vers quoi je vais : chaque effet, jusqu'à son seuil
+  const versQuoi = el('div.card', {},
+    el('div.corps-bloc-titre', { text: '🧭 Vers quoi je vais' }),
+    ...risques(b).map(r => el('div.corps-risque', {},
+      el('div.corps-risque-tete', {}, el(`span.corps-pt.${r.niveau}`), el('b', { text: r.nom }),
+        el('span.corps-risque-pct', { text: `${Math.round(r.pct)} % du seuil` })),
+      el('div.corps-jauge', {}, el(`span.${r.niveau}`, { style: { width: `${Math.min(100, r.pct)}%` } })),
+      el('div.corps-risque-txt', { text: `${r.releve} · seuil : ${r.seuil}` }),
+      el('div.corps-risque-effet', { text: r.effet }))));
+
   // 3. La prochaine plongée
   const prochaine = el('div.corps-bloc', {},
     el('div.corps-bloc-titre', { text: '🤿 Prochaine plongée' }),
@@ -236,6 +246,7 @@ export async function corpsView() {
     verdict(L),
     el('div.card.corps-haut', {}, bonhomme(L.etat), zones),
     el('div.card', {}, tableau),
+    versQuoi,
     el('div.corps-deux', {}, el('div.card', {}, prochaine), el('div.card', {}, conseilsBloc)),
     el('details.card.corps-plie', {}, el('summary', { text: '📈 La charge en azote sur 7 jours, avec ses limites' }), zoom),
     b.plongees.length ? el('details.card.corps-plie', {}, el('summary', { text: `🤿 Mes plongées des 7 jours (${b.plongees.length})` }), ...liste) : null,
