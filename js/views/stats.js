@@ -14,7 +14,6 @@ import { statsApnee } from '../seances.js';
 import { ambianceDe, AMBIANCES } from '../ambiance.js';
 import { niveauDeLaPlongee } from '../apercu.js';
 import { rangNiveau } from '../config.js';
-import { computeStats } from '../model.js';
 
 const TRANCHES = [
   ['0 – 12 m', 0, 12], ['12 – 20 m', 12, 20], ['20 – 30 m', 20, 30],
@@ -50,22 +49,9 @@ export async function statsView() {
   };
 
   // ---------- Tuiles ----------
-  // L'impact de la dernière plongée : les tuiles qu'elle a fait bouger « respirent », avec ce qui a changé.
-  const derniere = dives.slice().sort((a, b) => `${b.date || ''}${b.heureImmersion || ''}`.localeCompare(`${a.date || ''}${a.heureImmersion || ''}`))[0];
-  const avant = derniere ? computeStats(dives.filter(d => d !== derniere), certifs) : null;
-  const tuile = (n, l, onclick, delta = null) => {
-    const contenu = [el('div.n', { text: String(n) }), el('div.l', { text: l }), delta ? el('div.delta', { text: delta }) : null];
-    const t = onclick
-      ? el('button.tuile', { type: 'button', onclick, title: 'Voir les plongées' }, ...contenu)
-      : el('div.tuile', {}, ...contenu);
-    if (delta) t.classList.add('impact');
-    return t;
-  };
-  const fois = (filtre, n) => (derniere && filtre(derniere) ? `+1` : null);
-  const ecart = (a, b, unite, dec = 1) => {
-    const d = (a || 0) - (b || 0);
-    return Math.abs(d) >= 0.5 * 10 ** -dec ? `${d > 0 ? '+' : '−'}${Math.abs(d).toFixed(dec).replace('.', ',')}${unite}` : null;
-  };
+  const tuile = (n, l, onclick) => onclick
+    ? el('button.tuile', { type: 'button', onclick, title: 'Voir les plongées' }, el('div.n', { text: String(n) }), el('div.l', { text: l }))
+    : el('div.tuile', {}, el('div.n', { text: String(n) }), el('div.l', { text: l }));
 
   const parProf = (a, b) => (Number(b.profMax) || 0) - (Number(a.profMax) || 0);
   const parDuree = (a, b) => (Number(b.dureeMin) || 0) - (Number(a.dureeMin) || 0);
@@ -74,25 +60,17 @@ export async function statsView() {
   const exploJour = d => /exploration de jour/i.test(d.type || '') || (/explor/i.test(d.type || '') && !nuit(d));
 
   const tuiles = el('div.tuiles.plein', {},
-    tuile(st.count, 'plongées', () => montrer('Toutes les plongées', () => true), derniere ? '+1' : null),
-    tuile(fmtDuration(Math.round(st.totalMin)), 'sous l’eau', () => montrer('Les plus longues', () => true, parDuree),
-      derniere?.dureeMin ? `+${fmtDuration(Math.round(+derniere.dureeMin))}` : null),
-    tuile(st.maxDepth ? `${st.maxDepth} m` : '—', 'profondeur max', () => montrer('Les plus profondes', d => d.profMax, parProf),
-      avant && st.maxDepth > (avant.maxDepth || 0) ? `record : +${(st.maxDepth - (avant.maxDepth || 0)).toFixed(1).replace('.', ',')} m` : null),
-    tuile(st.avgDepth ? `${Math.round(st.avgDepth)} m` : '—', 'profondeur moyenne', () => montrer('Par profondeur', d => d.profMax, parProf),
-      avant ? ecart(st.avgDepth, avant.avgDepth, ' m') : null),
-    tuile(fmtDuration(Math.round(st.avgDuration)), 'durée moyenne', () => montrer('Par durée', d => d.dureeMin, parDuree),
-      avant ? ecart(st.avgDuration, avant.avgDuration, ' min') : null),
-    tuile(dives.filter(formation).length, 'en formation', () => montrer('Plongées en formation', formation), fois(formation)),
-    tuile(dives.filter(exploJour).length, 'explo de jour', () => montrer('Explorations de jour', exploJour), fois(exploJour)),
-    tuile(st.nuit, 'de nuit', () => montrer('Plongées de nuit', nuit), fois(nuit)),
-    tuile(st.salee, 'en mer', () => montrer('En mer', d => d.eau === 'salee'), fois(d => d.eau === 'salee')),
-    tuile(st.douce, 'en eau douce', () => montrer('En eau douce', d => d.eau === 'douce'), fois(d => d.eau === 'douce')),
+    tuile(st.count, 'plongées', () => montrer('Toutes les plongées', () => true)),
+    tuile(fmtDuration(Math.round(st.totalMin)), 'sous l’eau', () => montrer('Les plus longues', () => true, parDuree)),
+    tuile(st.maxDepth ? `${st.maxDepth} m` : '—', 'profondeur max', () => montrer('Les plus profondes', d => d.profMax, parProf)),
+    tuile(st.avgDepth ? `${Math.round(st.avgDepth)} m` : '—', 'profondeur moyenne', () => montrer('Par profondeur', d => d.profMax, parProf)),
+    tuile(fmtDuration(Math.round(st.avgDuration)), 'durée moyenne', () => montrer('Par durée', d => d.dureeMin, parDuree)),
+    tuile(dives.filter(formation).length, 'en formation', () => montrer('Plongées en formation', formation)),
+    tuile(dives.filter(exploJour).length, 'explo de jour', () => montrer('Explorations de jour', exploJour)),
+    tuile(st.nuit, 'de nuit', () => montrer('Plongées de nuit', nuit)),
+    tuile(st.salee, 'en mer', () => montrer('En mer', d => d.eau === 'salee')),
+    tuile(st.douce, 'en eau douce', () => montrer('En eau douce', d => d.eau === 'douce')),
   );
-  const impact = derniere ? el('div.stats-impact.plein', {},
-    el('span', { text: '✨' }),
-    el('span', {}, 'Ta dernière plongée, ', el('b', { text: `${derniere.lieuNom || 'sans lieu'} · ${fmtDate(derniere.date)}` }),
-      ' : ce qu’elle a changé respire ci-dessous.')) : null;
 
   // ---------- Barres ----------
   /** entries : [label, n, filtre, {b1,b2}?] */
@@ -175,7 +153,6 @@ export async function statsView() {
   const corps = await (await import('./corps.js')).carteCorps().catch(() => null);
   const tb = el('div.tb', {},
     corps ? el('div.tb-carte.plein.corps-place', {}, corps) : null,
-    impact,
     tuiles,
     carte('Par année', histo, { aide: 'touche une année', classe: '.plein' }),
     niveaux.length ? carte('Par niveau', barres(niveaux), { aide: st.niveau ? `aujourd’hui : ${st.niveau}` : '' }) : null,

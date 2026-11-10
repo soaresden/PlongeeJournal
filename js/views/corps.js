@@ -9,7 +9,7 @@
 import { el, fmtDate } from '../lib.js';
 import { store } from '../store.js';
 import { navigate } from '../router.js';
-import { bilanCorps, conseils, zonesDuCorps, prochainePlongee, risques, niveauDe } from '../corps.js';
+import { bilanCorps, conseils, zonesDuCorps, prochainePlongee, risques, niveauDe, ZHL16C, saturation } from '../corps.js';
 
 const NS = 'http://www.w3.org/2000/svg';
 const s = (tag, attrs = {}, ...enfants) => {
@@ -43,26 +43,27 @@ const quand = ms => {
 };
 
 /** Le bonhomme plongeur : chaque zone colorée selon son état. */
-function bonhomme(etat, { taille = 130 } = {}) {
+function bonhomme(etat, { taille = 130, respire = [] } = {}) {
   const c = k => COUL[etat[k]];
+  const z = k => (respire.includes(k) ? 'respire' : null);
   const svg = s('svg', { viewBox: '0 0 120 230', width: taille, height: taille * 230 / 120, class: 'corps-bonhomme', role: 'img', 'aria-label': 'Mon corps par zones' });
   svg.append(
     s('rect', { x: 43, y: 50, width: 34, height: 74, rx: 10, fill: '#6b7280' }),                       // le bloc, derrière
     // jambes et bras : les muscles
-    s('rect', { x: 41, y: 128, width: 16, height: 62, rx: 7, fill: c('muscles') }),
-    s('rect', { x: 63, y: 128, width: 16, height: 62, rx: 7, fill: c('muscles') }),
-    s('rect', { x: 19, y: 58, width: 13, height: 60, rx: 6, fill: c('muscles'), transform: 'rotate(8 25 58)' }),
-    s('rect', { x: 88, y: 58, width: 13, height: 60, rx: 6, fill: c('muscles'), transform: 'rotate(-8 95 58)' }),
+    s('rect', { x: 41, y: 128, width: 16, height: 62, rx: 7, fill: c('muscles'), class: z('muscles') }),
+    s('rect', { x: 63, y: 128, width: 16, height: 62, rx: 7, fill: c('muscles'), class: z('muscles') }),
+    s('rect', { x: 19, y: 58, width: 13, height: 60, rx: 6, fill: c('muscles'), class: z('muscles'), transform: 'rotate(8 25 58)' }),
+    s('rect', { x: 88, y: 58, width: 13, height: 60, rx: 6, fill: c('muscles'), class: z('muscles'), transform: 'rotate(-8 95 58)' }),
     // les palmes
     s('path', { d: 'M38 188 L60 188 L64 222 L30 222 Z', fill: 'var(--text-mute)' }),
     s('path', { d: 'M60 188 L82 188 L90 222 L56 222 Z', fill: 'var(--text-mute)' }),
     // le tronc : poumons (OTU), ventre et hanches (graisses)
-    s('rect', { x: 34, y: 52, width: 52, height: 46, rx: 14, fill: c('poumons') }),
-    s('rect', { x: 37, y: 96, width: 46, height: 34, rx: 12, fill: c('graisses') }),
+    s('rect', { x: 34, y: 52, width: 52, height: 46, rx: 14, fill: c('poumons'), class: z('poumons') }),
+    s('rect', { x: 37, y: 96, width: 46, height: 34, rx: 12, fill: c('graisses'), class: z('graisses') }),
     // les articulations : épaules, coudes, genoux
-    ...[[33, 58], [87, 58], [26, 92], [94, 92], [49, 160], [71, 160]].map(([cx, cy]) => s('circle', { cx, cy, r: 6.5, fill: c('articulations'), stroke: 'var(--surface)', 'stroke-width': 2 })),
+    ...[[33, 58], [87, 58], [26, 92], [94, 92], [49, 160], [71, 160]].map(([cx, cy]) => s('circle', { cx, cy, r: 6.5, fill: c('articulations'), class: z('articulations'), stroke: 'var(--surface)', 'stroke-width': 2 })),
     // la tête : sang & cerveau, et le masque
-    s('circle', { cx: 60, cy: 28, r: 20, fill: c('tete') }),
+    s('circle', { cx: 60, cy: 28, r: 20, fill: c('tete'), class: z('tete') }),
     s('rect', { x: 46, y: 20, width: 28, height: 12, rx: 5, fill: '#bfe7ff', stroke: '#1f2937', 'stroke-width': 2 }),
     s('path', { d: 'M66 38 q10 2 12 10', fill: 'none', stroke: '#1f2937', 'stroke-width': 3, 'stroke-linecap': 'round' }));
   return svg;
@@ -142,22 +143,49 @@ function courbe(b, { hauteur = 300, mini = false, debut = b.debut } = {}) {
   return svg;
 }
 
-/** Les 16 compartiments maintenant, chacun avec sa limite. */
-function compartiments(b) {
-  const W = 700, H = 210, haut = 26, bas = 160, l = (W - 44) / 16;
+/**
+ * Les 16 compartiments à l'instant choisi, chacun avec sa limite ;
+ * avec `sans` (le même instant sans la dernière plongée), la part qu'elle a ajoutée respire.
+ */
+function compartiments(b, sans = null) {
+  const W = 700, H = 330, haut = 30, bas = 270, l = (W - 44) / 16;
   const y = v => bas - Math.min(110, v) / 110 * (bas - haut);
-  const svg = s('svg', { viewBox: `0 0 ${W} ${H}`, class: 'corps-comp', role: 'img', 'aria-label': 'Les 16 compartiments maintenant' });
+  const svg = s('svg', { viewBox: `0 0 ${W} ${H}`, class: 'corps-comp', role: 'img', 'aria-label': 'Les 16 tissus : charge en azote' });
   svg.append(s('line', { x1: 40, x2: W - 6, y1: y(100), y2: y(100), class: 'corps-limite' }),
     s('text', { x: 36, y: y(100) + 6, class: 'corps-lbl', 'text-anchor': 'end' }, '100'));
   b.maintenant.T.forEach((Ti, i) => {
-    const v = saturation(Ti, i), x0 = 42 + i * l;
-    svg.append(s('rect', { x: x0, y: haut, width: l - 6, height: bas - haut, rx: 3, class: 'corps-case' }),
-      s('rect', { x: x0, y: y(v), width: l - 6, height: Math.max(1, bas - y(v)), rx: 3, fill: couleurCharge(v) }),
-      s('text', { x: x0 + (l - 6) / 2, y: y(v) - 4, class: 'corps-lbl', 'text-anchor': 'middle' }, v >= 1 ? `${Math.round(v)}` : ''),
-      s('text', { x: x0 + (l - 6) / 2, y: H - 26, class: 'corps-lbl petit', 'text-anchor': 'middle' }, `${ZHL16C[i][0]}′`));
+    const v = saturation(Ti, i), v0 = sans ? Math.min(v, saturation(sans.maintenant.T[i], i)) : v, x0 = 42 + i * l, w = l - 6;
+    svg.append(s('rect', { x: x0, y: haut, width: w, height: bas - haut, rx: 3, class: 'corps-case' }),
+      s('rect', { x: x0, y: y(v0), width: w, height: Math.max(v0 > 0 ? 1 : 0, bas - y(v0)), rx: 3, fill: couleurCharge(v) }));
+    if (v - v0 >= 0.5) {
+      svg.append(s('rect', { x: x0, y: y(v), width: w, height: Math.max(1, y(v0) - y(v)), rx: 3, fill: 'var(--accent)', class: 'respire', stroke: 'var(--accent)', 'stroke-width': 2 }),
+        s('text', { x: x0 + w / 2, y: y(v) - 4, class: 'corps-lbl petit', 'text-anchor': 'middle', fill: 'var(--accent)' }, `+${Math.round(v - v0)}`));
+    } else if (v >= 1) svg.append(s('text', { x: x0 + w / 2, y: y(v) - 4, class: 'corps-lbl petit', 'text-anchor': 'middle' }, `${Math.round(v)}`));
+    svg.append(s('text', { x: x0 + w / 2, y: H - 24, class: 'corps-lbl petit', 'text-anchor': 'middle' }, `${ZHL16C[i][0]}′`));
   });
-  svg.append(s('text', { x: W / 2, y: H - 3, class: 'corps-lbl', 'text-anchor': 'middle' }, 'tissus rapides ← période (min) → tissus lents'));
+  svg.append(s('text', { x: W / 2, y: H - 3, class: 'corps-lbl', 'text-anchor': 'middle' }, 'tissus rapides (sang) ← demi-vie en min → tissus lents (os)'));
   return svg;
+}
+
+/** L'impact de la dernière plongée à l'instant choisi : ce qu'elle a ajouté, zone par zone. */
+function impact(L, L0, bb, b0) {
+  const p = bb.plongees[bb.plongees.length - 1];
+  if (!p || !L0) return null;
+  const NOMS = { tete: 'Tête', poumons: 'Poumons', muscles: 'Muscles', graisses: 'Peau & graisses', articulations: 'Articulations & os' };
+  const deltas = Object.keys(NOMS).map(k => ({ k, nom: NOMS[k], avant: L0.pct[k], apres: L.pct[k], d: L.pct[k] - L0.pct[k] }))
+    .filter(x => x.d >= 1).sort((a, c) => c.d - a.d);
+  const ilya = (bb.fin - p.fin) / 36e5;
+  const depuis = ilya < 0.05 ? 'à l’instant' : ilya < 48 ? `il y a ${ilya < 1 ? `${Math.round(ilya * 60)} min` : `${Math.round(ilya)} h`}` : `il y a ${Math.round(ilya / 24)} j`;
+  const dAzote = bb.maintenant.sat - b0.maintenant.sat;
+  return el('div.corps-impact', {},
+    el('div.corps-impact-tete', {}, el('b', { text: '💨 L’impact de ta dernière plongée' }),
+      el('span.hint', { text: `${fmtInstant(p.debut)} · ${[p.d.lieuNom, p.d.profMax ? `${String(p.d.profMax).replace('.', ',')} m` : null, p.d.dureeMin ? `${Math.round(p.d.dureeMin)} min` : null].filter(Boolean).join(' · ')} · ${depuis}` })),
+    deltas.length
+      ? el('div.corps-impact-chips', {}, ...deltas.map(x => el('span.corps-impact-chip', {},
+          el('b', { text: x.nom }), el('span', { text: `${Math.round(x.avant)} → ${Math.round(x.apres)} %` }), el('span.corps-delta', { text: `+${Math.round(x.d)}` }))))
+      : el('div', { style: { marginTop: '6px' }, text: '✓ Il n’en reste plus rien : ton corps l’a éliminée.' }),
+    dAzote >= 1 ? el('div.hint', { style: { margin: '8px 0 0' }, text: `Azote : ${Math.round(b0.maintenant.sat)} → ${Math.round(bb.maintenant.sat)} % (le tissu le plus chargé). Ce qui respire, c’est ce qu’elle a ajouté ; fais glisser la timeline pour le voir s’éliminer.` }) : null,
+    compartiments(bb, b0));
 }
 
 /** La carte de l'onglet Stats : le verdict et le bonhomme ; un toucher ouvre l'écran. */
@@ -181,22 +209,26 @@ export async function corpsView() {
 
   // 1. Le bonhomme et ses zones (mêmes couleurs que partout) — et 2. Où j'en suis :
   //    redessinés à l'heure choisie sur la timeline.
-  const dessiner = L => {
+  const dessiner = (L, L0 = null) => {
+  const d = k => (L0 ? L.pct[k] - L0.pct[k] : 0);
+  const dr = id => (L0 ? L.rq.find(r => r.id === id).pct - L0.rq.find(r => r.id === id).pct : 0);
+  const badge = x => (x >= 1 ? el('span.corps-delta', { text: `+${Math.round(x)}` }) : null);
   const zones = el('div.corps-zones', {},
     ...[['tete', 'Tête', 'sang & cerveau'], ['poumons', 'Poumons', 'oxygène (OTU)'], ['muscles', 'Muscles', 'azote'],
       ['graisses', 'Peau & graisses', 'azote'], ['articulations', 'Articulations & os', 'azote, tissus lents']]
-      .map(([k, nom, quoi]) => el('div.corps-zone', {}, pastille(L.etat[k]),
-        el('div', { style: { flex: 1, minWidth: 0 } }, el('b', { text: `${nom} · ${Math.round(L.pct[k])} %` }), el('span', { text: quoi }), jauge(L.pct[k])))));
+      .map(([k, nom, quoi]) => el(`div.corps-zone${d(k) >= 1 ? '.impact' : ''}`, {}, pastille(L.etat[k]),
+        el('div', { style: { flex: 1, minWidth: 0 } }, el('b', {}, `${nom} · ${Math.round(L.pct[k])} %`, badge(d(k))), el('span', { text: quoi }), jauge(L.pct[k])))));
 
   // 2. Où j'en suis : un effet par ligne — relevé, limite, jauge
   const tableau = el('div.card', {},
     el('div.corps-bloc-titre', { text: '🧭 Où j’en suis, et vers quoi je vais' }),
-    ...L.rq.map(r => el('div.corps-risque', {},
-      el('div.corps-risque-tete', {}, pastille(r.niveau), el('b', { text: r.nom }), el('span.corps-risque-pct', { text: `${Math.round(r.pct)} %` })),
+    ...L.rq.map(r => el(`div.corps-risque${dr(r.id) >= 1 ? '.impact' : ''}`, {},
+      el('div.corps-risque-tete', {}, pastille(r.niveau), el('b', { text: r.nom }), el('span.corps-risque-pct', {}, `${Math.round(r.pct)} %`, badge(dr(r.id)))),
       jauge(r.pct),
       el('div.corps-risque-txt', {}, el('span', { text: `Relevé : ${r.releve}` }), el('span', { text: `Limite : ${r.seuil}` })),
       el('div.corps-risque-effet', { text: r.effet }))));
-  return { haut: el('div.corps-haut', {}, bonhomme(L.etat), zones), tableau };
+  const respire = Object.keys(L.pct).filter(k => d(k) >= 1);
+  return { haut: el('div.corps-haut', {}, bonhomme(L.etat, { respire }), zones), tableau };
   };
 
   // La timeline : de 7 jours en arrière à 48 h devant, par quarts d'heure
@@ -217,8 +249,12 @@ export async function corpsView() {
     t = Math.max(debutT, Math.min(finT, +t));
     curseur.value = t;
     const bb = t === maintenant ? b : bilanCorps(dives, { maintenant: t });
-    const D = dessiner(t === maintenant ? L : lecture(bb));
-    zoneHaut.replaceChildren(D.haut);
+    const LL = t === maintenant ? L : lecture(bb);
+    const derniere = bb.plongees[bb.plongees.length - 1];
+    const b0 = derniere ? bilanCorps(dives.filter(x => x !== derniere.d), { maintenant: t }) : null;
+    const L0 = b0 ? lecture(b0) : null;
+    const D = dessiner(LL, L0);
+    zoneHaut.replaceChildren(D.haut, impact(LL, L0, bb, b0) || '');
     zoneTableau.replaceChildren(D.tableau);
     sauts.forEach(c => c.classList.toggle('on', Math.abs(t - (maintenant + +c.dataset.h * 36e5)) < 60e3));
     etiquette.replaceChildren(el('b', { text: fmtInstant(t) }), el('span', { text: ` · ${relatif(t)}` }),
