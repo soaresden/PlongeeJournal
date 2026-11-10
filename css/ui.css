@@ -1050,6 +1050,18 @@ body { background-image: var(--deco, none), var(--bg-image); background-size: 20
 .corps-temps { margin: 8px 0 4px; } .corps-temps > b { display: block; margin-bottom: 4px; font-size: 13.5px; }
 .corps-temps .corps-conseils li { font-size: 13px; }
 
+/* --- Stats : l'impact de la dernière plongée (les tuiles « respirent ») --- */
+.stats-impact { display: flex; gap: 8px; align-items: center; font-size: 13px; padding: 8px 12px; border-radius: 12px;
+  background: rgba(var(--accent-rgb), .10); border: 1px dashed rgba(var(--accent-rgb), .5); }
+.tuile { position: relative; }
+.tuile.impact { animation: respire-tuile 2.6s ease-in-out infinite; border-color: rgba(var(--accent-rgb), .7) !important; }
+.tuile .delta { position: absolute; top: 6px; right: 8px; font-size: 11px; font-weight: 800; padding: 1px 7px; border-radius: 99px;
+  background: var(--accent); color: var(--on-accent); }
+@keyframes respire-tuile {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(var(--accent-rgb), 0); transform: scale(1); }
+  50% { box-shadow: 0 0 16px 3px rgba(var(--accent-rgb), .45); transform: scale(1.025); }
+}
+@media (prefers-reduced-motion: reduce) { .tuile.impact { animation: none; box-shadow: 0 0 10px 2px rgba(var(--accent-rgb), .4); } }
 /* --- Mon corps : l'impact de la dernière plongée (ce qu'elle a chargé « respire ») --- */
 .corps-impact { margin: 10px 0 4px; padding: 10px 12px; border-radius: 12px;
   background: rgba(var(--accent-rgb), .08); border: 1px dashed rgba(var(--accent-rgb), .5); font-size: 13px; }
