@@ -136,9 +136,12 @@ export function bilanCorps(dives, { maintenant = Date.now(), jours = 7 } = {}) {
       pic = Math.max(pic, sat(T).v);
       noter(x.debut + t1 * 1000, d1);
     }
+    const finAvant = plongees.length ? plongees[plongees.length - 1].fin : null;
     t = x.debut + pts[pts.length - 1][0] * 1000;
     otus.push({ t, otu: otuPlongee });
-    plongees.push({ d: x.d, debut: x.debut, fin: t, pic, estime: x.profil.estime, deco: decoDe(x.d), fo2, cns });
+    plongees.push({ d: x.d, debut: x.debut, fin: t, pic, estime: x.profil.estime, deco: decoDe(x.d), fo2, cns,
+      vmax: x.profil.estime ? null : vitesseMontee(pts), intervalle: finAvant != null ? x.debut - finAvant : null,
+      prof: Math.max(...pts.map(q => q[1])) });
   }
   surface(maintenant);
 
@@ -183,6 +186,88 @@ export function bilanCorps(dives, { maintenant = Date.now(), jours = 7 } = {}) {
     rythme: { sur24h: plongees.filter(p => p.fin > maintenant - 24 * H).length, joursDAffilee, total: fenetre.length },
     debut: debutFenetre, fin: maintenant,
   };
+}
+
+/** Vitesse de remontée la plus forte (m/min), sur des fenêtres de 30 s, sous 3 m (la sortie ne compte pas). */
+function vitesseMontee(pts) {
+  let v = 0;
+  for (let j = 0, k = 0; j < pts.length; j++) {
+    while (k < pts.length && pts[k][0] - pts[j][0] < 30) k++;
+    if (k >= pts.length) break;
+    const [t0, d0] = pts[j], [t1, d1] = pts[k];
+    if (d1 > 3 && d0 > d1) v = Math.max(v, (d0 - d1) / ((t1 - t0) / 60));
+  }
+  return v;
+}
+
+/** Le temps (h) pour que tous les compartiments redescendent sous un seuil de charge (%). */
+export function heuresAvant(T, seuil) {
+  return Math.max(0, ...T.map((Ti, i) => {
+    const exces = Ti - EQUILIBRE, cible = seuil / 100 * (M0[i] - EQUILIBRE);
+    return exces > cible ? Math.log(exces / cible) / K[i] : 0;
+  })) / 60;
+}
+
+/**
+ * L'assistant : un verdict (« tu es safe », « attention », « pas de plongée
+ * pour l'instant ») et ses raisons, lus dans le bilan.
+ * @returns {{niveau:'ok'|'attention'|'stop', titre:string, points:Array<{niveau, texte}>}}
+ */
+export function conseils(b, { maintenant = b.fin } = {}) {
+  const m = b.maintenant, r = b.rythme, pts = [];
+  const h = x => (x >= 1 ? `${Math.round(x)} h` : `${Math.max(1, Math.round(x * 60))} min`);
+  const jour = ms => new Date(ms).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric' });
+  const dit = (niveau, texte) => pts.push({ niveau, texte });
+  const recentes = b.plongees.filter(p => p.fin > maintenant - 48 * 36e5);
+
+  // L'azote en réserve, et la prochaine plongée
+  if (m.sat >= 50) dit('stop', `Tes tissus sont encore très chargés (${Math.round(m.sat)} %) : pas de nouvelle plongée tout de suite. Sous 20 % dans ~${h(heuresAvant(m.T, 20))}.`);
+  else if (m.sat >= 20) dit('attention', `Tu as encore de l’azote en réserve (${Math.round(m.sat)} %). Si tu replonges, fais plus court et moins profond, ou attends ~${h(heuresAvant(m.T, 20))} pour repasser sous 20 %.`);
+  else if (m.sat >= 5) dit('ok', `Il te reste un peu d’azote (${Math.round(m.sat)} %) : une plongée raisonnable est possible. Désaturation complète dans ~${h(m.desatH)}.`);
+  else if (b.plongees.length) dit('ok', 'Tu es désaturé : tes tissus sont revenus à l’équilibre.');
+
+  // Les pics qui montent d'une plongée à l'autre
+  const pics = recentes.map(p => p.pic);
+  if (pics.length >= 3 && pics[pics.length - 1] > pics[0] && Math.max(...pics.slice(-2)) >= 80) {
+    dit('attention', `Tes pics de saturation restent hauts d’une plongée à l’autre (${pics.map(v => Math.round(v)).join(' → ')} %) : l’azote s’accumule, espace tes plongées.`);
+  } else if (recentes.some(p => p.pic >= 85)) {
+    const p = recentes.find(q => q.pic >= 85);
+    dit('attention', `Le ${jour(p.debut)} à ${new Date(p.debut).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}, tu as atteint ${Math.round(p.pic)} % : tout près de la limite.`);
+  }
+
+  // Le profil inversé : une plongée plus profonde que la précédente le même jour
+  for (let j = 1; j < recentes.length; j++) {
+    const a = recentes[j - 1], c = recentes[j];
+    if (a.d.date === c.d.date && c.prof > a.prof + 3) {
+      dit('attention', `Le ${jour(c.debut)}, la plongée à ${Math.round(c.prof)} m est venue après celle à ${Math.round(a.prof)} m : la plus profonde d’abord, c’est mieux.`);
+      break;
+    }
+  }
+
+  // Les intervalles de surface trop courts
+  const court = recentes.find(p => p.intervalle != null && p.intervalle < 90 * 60e3);
+  if (court) dit('attention', `Seulement ${h(court.intervalle / 36e5)} de surface avant la plongée du ${jour(court.debut)} : vise au moins 1 h 30 à 2 h entre deux plongées.`);
+
+  // La vitesse de remontée
+  const vite = recentes.filter(p => p.vmax > 15).sort((a, c) => c.vmax - a.vmax)[0];
+  if (vite) dit(vite.vmax > 20 ? 'stop' : 'attention', `Remontée rapide (${Math.round(vite.vmax)} m/min) le ${jour(vite.debut)} : 15 m/min au plus, et 6 m/min après le palier.`);
+
+  // Le palier de sécurité
+  const sansPalier = recentes.find(p => p.prof >= 15 && p.d.palierSecu === false && !p.deco);
+  if (sansPalier) dit('attention', `Pas de palier de sécurité noté le ${jour(sansPalier.debut)} (${Math.round(sansPalier.prof)} m) : 3 à 5 min à 3-5 m, à chaque plongée.`);
+
+  // Le rythme, l'oxygène, l'avion
+  if (r.sur24h >= 4 || r.joursDAffilee >= 5) dit('stop', `${r.sur24h} plongées en 24 h, ${r.joursDAffilee} jour(s) d’affilée : prends une journée sans plonger.`);
+  else if (r.sur24h >= 3 || r.joursDAffilee >= 3) dit('attention', `${r.sur24h} plongées en 24 h, ${r.joursDAffilee} jour(s) d’affilée : une journée de repos ferait du bien à tes tissus.`);
+  if (m.cns >= 80) dit('stop', `Oxygène : CNS ${Math.round(m.cns)} % — pas de nitrox avant qu’il redescende.`);
+  else if (m.cns >= 40 || m.otu7 >= 1300) dit('attention', `Oxygène : CNS ${Math.round(m.cns)} %, ${Math.round(m.otu7)} OTU sur 7 jours — surveille ta PpO2.`);
+  if (m.avion?.attente > 0) dit('info', `Avion : pas avant ${new Date(m.avion.jusqua).toLocaleString('fr-FR', { weekday: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}.`);
+
+  if (!b.plongees.length) return { niveau: 'ok', titre: '✅ Tu es safe', points: [{ niveau: 'ok', texte: 'Aucune plongée ces 7 derniers jours : rien en réserve.' }] };
+  const niveau = pts.some(p => p.niveau === 'stop') ? 'stop' : pts.some(p => p.niveau === 'attention') ? 'attention' : 'ok';
+  const titre = niveau === 'stop' ? '⛔ Pas de plongée pour l’instant' : niveau === 'attention' ? '⚠️ Attention' : '✅ Tu es safe';
+  const ordre = { stop: 0, attention: 1, ok: 2, info: 3 };
+  return { niveau, titre, points: pts.sort((a, c) => ordre[a.niveau] - ordre[c.niveau]) };
 }
 
 /** Les feux : 'vert' | 'orange' | 'rouge', avec une phrase. */

@@ -989,3 +989,15 @@ body { background-image: var(--deco, none), var(--bg-image); background-size: 20
 .corps-carte .corps-lbl { font-size: 11px; }
 .corps-zoom-boutons { display: flex; gap: 6px; margin: 4px 0 8px; }
 .corps-zoom-boutons .chip.on { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+.corps-assistant { border-radius: 16px; padding: 12px 14px; margin-bottom: 12px; border: 1.5px solid; }
+.corps-assistant.ok { border-color: #22c55e; background: rgba(34,197,94,.10); }
+.corps-assistant.attention { border-color: #f59e0b; background: rgba(245,158,11,.11); }
+.corps-assistant.stop { border-color: #ef4444; background: rgba(239,68,68,.11); }
+.corps-assistant.compact { padding: 8px 10px; margin-bottom: 8px; }
+.corps-verdict { font-size: 19px; font-weight: 800; margin-bottom: 6px; }
+.corps-assistant.compact .corps-verdict { font-size: 15px; margin-bottom: 2px; }
+.corps-raison { font-size: 13px; color: var(--text-dim); line-height: 1.35; }
+.corps-raisons { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 7px; }
+.corps-raisons li { display: flex; gap: 8px; font-size: 14px; line-height: 1.4; }
+.corps-raisons li > span:first-child { flex: none; }
+.corps-raisons li.info, .corps-raisons li.ok { color: var(--text-dim); }

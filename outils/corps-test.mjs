@@ -31,6 +31,17 @@ const serie = C.bilanCorps(deux, { maintenant: t('2026-06-03T10:00:00') });
 check('la courbe couvre les 7 jours, la charge redescend en surface', serie.serie.length > 100 && serie.serie[serie.serie.length - 1].sat < serie.plongees[1].pic);
 check('sans courbe : profil carré estimé', C.profilDe({ profMax: 20, dureeMin: 40 })?.estime === true);
 
+// L'assistant
+const a1 = C.conseils(C.bilanCorps(deux, { maintenant: t('2026-06-01T16:00:00') }));
+check('assistant : juste après deux plongées, pas « safe »', a1.niveau !== 'ok' && a1.points.length >= 2, JSON.stringify(a1));
+const a2 = C.conseils(C.bilanCorps(deux, { maintenant: t('2026-06-05T10:00:00') }));
+check('assistant : quelques jours après, « tu es safe »', a2.niveau === 'ok' && /safe/.test(a2.titre), JSON.stringify(a2));
+const rapide = plongee('2026-06-01', '10:00', 30, 30); rapide.samples = rapide.samples.map(x => x.t > 1600 ? { ...x, d: Math.max(0, 30 - (x.t - 1600) / 60 * 25) } : x);
+const a3 = C.conseils(C.bilanCorps([rapide], { maintenant: t('2026-06-01T12:00:00') }));
+check('assistant : une remontée à 25 m/min est signalée', a3.points.some(p => /Remontée rapide/.test(p.texte)), JSON.stringify(a3.points));
+const inverse = [plongee('2026-06-01', '09:00', 18, 40), plongee('2026-06-01', '14:00', 32, 25)];
+check('assistant : profil inversé dans la journée', C.conseils(C.bilanCorps(inverse, { maintenant: t('2026-06-01T15:00:00') })).points.some(p => /plus profonde d’abord/.test(p.texte)));
+
 console.log(results.join('\n'));
 const ko = results.filter(r => r.startsWith(' FAIL'));
 console.log(`\n${results.length - ko.length}/${results.length} vérifications azote & oxygène`);

@@ -9,7 +9,7 @@
 import { el, fmtDate } from '../lib.js';
 import { store } from '../store.js';
 import { navigate } from '../router.js';
-import { bilanCorps, feux, ZHL16C, saturation } from '../corps.js';
+import { bilanCorps, feux, conseils, ZHL16C, saturation } from '../corps.js';
 
 const NS = 'http://www.w3.org/2000/svg';
 const s = (tag, attrs = {}, ...enfants) => {
@@ -25,6 +25,17 @@ async function bilan() {
   const diverId = await store.getActiveDiverId();
   const dives = diverId ? await store.listDives(diverId) : [];
   return bilanCorps(dives);
+}
+
+/** L'assistant : le verdict et ses raisons. */
+function assistant(b, { compact = false } = {}) {
+  const a = conseils(b);
+  const ico = { stop: '⛔', attention: '⚠️', ok: '✅', info: '✈️' };
+  return el(`div.corps-assistant.${a.niveau}${compact ? '.compact' : ''}`, {},
+    el('div.corps-verdict', { text: a.titre }),
+    compact
+      ? el('div.corps-raison', { text: a.points[0]?.texte || '' })
+      : el('ul.corps-raisons', {}, ...a.points.map(p => el(`li.${p.niveau}`, {}, el('span', { text: ico[p.niveau] || '•' }), el('span', { text: p.texte })))));
 }
 
 /** Les quatre feux. */
@@ -110,6 +121,7 @@ export async function carteCorps() {
   const b = await bilan();
   return el('button.card.corps-carte', { type: 'button', onclick: () => navigate('corps') },
     el('div.corps-carte-tete', {}, el('b', { text: '🫁 Azote & oxygène' }), el('span.hint', { style: { margin: 0 }, text: '7 jours · voir le détail ›' })),
+    assistant(b, { compact: true }),
     rangeeFeux(b, { compact: true }),
     b.plongees.length ? courbe(b, { hauteur: 70, mini: true }) : el('div.hint', { style: { margin: '6px 0 0' }, text: 'Aucune plongée ces 7 derniers jours : tout est au vert.' }));
 }
@@ -137,6 +149,7 @@ export async function corpsView() {
   };
   montrerZoom(168);
   const node = el('div.corps', {},
+    assistant(b),
     rangeeFeux(b),
     el('div.card', {},
       el('h3.corps-titre', { text: 'Charge en azote · 7 derniers jours' }),
