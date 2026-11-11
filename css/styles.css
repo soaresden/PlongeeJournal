@@ -258,7 +258,7 @@ body { background-image: var(--bg-image); background-attachment: fixed; }
 @media (min-width: 1000px) {
   .fiche { column-count: 2; column-gap: 18px; }
   .fiche > * { break-inside: avoid; }
-  .fiche > .fiche-tete, .fiche > .actions-fiche { column-span: all; }
+  .fiche > .fiche-tete, .fiche > .actions-fiche, .fiche > .fiche-parties { column-span: all; }
 }
 
 /* ---------- Cards & lists ---------- */

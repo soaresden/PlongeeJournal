@@ -170,6 +170,33 @@ export async function divesView() {
   const contenu = el('div.dives-contenu');
   const search = el('input', { type: 'search', placeholder: 'Chercher un lieu, un compagnon, une observation…' });
 
+  // « Joindre » : on coche deux plongées qui n'en font qu'une
+  let choix = null;                      // les ids cochés, ou null hors de ce mode
+  const btnJoindre = el('button.btn.sm.ghost.btn-joindre', { type: 'button', text: '🔗', title: 'Joindre deux plongées en une seule',
+    onclick: () => { choix = choix ? null : new Set(); majJoindre(); afficher({ garderScroll: true }); } });
+  const barreJoindre = el('div.joindre-barre', { hidden: true });
+  function majJoindre() {
+    barreJoindre.hidden = !choix;
+    btnJoindre.classList.toggle('on', !!choix);
+    contenu.classList.toggle('en-choix', !!choix);
+    if (!choix) return;
+    const n = choix.size;
+    barreJoindre.replaceChildren(
+      el('span', { text: n < 2 ? `🔗 Touche les 2 plongées à joindre (${n}/2)` : '🔗 Les 2 plongées sont choisies' }),
+      el('button.btn.sm.ghost', { type: 'button', text: 'Annuler', onclick: () => { choix = null; majJoindre(); afficher({ garderScroll: true }); } }),
+      el('button.btn.sm.primary', { type: 'button', text: 'Joindre', disabled: n !== 2, onclick: async () => {
+        const [a, b] = [...choix].map(id => dives.find(x => x.id === id));
+        const { ouvrirJoindre } = await import('./joindre.js');
+        ouvrirJoindre(a, b, { apres: async () => { choix = null; majJoindre(); await rafraichir(); nb.plongees = dives.length; rendreSegments(); } });
+      } }));
+  }
+  function basculer(id) {
+    if (choix.has(id)) choix.delete(id);
+    else { if (choix.size >= 2) choix.delete([...choix][0]); choix.add(id); }
+    contenu.querySelectorAll('.dive-card[data-id]').forEach(c => c.classList.toggle('choisie', choix.has(c.dataset.id)));
+    majJoindre();
+  }
+
   const nb = { plongees: dives.length, fosses: fosses.length, seances: autres.length };
   function rendreSegments() {
     segDisc.innerHTML = '';
@@ -191,6 +218,8 @@ export async function divesView() {
       segVue.append(b);
     });
     search.hidden = vue !== 'liste' || discipline === 'seances';
+    btnJoindre.hidden = vue !== 'liste' || discipline !== 'plongees';
+    if (btnJoindre.hidden && choix) { choix = null; majJoindre(); }
   }
 
   // Des « plongées » importées qui étaient des piscines ou des fosses.
@@ -231,8 +260,8 @@ export async function divesView() {
     el('div', { style: { fontWeight: '650' }, text: `🏊 ${aRanger.length} plongée${aRanger.length > 1 ? 's' : ''} importée${aRanger.length > 1 ? 's' : ''} ressemble${aRanger.length > 1 ? 'nt' : ''} à des séances` }),
     el('div.hint', { text: 'Piscine, fosse : range-les dans Séances pour qu’elles ne comptent plus comme plongées ›' })) : null;
 
-  outils.append(search);
-  wrap.append(el('div.dives-barre', {}, segDisc, outils), bandeauRanger || '', bandeauVerif || '', bandeauDonnees || '', contenu);
+  outils.append(search, btnJoindre);
+  wrap.append(el('div.dives-barre', {}, segDisc, outils), bandeauRanger || '', bandeauVerif || '', bandeauDonnees || '', contenu, barreJoindre);
 
   function matches(d, q) {
     if (!q) return true;
@@ -285,7 +314,8 @@ export async function divesView() {
   function carte(d) {
     const a = ambianceDe(d);
     const prof = Number(d.profMax) || 0;
-    return el('div.card.clickable.dive-card', { style: stylesAmbiance(a), onclick: () => apercuPlongee(d.id, { onClose: rafraichir }) },
+    return el(`div.card.clickable.dive-card${choix?.has(d.id) ? '.choisie' : ''}`, { style: stylesAmbiance(a), 'data-id': d.id,
+      onclick: () => (choix ? basculer(d.id) : apercuPlongee(d.id, { onClose: rafraichir })) },
       vignetteLieu(d, { boite: 84, contenu: d.numero ?? '—' }),
       el('div.dive-main', {},
         el('div.dive-title', { text: d.lieuNom || d.site || 'Lieu non précisé' }),
@@ -454,6 +484,18 @@ export async function divesView() {
   return { title: 'Plongées', node: wrap, identite };
 }
 
+/** Depuis la fiche : joindre à la voisine (ou choisir laquelle, s'il y en a plusieurs). */
+async function joindreDepuisFiche(d, voisines) {
+  const { ouvrirJoindre } = await import('./joindre.js');
+  if (voisines.length === 1) return ouvrirJoindre(d, voisines[0]);
+  openModal(close => el('div', {},
+    el('h3', { text: '🔗 Joindre avec…' }),
+    ...voisines.map(v => el('button.btn', { type: 'button', style: { width: '100%', marginBottom: '8px' },
+      text: `n°${v.numero ?? '—'} · ${v.heureImmersion} · ${v.lieuNom || v.site || ''}`,
+      onclick: () => { close(); ouvrirJoindre(d, v); } })),
+    el('div.btn-row', {}, el('button.btn.ghost', { type: 'button', text: 'Annuler', onclick: close }))));
+}
+
 /** Une « plongée » qui était une séance : on la range, elle quitte le carnet. */
 function versSeance(d) {
   openModal(close => el('div', {},
@@ -504,12 +546,26 @@ export async function diveView({ id }) {
     vignetteLieu(d, { boite: 112, zoom: 11, contenu: d.numero ?? '—', classe: 'grande' }),
   ));
 
+  // Une plongée jointe : ses parties
+  if (d.parties?.length > 1) {
+    wrap.append(el('div.fiche-parties', {}, el('span', { text: `🔗 En ${d.parties.length} parties :` }),
+      ...d.parties.flatMap((x, i) => [
+        i && x.surfaceAvantMin != null ? el('span.fiche-partie-surface', { text: `⛵ ${x.surfaceAvantMin} min` }) : null,
+        el('span.fiche-partie', { text: [x.heureImmersion, x.dureeMin ? `${x.dureeMin} min` : null, x.profMax ? `${String(x.profMax).replace('.', ',')} m` : null].filter(Boolean).join(' · ') })])));
+  }
+  const { voisinesAJoindre } = await import('./joindre.js');
+  const voisines = voisinesAJoindre(d, await store.listDives(d.diverId));
+
   // Actions en tête : on ouvre une fiche pour la lire ou la corriger.
   // Les chercher en bas d'une page longue n'avait aucun sens.
   wrap.append(el('div.btn-row.actions-fiche', {},
     el('button.btn.primary', { text: '✎ Modifier', onclick: () => navigate(`dive/${d.id}/edit`) }),
     el('button.btn.ghost', { text: '🕘 Historique', title: 'Revenir à une version précédente',
       onclick: async () => (await import('./historique.js')).ouvrirHistoriqueFiche(d.id, { apres: () => navigate(`dive/${d.id}`, true) }) }),
+    voisines.length ? el('button.btn.ghost', {
+      text: '🔗 Joindre', title: 'Avec la plongée d’avant ou d’après : c’était la même',
+      onclick: () => joindreDepuisFiche(d, voisines),
+    }) : null,
     el('button.btn.ghost', {
       text: '↪ En séance', title: 'C’était une fosse, une piscine ou une apnée',
       onclick: () => versSeance(d),

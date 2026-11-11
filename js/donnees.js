@@ -119,7 +119,8 @@ export function completerDepuisMontre(dive, decode) {
   const vide = v => v == null || v === '' || (typeof v === 'number' && Number.isNaN(v));
   const ancienne = dive.samples || [];
   const avecSonde = s => (s || []).some(p => Number.isFinite(p?.pression));
-  if (decode.samples?.length && (!ancienne.length || (!avecSonde(ancienne) && avecSonde(decode.samples))
+  // Une plongée jointe (deux enregistrements) : sa courbe est déjà la bonne.
+  if (!(dive.parties?.length > 1) && decode.samples?.length && (!ancienne.length || (!avecSonde(ancienne) && avecSonde(decode.samples))
     || decode.samples.length > ancienne.length * 1.3)) {
     champs.samples = decode.samples;
     libelles.push(avecSonde(decode.samples) ? 'courbe et sonde' : 'courbe');

@@ -595,7 +595,7 @@ input.lecture-seule { opacity: .75; cursor: default; }
 
 /* ---------- Carnet partagé : lecture seule ---------- */
 html.partage .tab-add, html.partage [data-route="reglages"], html.partage .btn-reglages,
-html.partage .actions-fiche, html.partage .annuaire-ajout, html.partage .tag-actions, html.partage .tag-renommer,
+html.partage .actions-fiche, html.partage .btn-joindre, html.partage .joindre-barre, html.partage .annuaire-ajout, html.partage .tag-actions, html.partage .tag-renommer,
 html.partage .apercu-actions .btn.ghost, html.partage .palq-saisie, html.partage .palq-props, html.partage .palq-puce button,
 html.partage .centre-ligne .btn, html.partage .seances-ajout, html.partage .pverse-pied .btn,
 html.partage .dives-actions, html.partage .btn.danger, html.partage .lien-texte { display: none !important; }
@@ -1092,3 +1092,31 @@ body { background-image: var(--deco, none), var(--bg-image); background-size: 20
 .corps-curseur { flex: 1; accent-color: var(--accent); }
 .corps-timeline-sauts { display: flex; flex-wrap: wrap; gap: 5px; }
 .corps-timeline-sauts .chip { padding: 3px 9px; font-size: 12px; }
+
+/* --- Joindre deux plongées en une --- */
+.btn-joindre { flex: 0 0 auto; font-size: 16px; padding: 6px 10px; }
+.btn-joindre.on { background: var(--accent); color: var(--on-accent); }
+.dives-contenu.en-choix .dive-card { position: relative; }
+.dives-contenu.en-choix .dive-card::after { content: ''; position: absolute; top: 10px; right: 10px; width: 22px; height: 22px; border-radius: 50%;
+  border: 2px solid var(--text-mute); background: var(--surface); }
+.dives-contenu.en-choix .dive-card.choisie { outline: 3px solid var(--accent); outline-offset: -1px; }
+.dives-contenu.en-choix .dive-card.choisie::after { content: '✓'; border-color: var(--accent); background: var(--accent); color: var(--on-accent);
+  font-weight: 800; font-size: 14px; display: grid; place-items: center; }
+.joindre-barre { position: sticky; bottom: 8px; z-index: 5; display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+  margin-top: 10px; padding: 10px 12px; border-radius: 14px; background: var(--surface); border: 1px solid rgba(var(--accent-rgb), .6);
+  box-shadow: 0 6px 22px rgba(0, 0, 0, .35); font-size: 13.5px; }
+.joindre-barre > span { flex: 1 1 160px; }
+.joindre-parts { display: flex; flex-direction: column; gap: 4px; margin: 12px 0; }
+.joindre-part { display: flex; flex-direction: column; padding: 8px 10px; border-radius: 10px; background: var(--bg-2); border: 1px solid var(--line); }
+.joindre-part span { font-size: 13px; color: var(--text-dim); }
+.joindre-surface { text-align: center; font-size: 12.5px; color: var(--text-dim); }
+.joindre-lieux { margin: 8px 0; }
+.joindre-lieu { display: flex; gap: 8px; align-items: center; padding: 4px 0; font-size: 14px; }
+.joindre-apercu { margin: 10px 0; padding: 10px 12px; border-radius: 12px; border: 1px dashed rgba(var(--accent-rgb), .6); background: rgba(var(--accent-rgb), .08); }
+.joindre-titre { font-size: 12px; font-weight: 750; color: var(--accent); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 2px; }
+.joindre-chiffres { display: flex; gap: 16px; margin-top: 6px; }
+.joindre-chiffres span { display: flex; flex-direction: column; font-size: 12px; color: var(--text-dim); }
+.joindre-chiffres b { font-size: 16px; color: var(--text); }
+.fiche-parties { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 13px; color: var(--text-dim); margin: 0 0 10px; }
+.fiche-partie { padding: 3px 9px; border-radius: 99px; background: var(--bg-2); border: 1px solid var(--line); color: var(--text); }
+.fiche-partie-surface { font-size: 12px; }

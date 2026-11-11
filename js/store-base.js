@@ -308,6 +308,26 @@ export function creerStore(support) {
       await save({ table: 'dives', id, supprime: true });
     },
 
+    /** Deux plongées qui n'en font qu'une : la fiche jointe remplace la première, la seconde s'en va. */
+    async joindreDives(jointe, secondeId) {
+      const d = db();
+      const seconde = d.dives.find(x => x.id === secondeId);
+      garderAncienne('dive', jointe);
+      if (seconde) garderAncienne('dive', seconde, 'suppression');
+      jointe.updatedAt = maintenant();
+      reconcileTimes(jointe);
+      const i = d.dives.findIndex(x => x.id === jointe.id);
+      if (i >= 0) d.dives[i] = jointe; else d.dives.push(jointe);
+      enterrer(d, secondeId);
+      d.dives = d.dives.filter(x => x.id !== secondeId);
+      // Ce qui pointait vers la seconde pointe vers la fiche jointe
+      for (const x of d.dives) if (x.repriseDe === secondeId) { x.repriseDe = jointe.id; x.updatedAt = jointe.updatedAt; }
+      retenir(jointe);
+      numeroter(d, jointe.diverId);
+      await save({ table: 'dives' });
+      return jointe;
+    },
+
     /** Plusieurs plongées modifiées d'un coup (tâches de fond) : une seule écriture. */
     async savePlongees(liste) {
       const d = db();
