@@ -595,7 +595,7 @@ input.lecture-seule { opacity: .75; cursor: default; }
 
 /* ---------- Carnet partagé : lecture seule ---------- */
 html.partage .tab-add, html.partage [data-route="reglages"], html.partage .btn-reglages,
-html.partage .actions-fiche, html.partage .btn-joindre, html.partage .joindre-barre, html.partage .annuaire-ajout, html.partage .tag-actions, html.partage .tag-renommer,
+html.partage .actions-fiche, html.partage .joindre-barre, html.partage .annuaire-ajout, html.partage .tag-actions, html.partage .tag-renommer,
 html.partage .apercu-actions .btn.ghost, html.partage .palq-saisie, html.partage .palq-props, html.partage .palq-puce button,
 html.partage .centre-ligne .btn, html.partage .seances-ajout, html.partage .pverse-pied .btn,
 html.partage .dives-actions, html.partage .btn.danger, html.partage .lien-texte { display: none !important; }
@@ -1094,8 +1094,7 @@ body { background-image: var(--deco, none), var(--bg-image); background-size: 20
 .corps-timeline-sauts .chip { padding: 3px 9px; font-size: 12px; }
 
 /* --- Joindre deux plongées en une --- */
-.btn-joindre { flex: 0 0 auto; font-size: 16px; padding: 6px 10px; }
-.btn-joindre.on { background: var(--accent); color: var(--on-accent); }
+.dive-card { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
 .dives-contenu.en-choix .dive-card { position: relative; }
 .dives-contenu.en-choix .dive-card::after { content: ''; position: absolute; top: 10px; right: 10px; width: 22px; height: 22px; border-radius: 50%;
   border: 2px solid var(--text-mute); background: var(--surface); }

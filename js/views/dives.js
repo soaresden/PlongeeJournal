@@ -170,19 +170,17 @@ export async function divesView() {
   const contenu = el('div.dives-contenu');
   const search = el('input', { type: 'search', placeholder: 'Chercher un lieu, un compagnon, une observation…' });
 
-  // « Joindre » : on coche deux plongées qui n'en font qu'une
+  // « Joindre » : un appui long sur une plongée ouvre la sélection, on touche
+  // la seconde, puis « Joindre » (les deux n'en font qu'une)
   let choix = null;                      // les ids cochés, ou null hors de ce mode
-  const btnJoindre = el('button.btn.sm.ghost.btn-joindre', { type: 'button', text: '🔗', title: 'Joindre deux plongées en une seule',
-    onclick: () => { choix = choix ? null : new Set(); majJoindre(); afficher({ garderScroll: true }); } });
   const barreJoindre = el('div.joindre-barre', { hidden: true });
   function majJoindre() {
     barreJoindre.hidden = !choix;
-    btnJoindre.classList.toggle('on', !!choix);
     contenu.classList.toggle('en-choix', !!choix);
     if (!choix) return;
     const n = choix.size;
     barreJoindre.replaceChildren(
-      el('span', { text: n < 2 ? `🔗 Touche les 2 plongées à joindre (${n}/2)` : '🔗 Les 2 plongées sont choisies' }),
+      el('span', { text: n < 2 ? `🔗 Touche l’autre plongée à joindre (${n}/2)` : '🔗 Les 2 plongées sont choisies' }),
       el('button.btn.sm.ghost', { type: 'button', text: 'Annuler', onclick: () => { choix = null; majJoindre(); afficher({ garderScroll: true }); } }),
       el('button.btn.sm.primary', { type: 'button', text: 'Joindre', disabled: n !== 2, onclick: async () => {
         const [a, b] = [...choix].map(id => dives.find(x => x.id === id));
@@ -193,6 +191,8 @@ export async function divesView() {
   function basculer(id) {
     if (choix.has(id)) choix.delete(id);
     else { if (choix.size >= 2) choix.delete([...choix][0]); choix.add(id); }
+    if (!choix.size) choix = null;
+    if (!choix) { contenu.querySelectorAll('.dive-card.choisie').forEach(c => c.classList.remove('choisie')); majJoindre(); return; }
     contenu.querySelectorAll('.dive-card[data-id]').forEach(c => c.classList.toggle('choisie', choix.has(c.dataset.id)));
     majJoindre();
   }
@@ -218,8 +218,7 @@ export async function divesView() {
       segVue.append(b);
     });
     search.hidden = vue !== 'liste' || discipline === 'seances';
-    btnJoindre.hidden = vue !== 'liste' || discipline !== 'plongees';
-    if (btnJoindre.hidden && choix) { choix = null; majJoindre(); }
+    if ((vue !== 'liste' || discipline !== 'plongees') && choix) { choix = null; majJoindre(); }
   }
 
   // Des « plongées » importées qui étaient des piscines ou des fosses.
@@ -260,7 +259,7 @@ export async function divesView() {
     el('div', { style: { fontWeight: '650' }, text: `🏊 ${aRanger.length} plongée${aRanger.length > 1 ? 's' : ''} importée${aRanger.length > 1 ? 's' : ''} ressemble${aRanger.length > 1 ? 'nt' : ''} à des séances` }),
     el('div.hint', { text: 'Piscine, fosse : range-les dans Séances pour qu’elles ne comptent plus comme plongées ›' })) : null;
 
-  outils.append(search, btnJoindre);
+  outils.append(search);
   wrap.append(el('div.dives-barre', {}, segDisc, outils), bandeauRanger || '', bandeauVerif || '', bandeauDonnees || '', contenu, barreJoindre);
 
   function matches(d, q) {
@@ -314,8 +313,27 @@ export async function divesView() {
   function carte(d) {
     const a = ambianceDe(d);
     const prof = Number(d.profMax) || 0;
+    let long = null, appuiLong = false, x0 = 0, y0 = 0;
+    const lacher = () => { clearTimeout(long); long = null; };
     return el(`div.card.clickable.dive-card${choix?.has(d.id) ? '.choisie' : ''}`, { style: stylesAmbiance(a), 'data-id': d.id,
-      onclick: () => (choix ? basculer(d.id) : apercuPlongee(d.id, { onClose: rafraichir })) },
+      // Appui long : la sélection s'ouvre avec cette plongée cochée
+      onpointerdown: e => {
+        appuiLong = false; x0 = e.clientX; y0 = e.clientY; lacher();
+        if (document.documentElement.classList.contains('partage') || e.button > 0) return;
+        long = setTimeout(() => {
+          long = null; appuiLong = true;
+          try { navigator.vibrate?.(30); } catch { /* pas de vibreur */ }
+          if (!choix) { choix = new Set(); majJoindre(); }
+          if (!choix.has(d.id)) basculer(d.id);
+        }, 550);
+      },
+      onpointermove: e => { if (long && Math.hypot(e.clientX - x0, e.clientY - y0) > 10) lacher(); },
+      onpointerup: lacher, onpointercancel: lacher, onpointerleave: lacher,
+      oncontextmenu: e => e.preventDefault(),
+      onclick: () => {
+        if (appuiLong) { appuiLong = false; return; }
+        if (choix) basculer(d.id); else apercuPlongee(d.id, { onClose: rafraichir });
+      } },
       vignetteLieu(d, { boite: 84, contenu: d.numero ?? '—' }),
       el('div.dive-main', {},
         el('div.dive-title', { text: d.lieuNom || d.site || 'Lieu non précisé' }),
