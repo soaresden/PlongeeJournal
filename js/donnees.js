@@ -116,6 +116,8 @@ export function debutOrdinateur(dives) {
  */
 export function completerDepuisMontre(dive, decode) {
   const champs = {}, libelles = [];
+  // Une plongée jointe (plusieurs enregistrements) : déjà complète, un morceau ne la retouche pas
+  if (dive.parties?.length > 1) return { champs, libelles };
   const vide = v => v == null || v === '' || (typeof v === 'number' && Number.isNaN(v));
   const ancienne = dive.samples || [];
   const avecSonde = s => (s || []).some(p => Number.isFinite(p?.pression));

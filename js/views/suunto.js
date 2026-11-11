@@ -20,6 +20,7 @@ import { navigate } from '../router.js';
 import { fitToDive, mergeDives, profileSvg } from '../fit.js';
 import { paliersDuProfil } from '../profil-analyse.js';
 import { lieuDuCarnet, memeSortie } from '../lieu-auto.js';
+import { trouverDansCarnet } from '../suunto-aligner.js';
 
 function fmtDateHeure(d) {
   if (!d) return 'Date inconnue';
@@ -90,12 +91,17 @@ export async function suuntoView() {
     champ.value = '';
     if (!fichiers.length) return;
 
+    // Ce qui est déjà au carnet (même fichier, même heure, ou partie d'une plongée jointe)
+    const diverId = await store.getActiveDiverId();
+    const connues = diverId ? await store.listDives(diverId) : [];
     for (const f of fichiers) {
       try {
         const octets = new Uint8Array(await f.arrayBuffer());
         const decode = fitToDive(octets);
         if (!decode) { toast(`${f.name} : aucune donnée de plongée`, true); continue; }
-        lots.push({ nom: f.name, decode, retenu: true });
+        const deja = connues.find(d => (d.suuntoKeys || []).includes(f.name))
+          || trouverDansCarnet({ cle: null, debut: decode.start ? decode.start.getTime() : NaN }, connues)?.entree || null;
+        lots.push({ nom: f.name, decode, retenu: !deja, deja });
       } catch (e) {
         console.error(e);
         toast(`${f.name} illisible : ${e.message}`, true);
@@ -135,7 +141,9 @@ export async function suuntoView() {
                      decode.tempFond != null ? `${Math.round(decode.tempFond)} °C` : null]
                 .filter(Boolean).join(' · ') || 'Sans détail' }),
             el('div', { style: { color: 'var(--text-mute)', fontSize: '11.5px' },
-              text: lot.nom })),
+              text: lot.nom }),
+            lot.deja ? el('div', { style: { color: 'var(--warn)', fontSize: '12.5px', marginTop: '2px' },
+              text: `Déjà au carnet : n°${lot.deja.numero ?? '—'}${lot.deja.parties?.length > 1 ? ' (plongée jointe)' : ''} — décochée` }) : null),
           el('button.icon-btn', { text: '✕', title: 'Retirer',
             onclick: () => { lots.splice(i, 1); rendre(); } })),
         decode.samples?.length

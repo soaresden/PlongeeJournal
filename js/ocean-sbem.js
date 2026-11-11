@@ -438,9 +438,13 @@ export function plongeeCorrespondante(fiche, dives) {
     }
   }
   for (const d of dives) {
-    if (!d.date || !d.heureImmersion) continue;
-    const t = new Date(`${d.date}T${d.heureImmersion}:00`).getTime() / 1000;
-    if (Math.abs(t - fiche.id) <= 600) return { dive: d, comment: 'même date et même heure' };
+    if (!d.date) continue;
+    // Une plongée jointe : chacune de ses parties a son heure
+    for (const hi of [d.heureImmersion, ...(d.parties || []).map(x => x.heureImmersion)]) {
+      if (!/^\d\d:\d\d/.test(hi || '')) continue;
+      const t = new Date(`${d.date}T${hi.slice(0, 5)}:00`).getTime() / 1000;
+      if (Math.abs(t - fiche.id) <= 600) return { dive: d, comment: d.parties?.length > 1 ? 'partie d’une plongée jointe' : 'même date et même heure' };
+    }
   }
   return null;
 }

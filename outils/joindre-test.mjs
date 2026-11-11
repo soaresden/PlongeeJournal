@@ -55,6 +55,24 @@ const sa = { ...a, samples: [], suuntoKeys: [] }, sb = { ...b, samples: [], suun
 check('sans courbe : surface d’après les heures', J.ordreEtSurface(sa, sb).surfaceMin === 8, J.ordreEtSurface(sa, sb).surfaceMin);
 check('sans courbe : durée 52 min', reconcileTimes(J.joindrePlongees(sa, sb)).dureeMin === 52);
 
+// Les synchros ne recréent pas la seconde partie
+const { plongeeCorrespondante } = await import(__p2u(path.join(ROOT, 'js/ocean-sbem.js')).href);
+const { trouverDansCarnet, completerPlongee } = await import(__p2u(path.join(ROOT, 'js/suunto-aligner.js')).href);
+const { completerDepuisMontre } = await import(__p2u(path.join(ROOT, 'js/donnees.js')).href);
+const ocean1 = ocean0 + 20 * 60;
+check('montre (Bluetooth) : 1re partie reconnue', plongeeCorrespondante({ id: ocean0 }, [f])?.dive === f);
+check('montre (Bluetooth) : 2de partie reconnue', plongeeCorrespondante({ id: ocean1 }, [f])?.dive === f);
+check('compte Suunto : 2de partie reconnue', trouverDansCarnet({ cle: 'abc', debut: ocean1 * 1000 }, [f])?.entree === f);
+// Plongées saisies à la main (sans clé de montre) puis jointes : reconnues par l'heure de chaque partie
+const fm = reconcileTimes(J.joindrePlongees(sa, sb));
+const heure = h => new Date(`2026-11-11T${h}:00`).getTime();
+check('sans clé : 2de partie reconnue (montre)', plongeeCorrespondante({ id: heure('07:20') / 1000 }, [fm])?.dive === fm);
+check('sans clé : 2de partie reconnue (compte Suunto)', trouverDansCarnet({ cle: 'abc', debut: heure('07:20') }, [fm])?.entree === fm);
+check('une autre plongée à 09:30 n’est pas prise pour elle', !trouverDansCarnet({ cle: 'abc', debut: heure('09:30') }, [fm]));
+const morceau = { samples: b.samples, profMax: 27.2, dureeMin: 40, pressionDepart: 168, pressionFin: 40, lieu: { lat: 1, lng: 2 } };
+check('compte Suunto : un morceau ne retouche pas la plongée jointe', !completerPlongee({ ...f, samples: [] }, morceau).libelles.length);
+check('montre : un morceau ne retouche pas la plongée jointe', !completerDepuisMontre({ ...f, lat: null }, morceau).libelles.length);
+
 console.log(results.join('\n'));
 const ko = results.filter(r => r.startsWith(' FAIL'));
 console.log(`\n${results.length - ko.length}/${results.length} vérifications joindre`);

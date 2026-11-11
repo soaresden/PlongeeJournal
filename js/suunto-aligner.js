@@ -106,13 +106,17 @@ export function trouverDansCarnet(act, connues) {
   // lieu de l'activité quand Suunto la donne (plongée à l'étranger).
   const tLieu = Number.isFinite(act.decalageMin) ? t + act.decalageMin * 60 : null;
   for (const d of connues) {
-    if (!d.date || !/^\d\d:\d\d/.test(d.heureImmersion || '')) continue;
-    const td = new Date(`${d.date}T${d.heureImmersion.slice(0, 5)}:00`).getTime() / 1000;
-    const [a, m, j] = d.date.split('-').map(Number);
-    const [h, mi] = d.heureImmersion.split(':').map(Number);
-    const murale = Date.UTC(a, m - 1, j, h, mi) / 1000;
-    if (Math.abs(td - t) <= 600 || (tLieu !== null && Math.abs(murale - tLieu) <= 600)) {
-      return { entree: d, comment: 'même date et même heure' };
+    if (!d.date) continue;
+    // Une plongée jointe : chacune de ses parties a son heure
+    for (const hi of [d.heureImmersion, ...(d.parties || []).map(x => x.heureImmersion)]) {
+      if (!/^\d\d:\d\d/.test(hi || '')) continue;
+      const td = new Date(`${d.date}T${hi.slice(0, 5)}:00`).getTime() / 1000;
+      const [a, m, j] = d.date.split('-').map(Number);
+      const [h, mi] = hi.split(':').map(Number);
+      const murale = Date.UTC(a, m - 1, j, h, mi) / 1000;
+      if (Math.abs(td - t) <= 600 || (tLieu !== null && Math.abs(murale - tLieu) <= 600)) {
+        return { entree: d, comment: d.parties?.length > 1 ? 'partie d’une plongée jointe' : 'même date et même heure' };
+      }
     }
   }
   return null;
@@ -128,6 +132,8 @@ const vide = v => v === null || v === undefined || v === '' || (typeof v === 'nu
 export function completerPlongee(dive, dec) {
   const champs = {};
   const libelles = [];
+  // Une plongée jointe (plusieurs enregistrements) : déjà complète, un morceau ne la retouche pas
+  if (dive.parties?.length > 1) return { champs, libelles };
   const mettre = (k, v, libelle) => {
     if (vide(v) || !vide(dive[k])) return false;
     champs[k] = v;
