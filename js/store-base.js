@@ -239,6 +239,7 @@ export function creerStore(support) {
         if (!String(garder[k] ?? '').trim() && String(retirer[k] ?? '').trim()) garder[k] = retirer[k];
       }
       garder.moniteur = !!(garder.moniteur || retirer.moniteur);
+      if (!garder.mii && retirer.mii) garder.mii = retirer.mii;         // son Mii, s'il n'était choisi que sur l'autre fiche
       garder.categories = [...new Set([...(garder.categories || []), ...(retirer.categories || [])])];
       if ((retirer.stamps || []).length) garder.stamps = [...(garder.stamps || []), ...retirer.stamps];
       garder.updatedAt = t;

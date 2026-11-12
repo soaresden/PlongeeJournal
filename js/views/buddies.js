@@ -5,7 +5,7 @@
 import { el, fullName, nomPlongeur, couleurCategorie, toast, confirmBox, openModal } from '../lib.js';
 import { verifierTags } from '../tags.js';
 import { devinerGenre, genreDe, COULEUR_GENRE } from '../genre.js';
-import { plongeurverse } from './plongeurverse.js';
+import { plongeurverse, editeurMii } from './plongeurverse.js';
 import { store, emptyBuddy } from '../store.js';
 import { navigate } from '../router.js';
 import { ouvrirApercu, fermerApercu, ligneApercu, apercuPlongee } from '../apercu.js';
@@ -417,7 +417,8 @@ export async function apercuPlongeur(id, { onClose = null } = {}) {
     i.addEventListener('input', () => maj({ [cle]: i.value }));
     return i;
   };
-  const genreSeg = choixGenre(b, v => maj({ genre: v }));
+  const mii = b.structure ? null : editeurMii(b, v => maj({ mii: v }));
+  const genreSeg = choixGenre(b, v => { maj({ genre: v }); mii?.rafraichir(); });
   const coche = (cle, label) => {
     const c = el('input', { type: 'checkbox' });
     c.checked = !!b[cle];
@@ -469,6 +470,7 @@ export async function apercuPlongeur(id, { onClose = null } = {}) {
       b.structure ? null : champ('Nom', saisie('nom')),
       b.structure ? null : champ('Licence', saisie('licence')),
       el('div.apercu-champ.large', {}, el('span', { text: 'Genre' }), genreSeg),
+      mii ? el('div.apercu-champ.large', {}, el('span', { text: 'Son Mii' }), mii) : null,
       el('div.apercu-champ.large', {}, coche('moniteur', 'Moniteur')),
       el('div.apercu-champ.large', {}, el('span', { text: 'Tags' }), zoneCats),
       champ('Note', note, true)),
@@ -492,6 +494,7 @@ export async function buddyFormView({ id }) {
   if (!b) return { title: 'Introuvable', node: el('div.empty', { text: 'Plongeur introuvable.' }), back: true };
 
   const set = p => Object.assign(b, p);
+  const miiForm = editeurMii(b, v => set({ mii: v }));
   const form = el('form', { onsubmit: e => e.preventDefault() });
 
   // Propose les clubs déjà saisis, sans imposer de liste fermée.
@@ -595,8 +598,9 @@ export async function buddyFormView({ id }) {
         { placeholder: 'La Garenne, Corfou Plongée…', list: 'clubs-connus' }),
         'Sert à regrouper la liste.'),
       listeClubs,
-      field('Genre', choixGenre(b, v => set({ genre: v })),
+      field('Genre', choixGenre(b, v => { set({ genre: v }); miiForm.rafraichir(); }),
         'Sans choix, il est deviné d’après le prénom (bouton en pointillé).'),
+      field('Son Mii', miiForm, 'Peau, cheveux (gris, blancs, dégarni, chauve), barbe : comme dans le Plongeurverse.'),
       field('Qualification',
         el('label.switch', {}, caseMoniteur, el('span', { text: 'C’est un moniteur' })),
         'Un niveau (N1, N3…) change avec le temps : le figer ici serait faux pour '

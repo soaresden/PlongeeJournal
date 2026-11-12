@@ -38,7 +38,7 @@ const API = 'https://api.github.com';
 // des autres plongeurs restent privés.
 const GARDER_PLONGEUR = ['id', 'prenom', 'nom', 'niveau', 'licence', 'materiel', 'equipe', 'combiType', 'combiMm',
   'urgPrenom', 'urgNom', 'urgTel', 'urgLien', 'photoProfil', 'avatar', 'createdAt', 'updatedAt'];
-const GARDER_COMPAGNON = ['id', 'prenom', 'nom', 'club', 'moniteur', 'structure', 'categories', 'genre', 'createdAt', 'updatedAt'];
+const GARDER_COMPAGNON = ['id', 'prenom', 'nom', 'club', 'moniteur', 'structure', 'categories', 'genre', 'mii', 'createdAt', 'updatedAt'];
 const GARDER_BREVET = ['id', 'diverId', 'nom', 'organisme', 'dateObtention', 'createdAt', 'updatedAt'];
 const garder = (o, cles) => Object.fromEntries(cles.filter(k => o[k] !== undefined).map(k => [k, o[k]]));
 
