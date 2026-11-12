@@ -19,6 +19,7 @@ import { aVerifier, ouvrirAVerifier, alertesFiche } from './verifs.js';
 import { paysPlongee, drapeau } from './cv.js';
 import { dossiersEnCache, videosDePlongee, chargerDossiers } from '../videos.js';
 import { photoCarnetFiche } from './carnet-photo.js';
+import { miniMii } from './plongeurverse.js';
 
 // ------------------------------------------------------------
 //  Sur la carte d'une plongée : la courbe, et les chiffres en pictos
@@ -722,10 +723,11 @@ export async function diveView({ id }) {
         d.centreNom ? el('div', { style: { marginBottom: '10px' } }, el('b', { text: d.centreNom }),
           d.centreAdresse ? el('span', { style: { color: 'var(--text-dim)' }, text: ` · ${d.centreAdresse}` }) : null) : null,
         (d.buddyIds || []).length || d.moniteurSansNom
-          ? el('div.chips', {}, ...(d.buddyIds || []).filter(bid => buddyName(bid)).map(bid =>
-              el('span.chip.solid', {
-                text: buddyName(bid) + (bid === d.chefBuddyId ? ' ★' : ''),
-              })),
+          ? el('div.chips', {}, ...(d.buddyIds || []).filter(bid => buddyName(bid)).map(bid => {
+              const bb = buddies.find(x => x.id === bid);
+              return el('span.chip.solid.chip-mii', {}, bb && !bb.structure ? miniMii(bb) : null,
+                el('span', { text: buddyName(bid) + (bid === d.chefBuddyId ? ' ★' : '') }));
+            }),
               d.moniteurSansNom ? el('span.chip.solid', { text: 'Moniteur (nom inconnu)' }) : null)
           : null,
       ),

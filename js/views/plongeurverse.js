@@ -46,7 +46,7 @@ export const MII = {
     ['#ea580c', 'Orange'], ['#ca8a04', 'Jaune']],
   blocs: [['#facc15', 'Jaune'], ['#f97316', 'Orange'], ['#ef4444', 'Rouge'], ['#f472b6', 'Rose'], ['#3b82f6', 'Bleu'],
     ['#22c55e', 'Vert'], ['#cbd5e1', 'Alu'], ['#e2e8f0', 'Blanc'], ['#1f2937', 'Noir']],
-  palmes: [['#0f172a', 'Noires'], ['#facc15', 'Jaunes'], ['#f97316', 'Orange'], ['#ef4444', 'Rouges'], ['#ec4899', 'Roses'],
+  palmes: [['#0f172a', 'Noires'], ['#6b7280', 'Grises'], ['#cbd5e1', 'Gris clair'], ['#facc15', 'Jaunes'], ['#f97316', 'Orange'], ['#ef4444', 'Rouges'], ['#ec4899', 'Roses'],
     ['#7c3aed', 'Violettes'], ['#2563eb', 'Bleues'], ['#06b6d4', 'Turquoise'], ['#22c55e', 'Vertes'], ['#f8fafc', 'Blanches']],
   bandanas: [['#dc2626', 'Rouge'], ['#2563eb', 'Bleu'], ['#0f172a', 'Noir'], ['#16a34a', 'Vert'], ['#facc15', 'Jaune'],
     ['#f97316', 'Orange'], ['#ec4899', 'Rose'], ['#7c3aed', 'Violet'], ['#f8fafc', 'Blanc'], ['#0e7490', 'Turquoise']],
@@ -427,11 +427,21 @@ export function plongeurverse({ buddies, compte = () => 0, onTap = () => {}, moi
     cam.ox += px - apres.x; cam.oy += py - apres.y;
   }
 
+  /** La hauteur que la scène devrait avoir (tout ce qui reste de l'écran). */
+  function hauteurVoulue(r = boite.getBoundingClientRect()) {
+    const vue = boite.closest('#view');
+    const bas = vue ? parseFloat(getComputedStyle(vue).paddingBottom) || 0 : 0;
+    const dessous = boite.nextElementSibling?.offsetHeight || 0;
+    return Math.round(Math.max(260, Math.min(1400, window.innerHeight - (r.top + (vue?.scrollTop || 0)) - bas - dessous - 10)));
+  }
+  let verif = 0;
   function dimensionner() {
     const r = boite.getBoundingClientRect();
     const premier = !W || W === 360;
     W = Math.max(280, r.width);
-    H = Math.round(Math.max(320, Math.min(window.innerHeight * 0.62, 640)));
+    // Toute la hauteur qui reste sous la scène (sans faire défiler la page) :
+    // l'écran, moins ce qu'il y a au-dessus, la ligne du dessous et la marge du bas.
+    H = hauteurVoulue(r);
     const dpr = Math.min(2, window.devicePixelRatio || 1);
     canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
     canvas.style.height = `${H}px`;
@@ -439,6 +449,15 @@ export function plongeurverse({ buddies, compte = () => 0, onTap = () => {}, moi
     if (premier || !cam.ox) { if (moi) surMoi(false); else cadrer(false); }
   }
   /** La caméra sur moi (zoomée), pour me retrouver parmi tout le monde. */
+  // ---------- depuis le volet : viser quelqu'un, le redessiner en direct ----------
+  const trouver = id => plongeurs.find(p => (id === '__moi__' || id === 'moi' ? p.estMoi : p.b.id === id));
+  boite.viser = id => { const p = trouver(id); if (p) viserZone(p.wx - 55, p.wy - 55, p.wx + 55, p.wy + 55); };
+  boite.majPlongeur = b => {
+    const p = trouver(b.id);
+    if (p) Object.assign(p, apparenceDe(b, genreDe(b)), { b, genre: genreDe(b), nom: nomPlongeur(b) || p.nom });
+  };
+  boite.majMoi = mii => { const p = trouver('__moi__'); if (p) Object.assign(p, apparenceDe({ id: 'moi', mii }, 'h', MOI)); };
+
   function surMoi(anime = true) {
     const m = plongeurs.find(p => p.estMoi);
     if (!m) return cadrer(anime);
@@ -738,6 +757,8 @@ export function plongeurverse({ buddies, compte = () => 0, onTap = () => {}, moi
     if (!boite.isConnected) return;
     requestAnimationFrame(image);
     if (document.hidden) { avant = tt; return; }
+    // La page bouge autour (bandeau, volet, rotation) : on se recale, sans faire défiler
+    if (++verif % 30 === 0 && Math.abs(hauteurVoulue() - H) > 3) dimensionner();
     const dt = Math.min(0.05, (tt - avant) / 1000);
     avant = tt; temps += dt;
 
@@ -887,6 +908,8 @@ export function plongeurverse({ buddies, compte = () => 0, onTap = () => {}, moi
     requestAnimationFrame(image);
   });
   if (typeof ResizeObserver === 'function') new ResizeObserver(() => dimensionner()).observe(boite);
+  window.addEventListener('resize', () => { if (boite.isConnected) dimensionner(); });
+  boite.redimensionner = () => { if (boite.isConnected) dimensionner(); };
 
   return boite;
 }
@@ -898,6 +921,13 @@ function buste(toile, b, defaut = null, { entier = false } = {}) {
   ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, toile.width, toile.height); ctx.setTransform(2, 0, 0, 2, 0, 0);
   dessinerPlongeur(ctx, { ...(entier ? { x: 56, y: 168, s: 2.1 } : { x: 58, y: 228, s: 3 }), dir: 1, etat: 'pause', phase: 0, rot: 0, genre: genreDe(b),
     bande: (b.categories || [])[0] ? couleurCategorie(b.categories[0]) : '#22d3ee', ...apparenceDe(b, defaut ? 'h' : genreDe(b), defaut) });
+}
+
+/** Son Mii en tout petit, à côté de son nom (palanquée d'une plongée). */
+export function miniMii(b) {
+  const t = portraitMii(b);
+  t.className = 'mii-mini';
+  return t;
 }
 
 /** Son Mii en portrait (en-tête du volet) ; .redessiner() après un changement. */

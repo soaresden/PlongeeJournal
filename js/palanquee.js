@@ -10,6 +10,7 @@
 import { el, fullName, nomAffiche, toast } from './lib.js';
 import { store, emptyBuddy, premierMoniteur } from './store.js';
 import { trouverPlongeurs } from './noms.js';
+import { miniMii } from './views/plongeurverse.js';
 
 const sansAccent = s => (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
 
@@ -77,6 +78,7 @@ export function editeurPalanquee(dive, buddies, onChange = () => {}, { anonyme =
           dive.buddyIds = [b.id, ...dive.buddyIds.filter(x => x !== b.id)];
           changer();
         } : null },
+        b.structure ? null : miniMii(b),
         mon ? el('small', { text: avecLui ? '★ MON' : 'MON' }) : null,
         el('span', { text: nomAffiche(b) }),
         el('button', { type: 'button', 'aria-label': 'Retirer', text: '×', onclick: e => {

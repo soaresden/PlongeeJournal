@@ -69,7 +69,9 @@ export function fermerApercu({ silencieux = false } = {}) {
   if (!racine || !estOuvert()) return;
   racine.aside.classList.remove('ouvert');
   racine.fond.classList.remove('ouvert');
-  document.documentElement.classList.remove('apercu-actif');
+  const etaitCote = document.documentElement.classList.contains('apercu-cote');
+  document.documentElement.classList.remove('apercu-actif', 'apercu-cote');
+  if (etaitCote) requestAnimationFrame(() => window.dispatchEvent(new Event('resize')));
   const cb = surFermeture; surFermeture = null;
   if (cb && !silencieux) cb();
 }
@@ -79,8 +81,13 @@ export function fermerApercu({ silencieux = false } = {}) {
  * @param {{tete:Node, corps:Node, pied?:Node, style?:object, retour?:Function}} contenu
  * @param {{onClose?:Function}} options  appelée à la fermeture (pour rafraîchir la liste)
  */
-export function ouvrirApercu({ tete, corps, pied = null, style = null, retour = null }, { onClose = null } = {}) {
+export function ouvrirApercu({ tete, corps, pied = null, style = null, retour = null }, { onClose = null, cote = false } = {}) {
   const { fond, aside } = panneau();
+  // « À côté » : l'écran se partage (le Plongeurverse reste visible et vivant), sans voile
+  const avant = document.documentElement.classList.contains('apercu-cote');
+  aside.classList.toggle('cote', !!cote);
+  document.documentElement.classList.toggle('apercu-cote', !!cote);
+  if (avant !== !!cote) requestAnimationFrame(() => window.dispatchEvent(new Event('resize')));     // la scène se range
   aside.innerHTML = '';
   aside.removeAttribute('style');
   if (style) for (const [k, v] of Object.entries(style)) aside.style.setProperty(k, v);
@@ -95,7 +102,7 @@ export function ouvrirApercu({ tete, corps, pied = null, style = null, retour = 
   if (pied) aside.append(el('footer.apercu-pied', {}, pied));
 
   aside.classList.add('ouvert');
-  fond.classList.add('ouvert');
+  if (!cote) fond.classList.add('ouvert'); else fond.classList.remove('ouvert');
   document.documentElement.classList.add('apercu-actif');
   aside.scrollTop = 0;
   aside.querySelector('.apercu-corps').scrollTop = 0;

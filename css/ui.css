@@ -595,7 +595,7 @@ input.lecture-seule { opacity: .75; cursor: default; }
 
 /* ---------- Carnet partagé : lecture seule ---------- */
 html.partage .tab-add, html.partage [data-route="reglages"], html.partage .btn-reglages,
-html.partage .actions-fiche, html.partage .joindre-barre, html.partage .annuaire-ajout, html.partage .tag-actions, html.partage .tag-renommer,
+html.partage .actions-fiche, html.partage .joindre-barre, html.partage .annuaire-ajout, html.partage .tag-actions, html.partage .annuaire-barre .tag-outil, html.partage .tag-renommer,
 html.partage .apercu-actions .btn.ghost, html.partage .palq-saisie, html.partage .palq-props, html.partage .palq-puce button,
 html.partage .centre-ligne .btn, html.partage .seances-ajout, html.partage .pverse-pied .btn,
 html.partage .dives-actions, html.partage .btn.danger, html.partage .lien-texte { display: none !important; }
@@ -1135,3 +1135,46 @@ body { background-image: var(--deco, none), var(--bg-image); background-size: 20
   background: linear-gradient(180deg, rgba(var(--accent-rgb), .14), rgba(14, 116, 144, .25)); }
 .mii-acc { display: flex; flex-wrap: wrap; gap: 6px; }
 .mii-seg { flex-wrap: wrap; } .mii-seg button { white-space: nowrap; }
+
+/* --- Volet « à côté » (depuis le Plongeurverse) : 3/4 la scène, 1/4 le volet --- */
+html.apercu-cote .apercu-fond { display: none; }
+@media (min-width: 760px) {
+  .apercu.cote { width: max(25vw, 320px); }
+  html.apercu-cote #view { padding-right: calc(max(25vw, 320px) + 14px); }
+}
+@media (max-width: 759px) {
+  .apercu.cote { max-height: none; height: max(25dvh, 250px); }
+  html.apercu-cote #view { padding-bottom: calc(max(25dvh, 250px) + 16px); }
+}
+/* Le Mii en tout petit, à côté d'un nom */
+.mii-mini { width: 22px; height: 28px; flex: 0 0 22px; border-radius: 7px; vertical-align: middle;
+  background: linear-gradient(180deg, rgba(var(--accent-rgb), .18), rgba(14, 116, 144, .3)); }
+.chip-mii { display: inline-flex; align-items: center; gap: 6px; padding-left: 4px; }
+.palq-puce .mii-mini { margin-right: 2px; }
+
+/* --- Plongeurs : une seule ligne d'outils, la scène prend le reste de l'écran --- */
+.annuaire-barre { flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+.annuaire-barre .vue-switch { margin: 0; flex: 0 0 auto; }
+.annuaire-barre .vue-switch button { padding: 8px 14px; }
+.annuaire-barre input[type=search] { flex: 1 1 160px; min-width: 120px; }
+.tag-choix { flex: 0 1 220px; min-width: 130px; padding: 9px 10px; border-radius: var(--radius-sm); border: 1px solid var(--line);
+  border-left: 5px solid var(--cat, var(--line)); background: var(--bg-2); color: var(--text); font: inherit; font-size: 14px; }
+.tag-choix.on { border-color: var(--accent); border-left-color: var(--cat, var(--accent)); }
+.annuaire-barre .tag-outil { margin: 0; display: flex; gap: 6px; flex: 0 0 auto; }
+.btn.icone { padding: 8px 10px; min-width: 38px; font-size: 15px; }
+.pverse-pied { margin-top: 6px; font-size: 12.5px; }
+@media (max-width: 600px) {          /* téléphone : 2 lignes — Miis/Liste + boutons, puis recherche + tag */
+  .annuaire-barre .vue-switch { flex: 1 1 auto; order: 0; }
+  .annuaire-barre .tag-outil { order: 1; }
+  .annuaire-barre .annuaire-ajout { order: 2; }
+  .annuaire-barre input[type=search] { order: 3; flex: 1 1 52%; min-width: 0; }
+  .tag-choix { order: 4; flex: 1 1 38%; min-width: 0; }
+}
+@media (min-width: 601px) {
+  .annuaire-barre { flex-wrap: nowrap; }
+  .annuaire-barre input[type=search] { min-width: 80px; }
+  .tag-choix { min-width: 110px; }
+}
+@media (min-width: 760px) {
+  html.apercu-cote #view > * { max-width: none; }
+}

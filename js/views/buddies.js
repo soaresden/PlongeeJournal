@@ -74,9 +74,14 @@ export async function buddiesView() {
     seg.hidden = vue === 'verse';            // le tri ne sert qu'à la liste
   };
   majInterrupteur();
-  wrap.append(interrupteur, el('div.annuaire-barre', {}, recherche, seg,
+  // Tout sur une ligne : Miis / Liste, recherche, le tag (une liste déroulante,
+  // plus des puces qui prennent trois lignes), ✎ renommer, 🔎 vérifier, ＋.
+  const choixTag = el('select.tag-choix', { 'aria-label': 'Filtrer par tag', onchange: () => {
+    filtre = choixTag.value; try { localStorage.setItem(CLE_FILTRE, filtre); } catch { /* privé */ } rendre();
+  } });
+  wrap.append(el('div.annuaire-barre', {}, interrupteur, recherche, choixTag, outilTag, seg,
     el('button.btn.primary.sm.annuaire-ajout', { type: 'button', title: 'Ajouter un plongeur', 'aria-label': 'Ajouter un plongeur',
-      onclick: () => navigate('buddy/new') }, '＋', el('span', { text: ' Ajouter' }))), puces, outilTag, liste);
+      onclick: () => navigate('buddy/new') }, '＋', el('span', { text: ' Ajouter' }))), liste);
 
   const n = b => st.buddyCount[b.id] || 0;
   const initiales = b => (b.structure ? (b.prenom || '?').slice(0, 2) : (b.prenom?.[0] || '') + (b.nom?.[0] || '')).toUpperCase() || '?';
@@ -119,44 +124,18 @@ export async function buddiesView() {
       ...categories.map(c => [`cat:${c}`, c, compte.get(c), couleurCategorie(c)]),
       ['sans', 'Sans tag', gens.filter(b => !cats(b).length).length, null],
     ];
-    puces.replaceChildren(...choix.filter(([id, , nb]) => nb || !id).map(([id, label, nb, couleur]) => {
-      const p = el(`button.cat-filtre${id === filtre ? '.on' : ''}`, { type: 'button',
-        style: couleur ? { '--cat': couleur } : null,
-        onclick: () => { filtre = id; try { localStorage.setItem(CLE_FILTRE, id); } catch { /* privé */ } rendre(); } },
-        couleur ? el('i') : null, label, el('small', { text: String(nb) }));
-      return p;
-    }));
+    choixTag.replaceChildren(...choix.filter(([id, , nb]) => nb || !id).map(([id, label, nb]) =>
+      el('option', { value: id, text: `${id.startsWith('cat:') ? '● ' : id === 'mon' ? '🎓 ' : id === 'sans' ? '○ ' : '🏷 '}${label} · ${nb}` })));
+    choixTag.value = filtre;
+    choixTag.classList.toggle('on', !!filtre);
+    choixTag.style.setProperty('--cat', filtre.startsWith('cat:') ? couleurCategorie(filtre.slice(4)) : 'var(--line)');
 
-    // Un tag choisi : on peut le renommer pour tout le monde.
-    outilTag.replaceChildren();
-    if (categories.length) {
-      outilTag.append(el('div.tag-actions', {},
-        el('button.btn.sm.ghost', { type: 'button', text: '🔎 Vérifier les tags avec mes plongées',
-          onclick: () => ouvrirVerification() }),
-        filtre.startsWith('cat:') ? null : el('span.hint', { style: { margin: 0 }, text: 'Pour renommer un tag : touche-le ci-dessus.' })));
-    }
-    if (filtre.startsWith('cat:')) {
-      const tag = filtre.slice(4);
-      const champ = el('input', { type: 'text', value: tag, enterkeyhint: 'done' });
-      const renommer = async () => {
-        const nv = champ.value.trim();
-        if (!nv || nv === tag) return;
-        for (const b of buddies.filter(x => cats(x).includes(tag))) {
-          const frais = await store.getBuddy(b.id);
-          frais.categories = [...new Set((frais.categories || []).map(c => (c === tag ? nv : c)))];
-          await store.saveBuddy(frais);
-        }
-        filtre = `cat:${nv}`;
-        try { localStorage.setItem(CLE_FILTRE, filtre); } catch { /* privé */ }
-        toast(`« ${tag} » devient « ${nv} »`);
-        recharger();
-      };
-      champ.addEventListener('keydown', ev => { if (ev.key === 'Enter') { ev.preventDefault(); renommer(); } });
-      outilTag.append(el('div.tag-renommer', {}, el('span', { text: `✎ Renommer « ${tag} » pour tout le monde :` }), champ,
-        el('button.btn.sm', { type: 'button', text: 'Renommer', onclick: renommer }),
-        el('span.hint', { style: { margin: 0, flexBasis: '100%' },
-          text: 'Un nom déjà utilisé fusionne les deux tags.' })));
-    }
+    // ✎ renommer le tag choisi (pour tout le monde) ; 🔎 vérifier les tags avec les plongées
+    outilTag.replaceChildren(
+      filtre.startsWith('cat:') ? el('button.btn.sm.ghost.icone', { type: 'button', text: '✎', title: `Renommer « ${filtre.slice(4)} » pour tout le monde`,
+        onclick: () => renommerTag(filtre.slice(4)) }) : null,
+      categories.length ? el('button.btn.sm.ghost.icone', { type: 'button', text: '🔎', title: 'Vérifier les tags avec mes plongées',
+        onclick: () => ouvrirVerification() }) : null);
 
     const q = recherche.value.trim().toLowerCase();
     let filtres = buddies.filter(b => {
@@ -173,8 +152,15 @@ export async function buddiesView() {
     if (vue === 'verse') {
       // Une seule scène pour tout le monde : un filtre ou une recherche
       // met les élus en rangs (une petite armée), les autres sortent.
-      if (!scene) scene = plongeurverse({ buddies, compte: n, moi, dives: plongeesMoi, onMoi: () => (document.documentElement.classList.contains('partage') ? navigate('cv') : apercuMoi(diverId, { onClose: recharger })),
-        onTap: b => apercuPlongeur(b.id, { onClose: recharger }) });
+      if (!scene) scene = plongeurverse({ buddies, compte: n, moi, dives: plongeesMoi, onMoi: () => {
+          if (document.documentElement.classList.contains('partage')) return navigate('cv');
+          scene?.viser('__moi__');
+          apercuMoi(diverId, { onClose: rechargerDoux, cote: true, onMii: mii => scene?.majMoi(mii) });
+        },
+        onTap: b => {
+          scene?.viser(b.id);
+          apercuPlongeur(b.id, { onClose: rechargerDoux, cote: true, onMii: nb => scene?.majPlongeur(nb) });
+        } });
       scene.ranger?.(!filtre && !q ? null : new Set(filtres.map(b => b.id)));
       // Les genres pas encore notés : on peut enregistrer ce que le prénom suggère.
       const aDeviner = buddies.filter(b => !b.structure && !b.genre && devinerGenre(b.prenom));
@@ -193,6 +179,9 @@ export async function buddiesView() {
             } }) : null);
       if (liste.firstElementChild !== scene) liste.replaceChildren(scene, pied);
       else liste.lastElementChild.replaceWith(pied);
+      // la scène prend toute la hauteur restante (une fois la page posée)
+      requestAnimationFrame(() => scene?.redimensionner?.());
+      [250, 900].forEach(ms => setTimeout(() => scene?.redimensionner?.(), ms));
       return;
     }
     scene = null;
@@ -201,7 +190,39 @@ export async function buddiesView() {
       : el('div.empty', { text: 'Aucun plongeur ne correspond.' }));
   }
 
+  /** Renommer un tag pour tout le monde (un nom déjà pris fusionne les deux). */
+  function renommerTag(tag) {
+    openModal(close => {
+      const champ = el('input', { type: 'text', value: tag, enterkeyhint: 'done' });
+      const ok = async () => {
+        const nv = champ.value.trim();
+        if (!nv || nv === tag) return close();
+        for (const b of buddies.filter(x => cats(x).includes(tag))) {
+          const frais = await store.getBuddy(b.id);
+          frais.categories = [...new Set((frais.categories || []).map(c => (c === tag ? nv : c)))];
+          await store.saveBuddy(frais);
+        }
+        filtre = `cat:${nv}`;
+        try { localStorage.setItem(CLE_FILTRE, filtre); } catch { /* privé */ }
+        close();
+        toast(`« ${tag} » devient « ${nv} »`);
+        recharger();
+      };
+      champ.addEventListener('keydown', ev => { if (ev.key === 'Enter') { ev.preventDefault(); ok(); } });
+      setTimeout(() => champ.select(), 50);
+      return el('div', {}, el('h3', { text: `✎ Renommer « ${tag} »` }),
+        el('div.hint', { text: 'Pour tout le monde. Un nom déjà utilisé fusionne les deux tags.' }), champ,
+        el('div.btn-row', { style: { marginTop: '12px' } }, el('button.btn.ghost', { type: 'button', text: 'Annuler', onclick: close }),
+          el('button.btn.primary', { type: 'button', text: 'Renommer', onclick: ok })));
+    });
+  }
+
   let scene = null;           // le Plongeurverse, gardé d'un filtre à l'autre
+  /** Après le volet « à côté » : les fiches à jour, sans refaire la scène (déjà redessinée en direct). */
+  async function rechargerDoux() {
+    buddies.splice(0, buddies.length, ...await store.listBuddies());
+    rendre();
+  }
   async function recharger() {
     buddies.splice(0, buddies.length, ...await store.listBuddies());
     scene = null;
@@ -387,7 +408,7 @@ export async function fusionnerAvec(garderId, apres = () => {}) {
 }
 
 /** Aperçu modifiable d'un plongeur, sur le bord de l'écran. */
-export async function apercuPlongeur(id, { onClose = null } = {}) {
+export async function apercuPlongeur(id, { onClose = null, cote = false, onMii = null } = {}) {
   const b = structuredClone(await store.getBuddy(id));
   if (!b) return toast('Plongeur introuvable', true);
   window.dispatchEvent(new CustomEvent('pj-vue', { detail: `fiche de ${b.prenom || '?'}` }));
@@ -418,8 +439,8 @@ export async function apercuPlongeur(id, { onClose = null } = {}) {
     return i;
   };
   const portrait = b.structure ? null : portraitMii(b);
-  const mii = b.structure ? null : editeurMii(b, v => { maj({ mii: v }); portrait.redessiner(); });
-  const genreSeg = choixGenre(b, v => { maj({ genre: v }); mii?.rafraichir(); portrait?.redessiner(); });
+  const mii = b.structure ? null : editeurMii(b, v => { maj({ mii: v }); portrait.redessiner(); onMii?.(b); });
+  const genreSeg = choixGenre(b, v => { maj({ genre: v }); mii?.rafraichir(); portrait?.redessiner(); onMii?.(b); });
   const coche = (cle, label) => {
     const c = el('input', { type: 'checkbox' });
     c.checked = !!b[cle];
@@ -464,7 +485,7 @@ export async function apercuPlongeur(id, { onClose = null } = {}) {
       el('div.apercu-t1', { text: b.structure ? (b.prenom || 'Centre') : (nomPlongeur(b) || 'Sans nom') }),
       el('div.apercu-t2', { text: [ensemble.length ? `${ensemble.length} plongée${ensemble.length > 1 ? 's' : ''} ensemble` : 'pas encore plongé ensemble'].filter(Boolean).join(' · ') })));
 
-  const rouvrir = () => apercuPlongeur(id, { onClose });
+  const rouvrir = () => apercuPlongeur(id, { onClose, cote, onMii });
   const corps = el('div', {},
     el('div.apercu-grille', {},
       champ(b.structure ? 'Centre de plongée' : 'Prénom', saisie('prenom')),
@@ -484,11 +505,11 @@ export async function apercuPlongeur(id, { onClose = null } = {}) {
         fusionnerAvec(b.id, () => { fermerApercu(); onClose?.(); }); } }),
     el('button.btn.primary.sm', { type: 'button', text: 'Fiche complète ›', onclick: () => navigate(`buddy/${b.id}`) }));
 
-  ouvrirApercu({ tete, corps, pied }, { onClose });
+  ouvrirApercu({ tete, corps, pied }, { onClose, cote });
 }
 
 /** Moi, touché dans le Plongeurverse : mon Mii (enregistré sur mon profil) et ma page. */
-export async function apercuMoi(diverId, { onClose = null } = {}) {
+export async function apercuMoi(diverId, { onClose = null, cote = false, onMii = null } = {}) {
   const d = await store.getDiver(diverId);
   if (!d) return navigate('cv');
   const b = { id: 'moi', prenom: d.prenom, genre: 'h', mii: d.mii };
@@ -497,6 +518,7 @@ export async function apercuMoi(diverId, { onClose = null } = {}) {
   let t = null;
   const editeur = editeurMii(b, v => {
     portrait.redessiner();
+    onMii?.(v);
     temoin.textContent = '…'; temoin.className = 'apercu-temoin';
     clearTimeout(t);
     t = setTimeout(async () => {
@@ -513,7 +535,7 @@ export async function apercuMoi(diverId, { onClose = null } = {}) {
     corps: el('div.apercu-grille', {}, el('div.apercu-champ.large', {}, el('span', { text: 'Mon Mii' }), editeur)),
     pied: el('div.apercu-actions', {}, temoin,
       el('button.btn.primary.sm', { type: 'button', text: 'Ma page « Qui je suis » ›', onclick: () => { fermerApercu(); navigate('cv'); } })),
-  }, { onClose });
+  }, { onClose, cote });
 }
 
 // ------------------------------------------------------------
