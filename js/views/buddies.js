@@ -220,6 +220,7 @@ export async function buddiesView() {
   let scene = null;           // le Plongeurverse, gardé d'un filtre à l'autre
   /** Après le volet « à côté » : les fiches à jour, sans refaire la scène (déjà redessinée en direct). */
   async function rechargerDoux() {
+    scene?.lacher?.();                 // la vedette retourne à sa vie
     buddies.splice(0, buddies.length, ...await store.listBuddies());
     rendre();
   }

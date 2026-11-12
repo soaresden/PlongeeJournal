@@ -106,6 +106,12 @@ export function dessinerPlongeur(ctx, p) {
   if (p.assis) ctx.translate(0, 19);           // assis : les hanches au niveau du siège
   ctx.lineCap = 'round'; ctx.lineJoin = 'round';
 
+  if (p.etat === 'vedette') {        // un halo doré à ses pieds
+    ctx.save(); ctx.scale(1 / p.dir, 1);
+    ctx.strokeStyle = 'rgba(250,204,21,.9)'; ctx.lineWidth = 2.2;
+    ctx.beginPath(); ctx.ellipse(0, 1 + (p.wzDessin || 0), 22, 6, 0, 0, Math.PI * 2); ctx.stroke();
+    ctx.fillStyle = 'rgba(250,204,21,.18)'; ctx.fill(); ctx.restore();
+  }
   // Ombre
   if (!p.assis && !['nage', 'vol', 'saut', 'attrape'].includes(p.etat)) {
     ctx.save(); ctx.scale(1 / p.dir, 1); ctx.fillStyle = 'rgba(0,0,0,.18)';
@@ -187,7 +193,7 @@ export function dessinerPlongeur(ctx, p) {
   // Bras
   const epaule = [3 * cx, -46];
   let bras = marche ? -jambe * 0.8 : 0.3;
-  if (p.etat === 'coucou') bras = Math.PI - 0.5 + Math.sin(p.phase * 10) * 0.45;
+  if (p.etat === 'coucou' || p.etat === 'vedette') bras = Math.PI - 0.5 + Math.sin(p.phase * (p.etat === 'vedette' ? 4 : 10)) * 0.45;
   if (p.etat === 'danse') bras = Math.PI - 0.3 + Math.sin(p.phase * 4) * 0.5;
   if (p.etat === 'attrape' || p.etat === 'vol') bras = Math.PI - 0.6 + Math.sin(p.phase) * 0.6;
   if (p.etat === 'tope') bras = Math.PI * 0.62;
@@ -311,6 +317,9 @@ export function dessinerPlongeur(ctx, p) {
   if (['chute', 'vol', 'attrape'].includes(p.etat)) {
     ctx.strokeStyle = '#0f172a'; ctx.lineWidth = 1.2;
     [[5, hy - 3.5], [9.5, hy - 3.5]].forEach(([ex, ey]) => { ctx.beginPath(); ctx.moveTo(ex - 1.5, ey - 1.5); ctx.lineTo(ex + 1.5, ey + 1.5); ctx.moveTo(ex + 1.5, ey - 1.5); ctx.lineTo(ex - 1.5, ey + 1.5); ctx.stroke(); });
+  } else if (p.etat === 'vedette') {   // des yeux qui sourient ^^
+    ctx.strokeStyle = '#0f172a'; ctx.lineWidth = 1.3;
+    [[5, hy - 3], [9.5, hy - 3]].forEach(([ex, ey]) => { ctx.beginPath(); ctx.arc(ex, ey, 1.6, Math.PI * 1.1, Math.PI * 1.9); ctx.stroke(); });
   } else {
     [[5, hy - 3.5], [9.5, hy - 3.5]].forEach(([ex, ey]) => { ctx.beginPath(); ctx.arc(ex, ey, 1.3, 0, Math.PI * 2); ctx.fill(); });
   }
@@ -416,7 +425,8 @@ export function plongeurverse({ buddies, compte = () => 0, onTap = () => {}, moi
     plongeurs.push({
       ...plongeurCartoon('moi', { ...MOI, ...apparenceDe({ id: 'moi', mii: moi.mii }, 'h', MOI) }), estMoi: true,
       b: { id: '__moi__', prenom: moi.prenom || 'Moi' }, nom: `★ ${moi.prenom || 'Moi'}`, genre: 'h',
-      wx: L / 2, wy: L / 2, wz: 0, vx: 0, vy: 0, vz: 0, cx: 0, cy: 0,
+      // Moi : sur le côté (à gauche à l'écran), pas au milieu de tout le monde
+      wx: L * 0.12, wy: L * 0.62, home: { x: L * 0.12, y: L * 0.62 }, wz: 0, vx: 0, vy: 0, vz: 0, cx: 0, cy: 0,
       s0: 1.5, s: 1, x: 0, y: 0, etat: 'marche', t: 2, salto: false, cool: 0, salut: 0, vitesse: 22, slot: null, cache: false,
     });
   }
@@ -438,11 +448,11 @@ export function plongeurverse({ buddies, compte = () => 0, onTap = () => {}, moi
         if (k > n) { n = k; meilleur = q; }
       }
       // Un seul suiveur par « chef » de binôme, pour éviter les chenilles.
-      if (meilleur && !meilleur.binome && !plongeurs.some(x => x.binome === p)) { p.binome = meilleur; p.ecart = hasard(14, 22); }
+      if (meilleur && !meilleur.binome && !plongeurs.some(x => x.binome === p)) { p.binome = meilleur; p.ecart = hasard(34, 42); }        // à côté, sans le cacher
     }
-    // Moi : au centre du monde.
+    // Moi : de mon côté (à gauche), pas au milieu de tout le monde.
     const m = plongeurs.find(p => p.estMoi);
-    if (m) { m.wx = L / 2; m.wy = L / 2; }
+    if (m) { m.wx = m.home.x; m.wy = m.home.y; }
   }
   plongeurs.forEach(viser);
 
@@ -493,12 +503,24 @@ export function plongeurverse({ buddies, compte = () => 0, onTap = () => {}, moi
     canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
     canvas.style.height = `${H}px`;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    if (premier || !cam.ox) { if (moi) surMoi(false); else cadrer(false); }
+    if (premier || !cam.ox) cadrer(false);
   }
   /** La caméra sur moi (zoomée), pour me retrouver parmi tout le monde. */
   // ---------- depuis le volet : viser quelqu'un, le redessiner en direct ----------
   const trouver = id => plongeurs.find(p => (id === '__moi__' || id === 'moi' ? p.estMoi : p.b.id === id));
-  boite.viser = id => { const p = trouver(id); if (p) viserZone(p.wx - 55, p.wy - 55, p.wx + 55, p.wy + 55); };
+  boite.viser = id => {
+    const p = trouver(id);
+    plongeurs.forEach(q => { if (q !== p && q.etat === 'vedette') { q.etat = 'marche'; q.t = hasard(1, 3); q.wz = 0; } });
+    if (!p) return;
+    if (p.cache) { p.cache = false; p.wz = 0; }
+    p.etat = 'vedette'; p.t = 1e9; p.rot = 0; p.vz = 0; p.dir = 1; p.coeur = 0;
+    viserZone(p.wx - 55, p.wy - 55, p.wx + 55, p.wy + 55);
+  };
+  /** Pour les tests : où est chacun à l'écran (sans zoom). */
+  boite.positions = () => plongeurs.filter(p => !p.cache).map(p => ({ id: p.b.id, etat: p.etat, s0: p.s0,
+    u: (p.wx - p.wy) * C, v: (p.wx + p.wy) * 0.5, x: p.x, y: p.y }));
+  /** Le volet se ferme : la vedette retourne à sa vie. */
+  boite.lacher = () => plongeurs.forEach(q => { if (q.etat === 'vedette') { q.etat = 'marche'; q.t = hasard(1, 3); q.wz = 0; viser(q); } });
   boite.majPlongeur = b => {
     const p = trouver(b.id);
     if (p) Object.assign(p, apparenceDe(b, genreDe(b)), { b, genre: genreDe(b), nom: nomPlongeur(b) || p.nom });
@@ -520,19 +542,24 @@ export function plongeurverse({ buddies, compte = () => 0, onTap = () => {}, moi
     const membres = plongeurs.filter(p => rangs.has(p.b.id)).sort((a, b) => b.s0 - a.s0);
     const k = membres.length;
     if (!k) return;
-    const pas = 30;
-    const cols = Math.max(1, Math.min(k, Math.ceil(Math.sqrt(k * 1.8)), Math.floor((L * 0.9) / pas)));
+    // Placés directement à l'écran, avec assez d'écart pour voir chacun en entier :
+    // une largeur de plongeur entre deux voisins, une hauteur entre deux rangs.
+    const smax = Math.max(...membres.map(p => p.s0)), du = 34 * smax, dv = 66 * smax;
+    const cols = Math.max(1, Math.min(k, Math.ceil(Math.sqrt(k * 2.4)), Math.floor((L * C * 1.2) / du)));
     const nb = Math.ceil(k / cols);
+    // (u, v) à l'écran → (x, y) sur le sable : x − y = u / C, x + y = 2 v
+    const auSable = (u, v) => ({ x: borne((u / C + 2 * v) / 2), y: borne((2 * v - u / C) / 2) });
+    const v0 = L / 2 - ((nb - 1) / 2) * dv;                    // le rang du fond
     membres.forEach((p, i) => {
       const r = Math.floor(i / cols), c = i % cols;
       const dansCeRang = Math.min(cols, k - r * cols);
-      // Rangées parallèles à l'écran ; le premier rang (les plus fidèles) devant.
-      const u = (c - (dansCeRang - 1) / 2) * pas, v = ((nb - 1) / 2 - r) * pas;
-      p.slot = { x: borne(L / 2 + (u + v) / Math.SQRT2), y: borne(L / 2 + (v - u) / Math.SQRT2) };
+      // Le premier rang (les plus fidèles) devant, c'est-à-dire en bas de l'écran
+      p.slot = auSable((c - (dansCeRang - 1) / 2) * du, v0 + (nb - 1 - r) * dv);
     });
+    const vDevant = v0 + (nb - 1) * dv;
     // Le chef devant sa troupe.
     const chef = plongeurs.find(p => p.estMoi);
-    if (chef) { const v = ((nb - 1) / 2) * pas + 40; chef.slot = { x: borne(L / 2 + v / Math.SQRT2), y: borne(L / 2 + v / Math.SQRT2) }; }
+    if (chef) chef.slot = auSable(0, vDevant + dv * 0.9);
   }
 
   boite.ranger = ids => {
@@ -566,7 +593,10 @@ export function plongeurverse({ buddies, compte = () => 0, onTap = () => {}, moi
   };
 
   // ---------- comportement ----------
-  function viser(p) { p.cx = borne(p.wx + hasard(-120, 120)); p.cy = borne(p.wy + hasard(-120, 120)); }
+  function viser(p) {
+    if (p.home) { p.cx = borne(p.home.x + hasard(-45, 45)); p.cy = borne(p.home.y + hasard(-45, 45)); return; }   // moi : je reste de mon côté
+    p.cx = borne(p.wx + hasard(-120, 120)); p.cy = borne(p.wy + hasard(-120, 120));
+  }
 
   function changer(p, etat, t) {
     p.etat = etat; p.t = t; p.rot = etat === 'chute' ? p.rot : 0; p.salto = false;
@@ -583,7 +613,7 @@ export function plongeurverse({ buddies, compte = () => 0, onTap = () => {}, moi
    */
   function bêtise(p) {
     const r = Math.random();
-    if (p.binome && !p.binome.cache && r < 0.45) return changer(p, 'suivre', hasard(5, 10));
+    if (p.binome && !p.binome.cache && !p.estMoi && r < 0.45) return changer(p, 'suivre', hasard(5, 10));   // moi, je reste de mon côté
     if (r < 0.40) return changer(p, 'marche', hasard(3, 7));
     if (r < 0.52) return changer(p, 'pause', hasard(1.5, 3));
     if (r < 0.62) return changer(p, 'bulles', 1.8);
@@ -636,6 +666,12 @@ export function plongeurverse({ buddies, compte = () => 0, onTap = () => {}, moi
     if (rangs && p.slot && LIBRES.includes(p.etat)) { p.etat = 'rang'; p.t = 1e9; }
     p.t -= dt; p.cool -= dt; p.salut -= dt;
     switch (p.etat) {
+      case 'vedette':                 // on la regarde : elle sautille, fait coucou, envoie des cœurs
+        p.phase += dt * 3; p.dir = 1;
+        p.wz = Math.abs(Math.sin(performance.now() / 260)) * 7;
+        p.coeur -= dt;
+        if (p.coeur <= 0) { p.coeur = 1.3; textes.push({ wx: p.wx, wy: p.wy, wz: 100 * p.s0, txt: ['😄', '👋', '💙', '🤩', '💛'][Math.floor(Math.random() * 5)], vie: 1.3 }); }
+        return;
       case 'rang':
         p.cx = p.slot.x; p.cy = p.slot.y;
         if (allerVers(p, 80, dt)) { p.etat = 'garde'; p.dir = 1; p.salut = 1.6;
@@ -697,6 +733,39 @@ export function plongeurverse({ buddies, compte = () => 0, onTap = () => {}, moi
         p.phase += dt * 2;
     }
     if (p.t <= 0 && !['saut', 'vol', 'attrape'].includes(p.etat)) bêtise(p);
+  }
+
+  /**
+   * Personne ne cache personne : deux plongeurs qui se recouvrent à l'écran
+   * (trop proches de côté ET l'un juste devant l'autre) s'écartent doucement
+   * de côté. La vedette ne bouge pas, ce sont les autres qui lui laissent la place.
+   */
+  // (les rangs ne sont pas concernés : leurs places sont déjà calculées sans se cacher)
+  const AU_SOL = ['marche', 'pause', 'bulles', 'danse', 'coucou', 'suivre', 'chute', 'vedette'];
+  function ecarter(dt) {
+    const vis = plongeurs.filter(p => !p.cache && AU_SOL.includes(p.etat));
+    for (let i = 0; i < vis.length; i++) {
+      const a = vis[i];
+      for (let j = i + 1; j < vis.length; j++) {
+        const b = vis[j];
+        const du = (a.wx - a.wy) * C - (b.wx - b.wy) * C, dv = (a.wx + a.wy) * 0.5 - (b.wx + b.wy) * 0.5;
+        const largeur = 15 * (a.s0 + b.s0), hauteur = 62 * Math.max(a.s0, b.s0);
+        if (Math.abs(du) >= largeur || Math.abs(dv) >= hauteur) continue;
+        // On s'écarte dans le sens le plus court : de côté (u) ou d'avant en arrière (v)
+        const deCote = (largeur - Math.abs(du)) / largeur <= (hauteur - Math.abs(dv)) / hauteur;
+        const manque = deCote ? largeur - Math.abs(du) : hauteur - Math.abs(dv);
+        const d0 = deCote ? du : dv, sens = d0 === 0 ? (i % 2 ? 1 : -1) : Math.sign(d0);
+        const pas = Math.min(manque, 150 * dt);
+        // u = (x − y)·C : de côté, x et y en sens contraires ; v = (x + y)/2 : x et y dans le même sens
+        const [ex, ey] = deCote ? [pas / (2 * C), -pas / (2 * C)] : [pas / 2, pas / 2];
+        const bouge = (p, k) => {
+          if (p.etat === 'vedette') return;
+          p.wx = borne(p.wx + k * ex / 2); p.wy = borne(p.wy + k * ey / 2);
+        };
+        const fixeA = a.etat === 'vedette', fixeB = b.etat === 'vedette';
+        bouge(a, fixeB ? 2 * sens : sens); bouge(b, fixeA ? -2 * sens : -sens);
+      }
+    }
   }
 
   function rencontres() {
@@ -811,6 +880,7 @@ export function plongeurverse({ buddies, compte = () => 0, onTap = () => {}, moi
 
     plongeurs.forEach(p => avancer(p, dt));
     rencontres();
+    ecarter(dt);
     if (cam.cible) {
       const k = Math.min(1, dt * 3.5);
       cam.z += (cam.cible.z - cam.z) * k; cam.ox += (cam.cible.ox - cam.ox) * k; cam.oy += (cam.cible.oy - cam.oy) * k;
