@@ -5,7 +5,7 @@
 import { el, fullName, nomPlongeur, couleurCategorie, toast, confirmBox, openModal } from '../lib.js';
 import { verifierTags } from '../tags.js';
 import { devinerGenre, genreDe, COULEUR_GENRE } from '../genre.js';
-import { plongeurverse, editeurMii, portraitMii } from './plongeurverse.js';
+import { plongeurverse, editeurMii, portraitMii, MOI } from './plongeurverse.js';
 import { store, emptyBuddy } from '../store.js';
 import { navigate } from '../router.js';
 import { ouvrirApercu, fermerApercu, ligneApercu, apercuPlongee } from '../apercu.js';
@@ -173,7 +173,7 @@ export async function buddiesView() {
     if (vue === 'verse') {
       // Une seule scène pour tout le monde : un filtre ou une recherche
       // met les élus en rangs (une petite armée), les autres sortent.
-      if (!scene) scene = plongeurverse({ buddies, compte: n, moi, dives: plongeesMoi, onMoi: () => navigate('cv'),
+      if (!scene) scene = plongeurverse({ buddies, compte: n, moi, dives: plongeesMoi, onMoi: () => (document.documentElement.classList.contains('partage') ? navigate('cv') : apercuMoi(diverId, { onClose: recharger })),
         onTap: b => apercuPlongeur(b.id, { onClose: recharger }) });
       scene.ranger?.(!filtre && !q ? null : new Set(filtres.map(b => b.id)));
       // Les genres pas encore notés : on peut enregistrer ce que le prénom suggère.
@@ -485,6 +485,35 @@ export async function apercuPlongeur(id, { onClose = null } = {}) {
     el('button.btn.primary.sm', { type: 'button', text: 'Fiche complète ›', onclick: () => navigate(`buddy/${b.id}`) }));
 
   ouvrirApercu({ tete, corps, pied }, { onClose });
+}
+
+/** Moi, touché dans le Plongeurverse : mon Mii (enregistré sur mon profil) et ma page. */
+export async function apercuMoi(diverId, { onClose = null } = {}) {
+  const d = await store.getDiver(diverId);
+  if (!d) return navigate('cv');
+  const b = { id: 'moi', prenom: d.prenom, genre: 'h', mii: d.mii };
+  const portrait = portraitMii(b, { defaut: MOI });
+  const temoin = el('span.apercu-temoin');
+  let t = null;
+  const editeur = editeurMii(b, v => {
+    portrait.redessiner();
+    temoin.textContent = '…'; temoin.className = 'apercu-temoin';
+    clearTimeout(t);
+    t = setTimeout(async () => {
+      const frais = await store.getDiver(diverId);
+      if (v) frais.mii = v; else delete frais.mii;
+      try { localStorage.setItem('plongee-journal:mon-mii', JSON.stringify(v || null)); } catch { /* privé */ }
+      await store.saveDiver(frais);
+      temoin.textContent = 'Enregistré ✓'; temoin.className = 'apercu-temoin ok';
+    }, 400);
+  }, { defaut: MOI });
+  ouvrirApercu({
+    tete: el('div.apercu-tete-plongee', {}, portrait,
+      el('div', {}, el('div.apercu-t1', { text: `★ ${d.prenom || 'Moi'}` }), el('div.apercu-t2', { text: 'Toi, dans le Plongeurverse' }))),
+    corps: el('div.apercu-grille', {}, el('div.apercu-champ.large', {}, el('span', { text: 'Mon Mii' }), editeur)),
+    pied: el('div.apercu-actions', {}, temoin,
+      el('button.btn.primary.sm', { type: 'button', text: 'Ma page « Qui je suis » ›', onclick: () => { fermerApercu(); navigate('cv'); } })),
+  }, { onClose });
 }
 
 // ------------------------------------------------------------

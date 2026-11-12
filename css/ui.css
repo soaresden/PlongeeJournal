@@ -1133,3 +1133,5 @@ body { background-image: var(--deco, none), var(--bg-image); background-size: 20
 .mii-seg button { padding: 5px 10px; font-size: 13px; }
 .mii-portrait { width: 56px; height: 70px; flex: 0 0 56px; border-radius: 14px; border: 1px solid var(--line);
   background: linear-gradient(180deg, rgba(var(--accent-rgb), .14), rgba(14, 116, 144, .25)); }
+.mii-acc { display: flex; flex-wrap: wrap; gap: 6px; }
+.mii-seg { flex-wrap: wrap; } .mii-seg button { white-space: nowrap; }

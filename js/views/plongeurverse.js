@@ -33,20 +33,28 @@ export const MII = {
   cheveux: [['#161616', 'Noirs'], ['#2b1d14', 'Brun foncé'], ['#5a3a22', 'Châtains'], ['#8a5a2b', 'Châtain clair'],
     ['#d4a253', 'Blonds'], ['#e6d3a0', 'Blond très clair'], ['#b5442e', 'Roux'], ['#8d8d8d', 'Poivre et sel'],
     ['#c4c4c4', 'Gris'], ['#f1f1f1', 'Blancs']],
-  coiffures: [['cheveux', 'Cheveux'], ['degarni', 'Dégarni'], ['chauve', 'Chauve']],
+  coiffures: [['cheveux', 'Cheveux'], ['pics', 'En pics'], ['degarni', 'Dégarni'], ['chauve', 'Chauve']],
+  accessoires: [['bandana', '🟥 Bandana'], ['boucle', '💛 Boucle d’oreille'], ['moustache', '〰 Moustache'],
+    ['cagoule', '🥷 Cagoule'], ['gopro', '📷 GoPro']],
 };
 
-/** L'apparence d'un compagnon : ses choix (b.mii), le reste tiré de son nom. */
-export function apparenceDe(b, genre = b?.genre || '') {
+/**
+ * L'apparence d'un plongeur : ses choix (b.mii) ; le reste vient de
+ * `defaut` (moi : MOI) ou est tiré de son nom.
+ */
+export function apparenceDe(b, genre = b?.genre || '', defaut = null) {
   const h = hash(b?.id || nomPlongeur(b || {}));
   const m = b?.mii || {};
-  const coiffure = m.coiffure || (genre === 'h' && (h >>> 15) % 6 === 0 ? 'chauve' : 'cheveux');
+  const coiffure = m.coiffure || (defaut ? (defaut.chauve ? 'chauve' : defaut.pics ? 'pics' : 'cheveux')
+    : genre === 'h' && (h >>> 15) % 6 === 0 ? 'chauve' : 'cheveux');
   return {
-    peau: m.peau || PEAUX[h % PEAUX.length],
-    cheveux: m.cheveux || CHEVEUX[(h >>> 5) % CHEVEUX.length],
-    chauve: coiffure === 'chauve', degarni: coiffure === 'degarni',
-    barbe: m.barbe ?? (genre === 'h' && (h >>> 13) % 4 === 0),
-    combi: COMBIS[(h >>> 8) % COMBIS.length], bloc: BLOCS[(h >>> 11) % BLOCS.length],
+    peau: m.peau || defaut?.peau || PEAUX[h % PEAUX.length],
+    cheveux: m.cheveux || defaut?.cheveux || CHEVEUX[(h >>> 5) % CHEVEUX.length],
+    chauve: coiffure === 'chauve', degarni: coiffure === 'degarni', pics: coiffure === 'pics',
+    barbe: m.barbe ?? (defaut ? !!defaut.barbe : genre === 'h' && (h >>> 13) % 4 === 0),
+    accessoires: Array.isArray(m.accessoires) ? m.accessoires : [],
+    combi: defaut?.combi || COMBIS[(h >>> 8) % COMBIS.length], bloc: defaut?.bloc || BLOCS[(h >>> 11) % BLOCS.length],
+    ...(defaut ? { bande: defaut.bande, sourcils: !!defaut.sourcils } : {}),
   };
 }
 const COMBIS = ['#1f2937', '#0f4c75', '#24543f', '#5b2a86', '#8a1c3a', '#0e6375', '#3a4556'];
@@ -125,12 +133,17 @@ export function dessinerPlongeur(ctx, p) {
 
   // Tête, cheveux
   const hy = -60;
-  if (p.genre === 'f' && !p.chauve && !p.degarni) {           // queue de cheval qui flotte
+  const acc = new Set(p.accessoires || []);
+  const cagoule = acc.has('cagoule');
+  if (p.genre === 'f' && !p.chauve && !p.degarni && !cagoule) {           // queue de cheval qui flotte
     ctx.fillStyle = p.cheveux;
     ctx.beginPath(); ctx.ellipse(-12, hy + 1 + Math.sin(p.phase * 0.7) * 1.5, 7, 4, -0.5 + Math.sin(p.phase * 0.5) * 0.2, 0, Math.PI * 2); ctx.fill();
   }
   ctx.fillStyle = p.peau; ctx.beginPath(); ctx.arc(0, hy, 10.5, 0, Math.PI * 2); ctx.fill();
-  if (p.degarni) {                 // le haut du crâne nu, une couronne derrière et sur le côté
+  if (cagoule) {                   // la cagoule en néoprène : seul le visage dépasse
+    ctx.fillStyle = '#111827'; ctx.beginPath(); ctx.arc(0, hy, 11.3, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = p.peau; ctx.beginPath(); ctx.ellipse(5, hy + 0.5, 7.2, 8.6, 0, 0, Math.PI * 2); ctx.fill();
+  } else if (p.degarni) {                 // le haut du crâne nu, une couronne derrière et sur le côté
     ctx.strokeStyle = p.cheveux; ctx.lineWidth = 3.6; ctx.lineCap = 'round';
     ctx.beginPath(); ctx.arc(0, hy, 9.4, Math.PI * 0.68, Math.PI * 1.12); ctx.stroke();
   } else if (!p.chauve) {
@@ -138,17 +151,27 @@ export function dessinerPlongeur(ctx, p) {
     ctx.beginPath(); ctx.arc(-1, hy - 2, 10.8, Math.PI * 1.05, Math.PI * 1.95); ctx.fill();
     if (p.genre === 'f') { ctx.beginPath(); ctx.arc(-6, hy - 1, 7, Math.PI * 0.6, Math.PI * 1.6); ctx.fill(); }
   }
-  if (p.chauve || p.degarni) {     // un reflet sur le crâne
+  if (!cagoule && (p.chauve || p.degarni)) {     // un reflet sur le crâne
     ctx.fillStyle = 'rgba(255,255,255,.35)';
     ctx.beginPath(); ctx.ellipse(1, hy - 7, 4, 2, -0.2, 0, Math.PI * 2); ctx.fill();
   }
   if (p.barbe) { ctx.fillStyle = p.cheveux; ctx.beginPath(); ctx.arc(2, hy + 5, 7.5, 0.1, Math.PI - 0.6); ctx.fill(); }
-  if (p.pics) {                    // la coupe en pics du Mii
+  if (p.pics && !cagoule) {        // la coupe en pics du Mii
     ctx.fillStyle = p.cheveux;
     ctx.beginPath(); ctx.moveTo(-11, hy - 2);
     [[-10, -15], [-6, -9], [-3, -17], [1, -10], [4, -16], [7, -9], [11, -13], [11, -4]]
       .forEach(([x, y]) => ctx.lineTo(x, hy + y));
     ctx.lineTo(9, hy - 4); ctx.lineTo(-11, hy - 2); ctx.fill();
+  }
+  if (acc.has('bandana') && !cagoule) {   // bandana rouge à pois, noué derrière
+    ctx.save(); ctx.beginPath(); ctx.arc(0, hy, 11.6, 0, Math.PI * 2); ctx.clip();
+    ctx.fillStyle = '#dc2626'; ctx.fillRect(-12, hy - 12.5, 25, 4.8);
+    ctx.fillStyle = '#fff'; [[-6, -10], [-1, -11], [4, -10], [8, -11]].forEach(([x, y]) => { ctx.beginPath(); ctx.arc(x, hy + y, 0.8, 0, Math.PI * 2); ctx.fill(); });
+    ctx.restore();
+    ctx.fillStyle = '#dc2626'; ctx.beginPath(); ctx.moveTo(-10, hy - 11); ctx.lineTo(-17, hy - 7 + Math.sin(p.phase) * 1.2); ctx.lineTo(-15, hy - 13); ctx.closePath(); ctx.fill();
+  }
+  if (acc.has('boucle') && !cagoule) {    // boucle d'oreille dorée
+    ctx.strokeStyle = '#facc15'; ctx.lineWidth = 1.3; ctx.beginPath(); ctx.arc(-3.5, hy + 5, 1.7, 0, Math.PI * 2); ctx.stroke();
   }
   // Masque et sangle
   ctx.strokeStyle = '#111827'; ctx.lineWidth = 2;
@@ -167,8 +190,17 @@ export function dessinerPlongeur(ctx, p) {
   } else {
     [[5, hy - 3.5], [9.5, hy - 3.5]].forEach(([ex, ey]) => { ctx.beginPath(); ctx.arc(ex, ey, 1.3, 0, Math.PI * 2); ctx.fill(); });
   }
+  if (acc.has('moustache')) {      // la moustache, au-dessus du détendeur
+    ctx.fillStyle = p.cheveux; ctx.beginPath(); ctx.ellipse(8.5, hy + 1.9, 4.6, 1.6, 0, 0, Math.PI * 2); ctx.fill();
+  }
   // Détendeur en bouche
   ctx.fillStyle = '#111827'; ctx.beginPath(); ctx.arc(8, hy + 5, 3, 0, Math.PI * 2); ctx.fill();
+  if (acc.has('gopro')) {          // une GoPro sur la tête
+    ctx.fillStyle = '#111827'; ctx.fillRect(-1, hy - 12.5, 2.5, 2.5);
+    ctx.beginPath(); ctx.roundRect(-4, hy - 18, 9, 6.5, 1.5); ctx.fill();
+    ctx.fillStyle = '#38bdf8'; ctx.beginPath(); ctx.arc(4.2, hy - 14.8, 1.8, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#ef4444'; ctx.beginPath(); ctx.arc(-2.2, hy - 16.6, 0.7, 0, Math.PI * 2); ctx.fill();
+  }
   ctx.restore();
 }
 
@@ -252,7 +284,7 @@ export function plongeurverse({ buddies, compte = () => 0, onTap = () => {}, moi
   });
   if (moi) {
     plongeurs.push({
-      ...plongeurCartoon('moi', MOI), estMoi: true,
+      ...plongeurCartoon('moi', { ...MOI, ...apparenceDe({ id: 'moi', mii: moi.mii }, 'h', MOI) }), estMoi: true,
       b: { id: '__moi__', prenom: moi.prenom || 'Moi' }, nom: `★ ${moi.prenom || 'Moi'}`, genre: 'h',
       wx: L / 2, wy: L / 2, wz: 0, vx: 0, vy: 0, vz: 0, cx: 0, cy: 0,
       s0: 1.5, s: 1, x: 0, y: 0, etat: 'marche', t: 2, salto: false, cool: 0, salut: 0, vitesse: 22, slot: null, cache: false,
@@ -777,18 +809,18 @@ export function plongeurverse({ buddies, compte = () => 0, onTap = () => {}, moi
 }
 
 /** Le buste d'un plongeur (son Mii) dans une toile de 120 × 150 (dessinée en ×2). */
-function buste(toile, b) {
+function buste(toile, b, defaut = null) {
   const ctx = toile.getContext('2d');
   if (!ctx) return;
   ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, toile.width, toile.height); ctx.setTransform(2, 0, 0, 2, 0, 0);
   dessinerPlongeur(ctx, { x: 58, y: 228, s: 3, dir: 1, etat: 'pause', phase: 0, rot: 0, genre: genreDe(b),
-    bande: (b.categories || [])[0] ? couleurCategorie(b.categories[0]) : '#22d3ee', ...apparenceDe(b, genreDe(b)) });
+    bande: (b.categories || [])[0] ? couleurCategorie(b.categories[0]) : '#22d3ee', ...apparenceDe(b, defaut ? 'h' : genreDe(b), defaut) });
 }
 
 /** Son Mii en portrait (en-tête du volet) ; .redessiner() après un changement. */
-export function portraitMii(b) {
+export function portraitMii(b, { defaut = null } = {}) {
   const toile = el('canvas.mii-portrait', { width: 240, height: 300, role: 'img', 'aria-label': `Mii de ${nomPlongeur(b) || 'ce plongeur'}` });
-  toile.redessiner = () => buste(toile, b);
+  toile.redessiner = () => buste(toile, b, defaut);
   toile.redessiner();
   return toile;
 }
@@ -799,11 +831,11 @@ export function portraitMii(b) {
  * @param {object} b  le plongeur (lu pour l'aperçu)
  * @param {(mii:object)=>void} onChange  reçoit le nouveau b.mii
  */
-export function editeurMii(b, onChange) {
+export function editeurMii(b, onChange, { defaut = null } = {}) {
   const boite = el('div.mii-editeur');
   const toile = el('canvas.mii-apercu', { width: 240, height: 300 });
   const zone = el('div.mii-choix');
-  const dessiner = () => buste(toile, b);
+  const dessiner = () => buste(toile, b, defaut);
   const choisir = p => {
     const mii = { ...(b.mii || {}), ...p };
     for (const k of Object.keys(mii)) if (mii[k] == null) delete mii[k];
@@ -815,17 +847,23 @@ export function editeurMii(b, onChange) {
     el(`button.mii-pastille${actuel === c ? '.on' : ''}`, { type: 'button', title: nom, 'aria-label': nom, style: { background: c },
       onclick: () => choisir({ [cle]: c }) })));
   function rendre() {
-    const a = apparenceDe(b, genreDe(b));
-    const coiffure = a.chauve ? 'chauve' : a.degarni ? 'degarni' : 'cheveux';
+    const a = apparenceDe(b, defaut ? 'h' : genreDe(b), defaut);
+    const coiffure = a.chauve ? 'chauve' : a.degarni ? 'degarni' : a.pics ? 'pics' : 'cheveux';
+    const acc = new Set(a.accessoires);
     zone.replaceChildren(
       el('div.mii-ligne', {}, el('span', { text: 'Peau' }), pastilles(MII.peaux, 'peau', a.peau)),
       el('div.mii-ligne', {}, el('span', { text: 'Coiffure' }), el('div.seg.mii-seg', {}, ...MII.coiffures.map(([v, nom]) =>
         el(`button${coiffure === v ? '.on' : ''}`, { type: 'button', text: nom, onclick: () => choisir({ coiffure: v }) })))),
       coiffure === 'chauve' && !a.barbe ? null : el('div.mii-ligne', {}, el('span', { text: coiffure === 'chauve' ? 'Barbe' : 'Couleur' }),
         pastilles(MII.cheveux, 'cheveux', a.cheveux)),
+      el('div.mii-ligne', {}, el('span', { text: 'Accessoires' }), el('div.mii-acc', {}, ...MII.accessoires.map(([v, nom]) =>
+        el(`button.chip${acc.has(v) ? '.on' : ''}`, { type: 'button', text: nom, onclick: () => {
+          const n = new Set(acc); n.has(v) ? n.delete(v) : n.add(v);
+          choisir({ accessoires: n.size ? [...n] : null });
+        } })))),
       el('div.mii-ligne', {}, el('label.switch', {},
         el('input', { type: 'checkbox', checked: !!a.barbe, onchange: e => choisir({ barbe: e.target.checked }) }), el('span', { text: 'Barbe' })),
-        b.mii ? el('button.btn.sm.ghost', { type: 'button', text: '↺ Au hasard', title: 'Revenir à l’apparence tirée du nom',
+        b.mii ? el('button.btn.sm.ghost', { type: 'button', text: defaut ? '↺ Par défaut' : '↺ Au hasard', title: defaut ? 'Revenir à mon Mii de départ' : 'Revenir à l’apparence tirée du nom',
           onclick: () => { b.mii = undefined; onChange(undefined); rendre(); } }) : null));
     dessiner();
   }

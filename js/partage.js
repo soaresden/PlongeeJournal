@@ -36,7 +36,7 @@ const API = 'https://api.github.com';
 // Le contact à appeler en cas d'urgence et MON numéro de licence sont
 // montrés (demandé exprès) ; l'adresse, le groupe sanguin et les licences
 // des autres plongeurs restent privés.
-const GARDER_PLONGEUR = ['id', 'prenom', 'nom', 'niveau', 'licence', 'materiel', 'equipe', 'combiType', 'combiMm',
+const GARDER_PLONGEUR = ['id', 'prenom', 'nom', 'niveau', 'licence', 'mii', 'materiel', 'equipe', 'combiType', 'combiMm',
   'urgPrenom', 'urgNom', 'urgTel', 'urgLien', 'photoProfil', 'avatar', 'createdAt', 'updatedAt'];
 const GARDER_COMPAGNON = ['id', 'prenom', 'nom', 'club', 'moniteur', 'structure', 'categories', 'genre', 'mii', 'createdAt', 'updatedAt'];
 const GARDER_BREVET = ['id', 'diverId', 'nom', 'organisme', 'dateObtention', 'createdAt', 'updatedAt'];

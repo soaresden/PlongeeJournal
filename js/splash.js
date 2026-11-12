@@ -10,7 +10,7 @@
 //  d'accessibilité) : le titre seul, un instant.
 // ============================================================
 
-import { dessinerPlongeur, plongeurCartoon, MOI } from './views/plongeurverse.js';
+import { dessinerPlongeur, plongeurCartoon, MOI, apparenceDe } from './views/plongeurverse.js';
 
 const CLE_PRENOM = 'plongee-journal:prenom';
 // Great Vibes (licence libre OFL), embarquée : pas besoin de réseau.
@@ -90,7 +90,10 @@ export function ouvrirSplash({ signature = prenomSignature() } = {}) {
     // ---------- la scène ----------
     const S = () => Math.max(1, Math.min(W, H * 0.75) / 300);
     const sol = () => H * 0.72;
-    const lecteur = plongeurCartoon('lecteur', { ...MOI, assis: true });       // le lecteur, c'est moi (mon Mii)
+    // le lecteur, c'est moi (mon Mii, tel que je l'ai réglé)
+    let monMii = null;
+    try { monMii = JSON.parse(localStorage.getItem('plongee-journal:mon-mii') || 'null'); } catch { monMii = null; }
+    const lecteur = plongeurCartoon('lecteur', { ...MOI, ...apparenceDe({ id: 'moi', mii: monMii }, 'h', MOI), assis: true });
     const auditoire = [
       plongeurCartoon('alison', { assis: true, genre: 'f', dir: 1 }),
       plongeurCartoon('marc', { assis: true, dir: 1, etat: 'coucou' }),
