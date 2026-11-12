@@ -651,13 +651,32 @@ export async function diveView({ id }) {
       'debut-fin': ['moyen', 'Sonde : pression de début et de fin seulement', 'pas la courbe'],
       defaut: [false, 'Sonde : 200 → 50 bar par défaut', 'pas une mesure'],
       aucune: [false, 'Sonde : pas de pression du bloc'],
+      sans: [true, 'Pas de sonde sur cette plongée', 'rien à récupérer'],
     }[b.sonde];
+    // Pas de sonde branchée : on le dit une fois, et on n'en parle plus
+    const lectureSeuleD = document.documentElement.classList.contains('partage');
+    const basculerSonde = async sans => {
+      const frais = await store.getDive(d.id);
+      if (sans) {
+        frais.sansSonde = true;
+        // Les 200 → 50 bar pré-remplis ne sont pas une mesure : on les enlève (le manomètre, lui, reste possible)
+        if (Number(frais.pressionDepart) === 200 && Number(frais.pressionFin) === 50) { frais.pressionDepart = null; frais.pressionFin = null; }
+      } else delete frais.sansSonde;
+      await store.saveDive(frais);
+      toast(sans ? 'Noté : pas de sonde sur cette plongée' : 'Sonde à nouveau attendue');
+      navigate(`dive/${d.id}`, true);
+    };
+    const boutonSonde = lectureSeuleD || b.sonde === 'courbe' ? null
+      : b.sonde === 'sans' ? el('button.btn.sm.ghost', { type: 'button', style: { marginTop: '8px' }, text: '↺ En fait, j’avais une sonde', onclick: () => basculerSonde(false) })
+      : el('button.btn.sm', { type: 'button', style: { marginTop: '8px' }, text: '🚫 Pas de sonde sur cette plongée', title: 'Sonde pas branchée : ne plus la réclamer',
+        onclick: () => basculerSonde(true) });
     wrap.append(el('details.section.donnees-fiche', { open: b.recuperer.length ? true : null },
       el('summary', {}, el('h2', { text: 'Données' }), badgeDonnees(b)),
       el('div.card', {},
         el('div.hint', { style: { marginTop: 0 }, text: LIBELLE_SOURCE[b.source] }),
         ligne(b.courbe, 'Courbe de plongée'),
         ligne(...sonde),
+        boutonSonde,
         ligne(b.temp, 'Température'),
         ligne(b.ndl, 'Temps sans palier / plafond'),
         ligne(b.coeur, 'Cœur'),

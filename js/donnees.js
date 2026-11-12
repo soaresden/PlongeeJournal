@@ -72,7 +72,9 @@ export function bilanDonnees(d, { liste = listeMontre(), debutMontre = null } = 
   const a = champ => s.some(p => p && Number.isFinite(p[champ]));
   const courbe = s.length >= 3;
   const preRemplie = Number(d.pressionDepart) === PRE_REMPLI.pressionDepart && Number(d.pressionFin) === PRE_REMPLI.pressionFin;
+  // « Pas de sonde » (sonde pas branchée, pas de sonde) : on ne la réclame plus
   const sonde = a('pression') ? 'courbe'
+    : d.sansSonde ? 'sans'
     : (d.pressionDepart && d.pressionFin && !preRemplie) ? 'debut-fin'
     : (d.pressionDepart && d.pressionFin) ? 'defaut' : 'aucune';
   const source = sourcePlongee(d);
@@ -86,18 +88,19 @@ export function bilanDonnees(d, { liste = listeMontre(), debutMontre = null } = 
   };
   bilan.manque = [
     !courbe && 'courbe de plongée',
-    sonde !== 'courbe' && (sonde === 'debut-fin' ? 'courbe de la sonde' : 'pression du bloc'),
+    sonde !== 'courbe' && sonde !== 'sans' && (sonde === 'debut-fin' ? 'courbe de la sonde' : 'pression du bloc'),
     !gps && 'point GPS',
   ].filter(Boolean);
 
   bilan.recuperer = [];
-  if ((!courbe || sonde !== 'courbe' || !gps) && dansLaMontre(d, liste)) {
+  const sondeOk = sonde === 'courbe' || sonde === 'sans';
+  if ((!courbe || !sondeOk || !gps) && dansLaMontre(d, liste)) {
     bilan.recuperer.push({ ou: 'montre', quoi: 'tout : courbe, sonde, cœur, GPS' });
   } else if (!courbe && (source === 'compte' || source === 'export' || source === 'fichier'
     || (source === 'saisie' && debutMontre && (d.date || '') >= debutMontre))) {
     bilan.recuperer.push({ ou: 'compte', quoi: 'la courbe de plongée' });
   }
-  bilan.niveau = courbe && sonde === 'courbe' ? 'complet' : courbe ? 'partiel' : 'vide';
+  bilan.niveau = courbe && sondeOk ? 'complet' : courbe ? 'partiel' : 'vide';
   return bilan;
 }
 

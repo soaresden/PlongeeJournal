@@ -527,6 +527,10 @@ export function plongeurverse({ buddies, compte = () => 0, onTap = () => {}, moi
     canvas.style.height = `${H}px`;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     if (premier || !cam.ox) cadrer(false);
+    else {                           // l'écran a changé (volet, rotation) : la vedette reste au centre
+      const v = plongeurs.find(q => q.etat === 'vedette');
+      if (v) viserZone(v.wx - 55, v.wy - 55, v.wx + 55, v.wy + 55, { anime: false });
+    }
   }
   /** La caméra sur moi (zoomée), pour me retrouver parmi tout le monde. */
   // ---------- depuis le volet : viser quelqu'un, le redessiner en direct ----------

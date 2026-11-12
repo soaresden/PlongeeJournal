@@ -291,7 +291,7 @@ export async function montreView() {
     const deja = plongeeCorrespondante(f, connues());
     if (!deja || deja.dive.seance || !dives.includes(deja.dive) || deja.dive.parties?.length > 1) return null;
     const b = bilanDonnees(deja.dive, { liste: null });
-    return b.courbe && b.sonde === 'courbe' && b.gps ? null : deja.dive;
+    return b.courbe && (b.sonde === 'courbe' || b.sonde === 'sans') && b.gps ? null : deja.dive;
   }
   const aTraiter = f => !plongeeCorrespondante(f, connues()) || !!aCompleter(f);
 
