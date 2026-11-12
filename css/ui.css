@@ -1178,3 +1178,9 @@ html.apercu-cote .apercu-fond { display: none; }
 @media (min-width: 760px) {
   html.apercu-cote #view > * { max-width: none; }
 }
+/* Mes couleurs, et ＋ pour en créer une */
+.mii-pastille.perso { outline: 2px dashed rgba(255,255,255,.45); outline-offset: 1px; }
+.mii-pastille.plus { position: relative; display: inline-grid; place-items: center; overflow: hidden; color: var(--text);
+  background: conic-gradient(#ef4444, #facc15, #e6ff00, #22c55e, #06b6d4, #3b82f6, #a855f7, #ec4899, #ef4444); font-weight: 800; }
+.mii-pastille.plus span { background: var(--surface); border-radius: 50%; width: 16px; height: 16px; display: grid; place-items: center; font-size: 12px; line-height: 1; }
+.mii-nuancier { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; border: 0; padding: 0; }

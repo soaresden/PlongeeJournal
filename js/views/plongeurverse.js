@@ -40,13 +40,13 @@ export const MII = {
     ['carre', 'Carré'], ['dreads', 'Dreadlocks'], ['cheveux', 'Courts'], ['clairsemes', 'Peu de cheveux'], ['chauve', 'Rasés']],
   tenues: [['combi', 'Combi une pièce'], ['deux', 'Combi deux pièces'], ['etanche', 'Étanche'], ['maillot', '🩱 Maillot de bain']],
   masques: [['#111827', 'Noir'], ['#e2e8f0', 'Transparent'], ['#1d4ed8', 'Bleu'], ['#dc2626', 'Rouge'], ['#ec4899', 'Rose'],
-    ['#facc15', 'Jaune'], ['#16a34a', 'Vert'], ['#f97316', 'Orange'], ['#7c3aed', 'Violet']],
+    ['#facc15', 'Jaune'], ['#e6ff00', 'Jaune fluo'], ['#16a34a', 'Vert'], ['#f97316', 'Orange'], ['#7c3aed', 'Violet']],
   combis: [['#1f2937', 'Noire'], ['#3a4556', 'Grise'], ['#0f4c75', 'Bleu nuit'], ['#1d4ed8', 'Bleue'], ['#0e6375', 'Pétrole'],
     ['#24543f', 'Verte'], ['#5b2a86', 'Violette'], ['#8a1c3a', 'Bordeaux'], ['#b91c1c', 'Rouge'], ['#db2777', 'Rose'],
-    ['#ea580c', 'Orange'], ['#ca8a04', 'Jaune']],
-  blocs: [['#facc15', 'Jaune'], ['#f97316', 'Orange'], ['#ef4444', 'Rouge'], ['#f472b6', 'Rose'], ['#3b82f6', 'Bleu'],
+    ['#ea580c', 'Orange'], ['#ca8a04', 'Jaune'], ['#e6ff00', 'Jaune fluo']],
+  blocs: [['#e6ff00', 'Jaune fluo'], ['#facc15', 'Jaune'], ['#f97316', 'Orange'], ['#ef4444', 'Rouge'], ['#f472b6', 'Rose'], ['#3b82f6', 'Bleu'],
     ['#22c55e', 'Vert'], ['#cbd5e1', 'Alu'], ['#e2e8f0', 'Blanc'], ['#1f2937', 'Noir']],
-  palmes: [['#0f172a', 'Noires'], ['#6b7280', 'Grises'], ['#cbd5e1', 'Gris clair'], ['#facc15', 'Jaunes'], ['#f97316', 'Orange'], ['#ef4444', 'Rouges'], ['#ec4899', 'Roses'],
+  palmes: [['#e6ff00', 'Jaune fluo'], ['#0f172a', 'Noires'], ['#6b7280', 'Grises'], ['#cbd5e1', 'Gris clair'], ['#facc15', 'Jaunes'], ['#f97316', 'Orange'], ['#ef4444', 'Rouges'], ['#ec4899', 'Roses'],
     ['#7c3aed', 'Violettes'], ['#2563eb', 'Bleues'], ['#06b6d4', 'Turquoise'], ['#22c55e', 'Vertes'], ['#f8fafc', 'Blanches']],
   bandanas: [['#dc2626', 'Rouge'], ['#2563eb', 'Bleu'], ['#0f172a', 'Noir'], ['#16a34a', 'Vert'], ['#facc15', 'Jaune'],
     ['#f97316', 'Orange'], ['#ec4899', 'Rose'], ['#7c3aed', 'Violet'], ['#f8fafc', 'Blanc'], ['#0e7490', 'Turquoise']],
@@ -55,6 +55,29 @@ export const MII = {
   accessoires: [['lunettes', '👓 Lunettes'], ['camera', '🎥 Caméra pro'], ['parachute', '🟠 Parachute'], ['bandana', '🧣 Bandana'], ['boucle', '💛 Boucle d’oreille'], ['moustache', '〰 Moustache'],
     ['cagoule', '🥷 Cagoule'], ['gopro', '📷 GoPro']],
 };
+
+// ---------- « Mes couleurs » : créées au nuancier, reprises dans toutes les palettes ----------
+const CLE_PERSO = 'plongee-journal:couleurs-perso';
+let persoCache = null;
+const ecrirePerso = () => { try { localStorage.setItem(CLE_PERSO, JSON.stringify(persoCache)); } catch { /* privé */ } };
+/** Mes couleurs (les plus récentes d'abord) ; gardées sur l'appareil et dans le carnet (synchronisées). */
+export function couleursPerso() {
+  if (!persoCache) {
+    try { persoCache = JSON.parse(localStorage.getItem(CLE_PERSO) || '[]'); } catch { persoCache = []; }
+    if (!Array.isArray(persoCache)) persoCache = [];
+    import('../store.js').then(({ store }) => store.getSettings()).then(r => {
+      const autres = (r.couleursPerso || []).filter(c => !persoCache.some(x => x.toLowerCase() === String(c).toLowerCase()));
+      if (autres.length) { persoCache = [...persoCache, ...autres].slice(0, 12); ecrirePerso(); }
+    }).catch(() => {});
+  }
+  return persoCache;
+}
+function ajouterPerso(c) {
+  if (!/^#[0-9a-f]{6}$/i.test(c)) return;
+  persoCache = [c, ...couleursPerso().filter(x => x.toLowerCase() !== c.toLowerCase())].slice(0, 12);
+  ecrirePerso();
+  import('../store.js').then(({ store }) => store.saveSettings({ couleursPerso: persoCache })).catch(() => {});
+}
 
 /**
  * L'apparence d'un plongeur : ses choix (b.mii) ; le reste vient de
@@ -1067,16 +1090,30 @@ export function editeurMii(b, onChange, { defaut = null } = {}) {
   const toile = el('canvas.mii-apercu', { width: 240, height: 360 });
   const zone = el('div.mii-choix');
   const dessiner = () => buste(toile, b, defaut, { entier: true });
-  const choisir = p => {
+  const choisir = (p, { garderEcran = false } = {}) => {
     const mii = { ...(b.mii || {}), ...p };
     for (const k of Object.keys(mii)) if (mii[k] == null) delete mii[k];
     b.mii = Object.keys(mii).length ? mii : undefined;
     onChange(b.mii);
-    rendre();
+    if (garderEcran) dessiner(); else rendre();      // pendant le nuancier : l'aperçu seul (le nuancier reste ouvert)
   };
-  const pastilles = (liste, cle, actuel) => el('div.mii-pastilles', {}, ...liste.map(([c, nom]) =>
-    el(`button.mii-pastille${actuel === c ? '.on' : ''}`, { type: 'button', title: nom, 'aria-label': nom, style: { background: c },
-      onclick: () => choisir({ [cle]: c }) })));
+  // Chaque palette : ses couleurs, puis « mes couleurs » (créées n'importe où, reprises partout,
+  // comme les couleurs récentes d'Excel), puis ＋ pour en créer une au nuancier.
+  const pastilles = (liste, cle, actuel) => {
+    const connues = new Set(liste.map(([c]) => c.toLowerCase()));
+    const miennes = [...couleursPerso(), ...(actuel && !connues.has(String(actuel).toLowerCase()) ? [actuel] : [])]
+      .filter((c, i, t) => !connues.has(c.toLowerCase()) && t.findIndex(x => x.toLowerCase() === c.toLowerCase()) === i);
+    const nuancier = el('input.mii-nuancier', { type: 'color', value: /^#[0-9a-f]{6}$/i.test(actuel || '') ? actuel : '#e6ff00',
+      'aria-label': 'Choisir une couleur' });
+    nuancier.addEventListener('input', () => choisir({ [cle]: nuancier.value }, { garderEcran: true }));       // aperçu en direct
+    nuancier.addEventListener('change', () => { ajouterPerso(nuancier.value); choisir({ [cle]: nuancier.value }); });
+    return el('div.mii-pastilles', {},
+      ...liste.map(([c, nom]) => el(`button.mii-pastille${actuel === c ? '.on' : ''}`, { type: 'button', title: nom, 'aria-label': nom,
+        style: { background: c }, onclick: () => choisir({ [cle]: c }) })),
+      ...miennes.map(c => el(`button.mii-pastille.perso${String(actuel).toLowerCase() === c.toLowerCase() ? '.on' : ''}`, { type: 'button',
+        title: `Ma couleur ${c}`, 'aria-label': `Ma couleur ${c}`, style: { background: c }, onclick: () => choisir({ [cle]: c }) })),
+      el('label.mii-pastille.plus', { title: 'Une autre couleur…' }, el('span', { text: '＋' }), nuancier));
+  };
   function rendre() {
     const a = apparenceDe(b, defaut ? 'h' : genreDe(b), defaut);
     const coiffure = a.coiffure;
