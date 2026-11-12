@@ -465,8 +465,8 @@ check('Plongeurs : plus de lignes pleine largeur',
   document.querySelector('#view .vue-switch button[data-vue="liste"]')?.click();
   await tick(40);
 }
-check('Plongeurs : filtres par catégorie (Tous, Moniteurs…)',
-  document.querySelectorAll('#view .cat-filtres .cat-filtre').length >= 1, '');
+check('Plongeurs : filtre par tag en liste déroulante (Tous, Moniteurs…)',
+  document.querySelectorAll('#view select.tag-choix option').length >= 1, '');
 check('Plongeurs : filtre présent', !!document.querySelector('#view input[type=search]'), '');
 
 window.location.hash = '#/dives';
