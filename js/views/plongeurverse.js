@@ -34,6 +34,11 @@ export const MII = {
     ['#d4a253', 'Blonds'], ['#e6d3a0', 'Blond très clair'], ['#b5442e', 'Roux'], ['#8d8d8d', 'Poivre et sel'],
     ['#c4c4c4', 'Gris'], ['#f1f1f1', 'Blancs']],
   coiffures: [['cheveux', 'Cheveux'], ['pics', 'En pics'], ['degarni', 'Dégarni'], ['chauve', 'Chauve']],
+  combis: [['#1f2937', 'Noire'], ['#3a4556', 'Grise'], ['#0f4c75', 'Bleu nuit'], ['#1d4ed8', 'Bleue'], ['#0e6375', 'Pétrole'],
+    ['#24543f', 'Verte'], ['#5b2a86', 'Violette'], ['#8a1c3a', 'Bordeaux'], ['#b91c1c', 'Rouge'], ['#db2777', 'Rose'],
+    ['#ea580c', 'Orange'], ['#ca8a04', 'Jaune']],
+  blocs: [['#facc15', 'Jaune'], ['#f97316', 'Orange'], ['#ef4444', 'Rouge'], ['#f472b6', 'Rose'], ['#3b82f6', 'Bleu'],
+    ['#22c55e', 'Vert'], ['#cbd5e1', 'Alu'], ['#e2e8f0', 'Blanc'], ['#1f2937', 'Noir']],
   bandanas: [['#dc2626', 'Rouge'], ['#2563eb', 'Bleu'], ['#0f172a', 'Noir'], ['#16a34a', 'Vert'], ['#facc15', 'Jaune'],
     ['#f97316', 'Orange'], ['#ec4899', 'Rose'], ['#7c3aed', 'Violet'], ['#f8fafc', 'Blanc'], ['#0e7490', 'Turquoise']],
   accessoires: [['bandana', '🧣 Bandana'], ['boucle', '💛 Boucle d’oreille'], ['moustache', '〰 Moustache'],
@@ -55,7 +60,7 @@ export function apparenceDe(b, genre = b?.genre || '', defaut = null) {
     chauve: coiffure === 'chauve', degarni: coiffure === 'degarni', pics: coiffure === 'pics',
     barbe: m.barbe ?? (defaut ? !!defaut.barbe : genre === 'h' && (h >>> 13) % 4 === 0),
     accessoires: Array.isArray(m.accessoires) ? m.accessoires : [], bandana: m.bandana || '#dc2626',
-    combi: defaut?.combi || COMBIS[(h >>> 8) % COMBIS.length], bloc: defaut?.bloc || BLOCS[(h >>> 11) % BLOCS.length],
+    combi: m.combi || defaut?.combi || COMBIS[(h >>> 8) % COMBIS.length], bloc: m.bloc || defaut?.bloc || BLOCS[(h >>> 11) % BLOCS.length],
     ...(defaut ? { bande: defaut.bande, sourcils: !!defaut.sourcils } : {}),
   };
 }
@@ -864,6 +869,8 @@ export function editeurMii(b, onChange, { defaut = null } = {}) {
           const n = new Set(acc); n.has(v) ? n.delete(v) : n.add(v);
           choisir({ accessoires: n.size ? [...n] : null });
         } })))),
+      el('div.mii-ligne', {}, el('span', { text: 'Combi' }), pastilles(MII.combis, 'combi', a.combi)),
+      el('div.mii-ligne', {}, el('span', { text: 'Bloc' }), pastilles(MII.blocs, 'bloc', a.bloc)),
       acc.has('bandana') && !acc.has('cagoule') ? el('div.mii-ligne', {}, el('span', { text: 'Bandana' }), pastilles(MII.bandanas, 'bandana', a.bandana)) : null,
       el('div.mii-ligne', {}, el('label.switch', {},
         el('input', { type: 'checkbox', checked: !!a.barbe, onchange: e => choisir({ barbe: e.target.checked }) }), el('span', { text: 'Barbe' })),
