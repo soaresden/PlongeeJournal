@@ -46,6 +46,8 @@ export const MII = {
     ['#ea580c', 'Orange'], ['#ca8a04', 'Jaune']],
   blocs: [['#facc15', 'Jaune'], ['#f97316', 'Orange'], ['#ef4444', 'Rouge'], ['#f472b6', 'Rose'], ['#3b82f6', 'Bleu'],
     ['#22c55e', 'Vert'], ['#cbd5e1', 'Alu'], ['#e2e8f0', 'Blanc'], ['#1f2937', 'Noir']],
+  palmes: [['#0f172a', 'Noires'], ['#facc15', 'Jaunes'], ['#f97316', 'Orange'], ['#ef4444', 'Rouges'], ['#ec4899', 'Roses'],
+    ['#7c3aed', 'Violettes'], ['#2563eb', 'Bleues'], ['#06b6d4', 'Turquoise'], ['#22c55e', 'Vertes'], ['#f8fafc', 'Blanches']],
   bandanas: [['#dc2626', 'Rouge'], ['#2563eb', 'Bleu'], ['#0f172a', 'Noir'], ['#16a34a', 'Vert'], ['#facc15', 'Jaune'],
     ['#f97316', 'Orange'], ['#ec4899', 'Rose'], ['#7c3aed', 'Violet'], ['#f8fafc', 'Blanc'], ['#0e7490', 'Turquoise']],
   accessoires: [['bandana', '🧣 Bandana'], ['boucle', '💛 Boucle d’oreille'], ['moustache', '〰 Moustache'],
@@ -65,7 +67,7 @@ export function apparenceDe(b, genre = b?.genre || '', defaut = null) {
     peau: m.peau || defaut?.peau || PEAUX[h % PEAUX.length],
     cheveux: m.cheveux || defaut?.cheveux || CHEVEUX[(h >>> 5) % CHEVEUX.length],
     coiffure, chauve: coiffure === 'chauve', degarni: coiffure === 'degarni', pics: coiffure === 'pics',
-    tenue: m.tenue || 'combi', bas: m.bas || null, masque: m.masque || null,
+    tenue: m.tenue || 'combi', bas: m.bas || null, masque: m.masque || null, palmes: m.palmes || null,
     barbe: m.barbe ?? (defaut ? !!defaut.barbe : genre === 'h' && (h >>> 13) % 4 === 0),
     accessoires: Array.isArray(m.accessoires) ? m.accessoires : [], bandana: m.bandana || '#dc2626',
     combi: m.combi || defaut?.combi || COMBIS[(h >>> 8) % COMBIS.length], bloc: m.bloc || defaut?.bloc || BLOCS[(h >>> 11) % BLOCS.length],
@@ -128,8 +130,11 @@ export function dessinerPlongeur(ctx, p) {
     if (etanche) {                     // les bottillons de l'étanche
       ctx.strokeStyle = '#111827'; ctx.beginPath(); ctx.moveTo(fx - (fx - hx) * 0.25, fy - (fy - hy) * 0.25); ctx.lineTo(fx, fy); ctx.stroke();
     }
-    ctx.fillStyle = '#0f172a';
+    ctx.fillStyle = p.palmes || '#0f172a';
     ctx.beginPath(); ctx.ellipse(fx + 6, fy + 1, 10, 3.2, a * 0.3, 0, Math.PI * 2); ctx.fill();
+    if (p.palmes && p.palmes !== '#0f172a') {       // le chausson, noir, et la lame colorée
+      ctx.fillStyle = '#0f172a'; ctx.beginPath(); ctx.ellipse(fx + 1.5, fy, 3.4, 2.6, a * 0.3, 0, Math.PI * 2); ctx.fill();
+    }
   };
   pied(-jambe, shade(jambes, -18));
   // Corps
@@ -886,12 +891,12 @@ export function plongeurverse({ buddies, compte = () => 0, onTap = () => {}, moi
   return boite;
 }
 
-/** Le buste d'un plongeur (son Mii) dans une toile de 120 × 150 (dessinée en ×2). */
-function buste(toile, b, defaut = null) {
+/** Un plongeur (son Mii), en buste (120 × 150) ou en pied (120 × 180), dessiné en ×2. */
+function buste(toile, b, defaut = null, { entier = false } = {}) {
   const ctx = toile.getContext('2d');
   if (!ctx) return;
   ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, toile.width, toile.height); ctx.setTransform(2, 0, 0, 2, 0, 0);
-  dessinerPlongeur(ctx, { x: 58, y: 228, s: 3, dir: 1, etat: 'pause', phase: 0, rot: 0, genre: genreDe(b),
+  dessinerPlongeur(ctx, { ...(entier ? { x: 56, y: 168, s: 2.1 } : { x: 58, y: 228, s: 3 }), dir: 1, etat: 'pause', phase: 0, rot: 0, genre: genreDe(b),
     bande: (b.categories || [])[0] ? couleurCategorie(b.categories[0]) : '#22d3ee', ...apparenceDe(b, defaut ? 'h' : genreDe(b), defaut) });
 }
 
@@ -911,9 +916,9 @@ export function portraitMii(b, { defaut = null } = {}) {
  */
 export function editeurMii(b, onChange, { defaut = null } = {}) {
   const boite = el('div.mii-editeur');
-  const toile = el('canvas.mii-apercu', { width: 240, height: 300 });
+  const toile = el('canvas.mii-apercu', { width: 240, height: 360 });
   const zone = el('div.mii-choix');
-  const dessiner = () => buste(toile, b, defaut);
+  const dessiner = () => buste(toile, b, defaut, { entier: true });
   const choisir = p => {
     const mii = { ...(b.mii || {}), ...p };
     for (const k of Object.keys(mii)) if (mii[k] == null) delete mii[k];
@@ -948,6 +953,7 @@ export function editeurMii(b, onChange, { defaut = null } = {}) {
         pastilles(MII.combis, 'combi', a.combi)),
       a.tenue === 'deux' ? el('div.mii-ligne', {}, el('span', { text: 'Pantalon' }), pastilles(MII.combis, 'bas', a.bas || '#1f2937')) : null,
       el('div.mii-ligne', {}, el('span', { text: 'Masque' }), pastilles(MII.masques, 'masque', a.masque || '#111827')),
+      el('div.mii-ligne', {}, el('span', { text: 'Palmes' }), pastilles(MII.palmes, 'palmes', a.palmes || '#0f172a')),
       el('div.mii-ligne', {}, el('span', { text: 'Bloc' }), pastilles(MII.blocs, 'bloc', a.bloc)),
       acc.has('bandana') && !acc.has('cagoule') ? el('div.mii-ligne', {}, el('span', { text: 'Bandana' }), pastilles(MII.bandanas, 'bandana', a.bandana)) : null,
       el('div.mii-ligne', {}, el('label.switch', {},
