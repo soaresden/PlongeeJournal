@@ -34,7 +34,9 @@ export const MII = {
     ['#d4a253', 'Blonds'], ['#e6d3a0', 'Blond très clair'], ['#b5442e', 'Roux'], ['#8d8d8d', 'Poivre et sel'],
     ['#c4c4c4', 'Gris'], ['#f1f1f1', 'Blancs']],
   coiffures: [['cheveux', 'Cheveux'], ['pics', 'En pics'], ['degarni', 'Dégarni'], ['chauve', 'Chauve']],
-  accessoires: [['bandana', '🟥 Bandana'], ['boucle', '💛 Boucle d’oreille'], ['moustache', '〰 Moustache'],
+  bandanas: [['#dc2626', 'Rouge'], ['#2563eb', 'Bleu'], ['#0f172a', 'Noir'], ['#16a34a', 'Vert'], ['#facc15', 'Jaune'],
+    ['#f97316', 'Orange'], ['#ec4899', 'Rose'], ['#7c3aed', 'Violet'], ['#f8fafc', 'Blanc'], ['#0e7490', 'Turquoise']],
+  accessoires: [['bandana', '🧣 Bandana'], ['boucle', '💛 Boucle d’oreille'], ['moustache', '〰 Moustache'],
     ['cagoule', '🥷 Cagoule'], ['gopro', '📷 GoPro']],
 };
 
@@ -52,7 +54,7 @@ export function apparenceDe(b, genre = b?.genre || '', defaut = null) {
     cheveux: m.cheveux || defaut?.cheveux || CHEVEUX[(h >>> 5) % CHEVEUX.length],
     chauve: coiffure === 'chauve', degarni: coiffure === 'degarni', pics: coiffure === 'pics',
     barbe: m.barbe ?? (defaut ? !!defaut.barbe : genre === 'h' && (h >>> 13) % 4 === 0),
-    accessoires: Array.isArray(m.accessoires) ? m.accessoires : [],
+    accessoires: Array.isArray(m.accessoires) ? m.accessoires : [], bandana: m.bandana || '#dc2626',
     combi: defaut?.combi || COMBIS[(h >>> 8) % COMBIS.length], bloc: defaut?.bloc || BLOCS[(h >>> 11) % BLOCS.length],
     ...(defaut ? { bande: defaut.bande, sourcils: !!defaut.sourcils } : {}),
   };
@@ -163,12 +165,13 @@ export function dessinerPlongeur(ctx, p) {
       .forEach(([x, y]) => ctx.lineTo(x, hy + y));
     ctx.lineTo(9, hy - 4); ctx.lineTo(-11, hy - 2); ctx.fill();
   }
-  if (acc.has('bandana') && !cagoule) {   // bandana rouge à pois, noué derrière
+  if (acc.has('bandana') && !cagoule) {   // bandana à pois (couleur au choix), noué derrière
+    const bc = p.bandana || '#dc2626', pois = /^#f[0-9a-f]{5}$/i.test(bc) && parseInt(bc.slice(3, 5), 16) > 200 ? '#334155' : '#fff';
     ctx.save(); ctx.beginPath(); ctx.arc(0, hy, 11.6, 0, Math.PI * 2); ctx.clip();
-    ctx.fillStyle = '#dc2626'; ctx.fillRect(-12, hy - 12.5, 25, 4.8);
-    ctx.fillStyle = '#fff'; [[-6, -10], [-1, -11], [4, -10], [8, -11]].forEach(([x, y]) => { ctx.beginPath(); ctx.arc(x, hy + y, 0.8, 0, Math.PI * 2); ctx.fill(); });
+    ctx.fillStyle = bc; ctx.fillRect(-12, hy - 12.5, 25, 4.8);
+    ctx.fillStyle = pois; [[-6, -10], [-1, -11], [4, -10], [8, -11]].forEach(([x, y]) => { ctx.beginPath(); ctx.arc(x, hy + y, 0.8, 0, Math.PI * 2); ctx.fill(); });
     ctx.restore();
-    ctx.fillStyle = '#dc2626'; ctx.beginPath(); ctx.moveTo(-10, hy - 11); ctx.lineTo(-17, hy - 7 + Math.sin(p.phase) * 1.2); ctx.lineTo(-15, hy - 13); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = bc; ctx.beginPath(); ctx.moveTo(-10, hy - 11); ctx.lineTo(-17, hy - 7 + Math.sin(p.phase) * 1.2); ctx.lineTo(-15, hy - 13); ctx.closePath(); ctx.fill();
   }
   if (acc.has('boucle') && !cagoule) {    // boucle d'oreille dorée
     ctx.strokeStyle = '#facc15'; ctx.lineWidth = 1.3; ctx.beginPath(); ctx.arc(-3.5, hy + 5, 1.7, 0, Math.PI * 2); ctx.stroke();
@@ -861,6 +864,7 @@ export function editeurMii(b, onChange, { defaut = null } = {}) {
           const n = new Set(acc); n.has(v) ? n.delete(v) : n.add(v);
           choisir({ accessoires: n.size ? [...n] : null });
         } })))),
+      acc.has('bandana') && !acc.has('cagoule') ? el('div.mii-ligne', {}, el('span', { text: 'Bandana' }), pastilles(MII.bandanas, 'bandana', a.bandana)) : null,
       el('div.mii-ligne', {}, el('label.switch', {},
         el('input', { type: 'checkbox', checked: !!a.barbe, onchange: e => choisir({ barbe: e.target.checked }) }), el('span', { text: 'Barbe' })),
         b.mii ? el('button.btn.sm.ghost', { type: 'button', text: defaut ? '↺ Par défaut' : '↺ Au hasard', title: defaut ? 'Revenir à mon Mii de départ' : 'Revenir à l’apparence tirée du nom',
