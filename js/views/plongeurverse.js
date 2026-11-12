@@ -33,7 +33,14 @@ export const MII = {
   cheveux: [['#161616', 'Noirs'], ['#2b1d14', 'Brun foncé'], ['#5a3a22', 'Châtains'], ['#8a5a2b', 'Châtain clair'],
     ['#d4a253', 'Blonds'], ['#e6d3a0', 'Blond très clair'], ['#b5442e', 'Roux'], ['#8d8d8d', 'Poivre et sel'],
     ['#c4c4c4', 'Gris'], ['#f1f1f1', 'Blancs']],
-  coiffures: [['cheveux', 'Cheveux'], ['pics', 'En pics'], ['degarni', 'Dégarni'], ['chauve', 'Chauve']],
+  // Les coiffures, séparées garçons / filles (les deux listes si le genre n'est pas connu)
+  coiffuresGarcon: [['cheveux', 'Courts'], ['pics', 'En pics'], ['crete', 'Crête'], ['longs', 'Longs'], ['dreads', 'Dreadlocks'],
+    ['degarni', 'Dégarni'], ['chauve', 'Chauve']],
+  coiffuresFille: [['longs', 'Longs'], ['queue', 'Queue de cheval'], ['couettes', 'Couettes'], ['chignon', 'Chignon'],
+    ['carre', 'Carré'], ['dreads', 'Dreadlocks'], ['cheveux', 'Courts'], ['chauve', 'Rasés']],
+  tenues: [['combi', 'Combi une pièce'], ['deux', 'Combi deux pièces'], ['etanche', 'Étanche'], ['maillot', '🩱 Maillot de bain']],
+  masques: [['#111827', 'Noir'], ['#e2e8f0', 'Transparent'], ['#1d4ed8', 'Bleu'], ['#dc2626', 'Rouge'], ['#ec4899', 'Rose'],
+    ['#facc15', 'Jaune'], ['#16a34a', 'Vert'], ['#f97316', 'Orange'], ['#7c3aed', 'Violet']],
   combis: [['#1f2937', 'Noire'], ['#3a4556', 'Grise'], ['#0f4c75', 'Bleu nuit'], ['#1d4ed8', 'Bleue'], ['#0e6375', 'Pétrole'],
     ['#24543f', 'Verte'], ['#5b2a86', 'Violette'], ['#8a1c3a', 'Bordeaux'], ['#b91c1c', 'Rouge'], ['#db2777', 'Rose'],
     ['#ea580c', 'Orange'], ['#ca8a04', 'Jaune']],
@@ -53,11 +60,12 @@ export function apparenceDe(b, genre = b?.genre || '', defaut = null) {
   const h = hash(b?.id || nomPlongeur(b || {}));
   const m = b?.mii || {};
   const coiffure = m.coiffure || (defaut ? (defaut.chauve ? 'chauve' : defaut.pics ? 'pics' : 'cheveux')
-    : genre === 'h' && (h >>> 15) % 6 === 0 ? 'chauve' : 'cheveux');
+    : genre === 'f' ? 'queue' : genre === 'h' && (h >>> 15) % 6 === 0 ? 'chauve' : 'cheveux');
   return {
     peau: m.peau || defaut?.peau || PEAUX[h % PEAUX.length],
     cheveux: m.cheveux || defaut?.cheveux || CHEVEUX[(h >>> 5) % CHEVEUX.length],
-    chauve: coiffure === 'chauve', degarni: coiffure === 'degarni', pics: coiffure === 'pics',
+    coiffure, chauve: coiffure === 'chauve', degarni: coiffure === 'degarni', pics: coiffure === 'pics',
+    tenue: m.tenue || 'combi', bas: m.bas || null, masque: m.masque || null,
     barbe: m.barbe ?? (defaut ? !!defaut.barbe : genre === 'h' && (h >>> 13) % 4 === 0),
     accessoires: Array.isArray(m.accessoires) ? m.accessoires : [], bandana: m.bandana || '#dc2626',
     combi: m.combi || defaut?.combi || COMBIS[(h >>> 8) % COMBIS.length], bloc: m.bloc || defaut?.bloc || BLOCS[(h >>> 11) % BLOCS.length],
@@ -103,25 +111,51 @@ export function dessinerPlongeur(ctx, p) {
   ctx.strokeStyle = '#111827'; ctx.lineWidth = 2;
   ctx.beginPath(); ctx.moveTo(-12, -55); ctx.quadraticCurveTo(-4, -66, 7, -53); ctx.stroke();
 
+  // La tenue : combi une pièce (par défaut), deux pièces, étanche, maillot de bain
+  const tenue = p.tenue || 'combi';
+  const etanche = tenue === 'etanche', maillot = tenue === 'maillot';
+  const jambes = maillot ? p.peau : tenue === 'deux' ? (p.bas || '#1f2937') : p.combi;
+
   // Jambes et palmes
   const pied = (a, couleur) => {
     const hx = 0, hy = -25, L = 22;
     let fx = hx + Math.sin(a) * L, fy = hy + Math.cos(a) * L;
-    ctx.strokeStyle = couleur; ctx.lineWidth = 7;
+    ctx.strokeStyle = couleur; ctx.lineWidth = etanche ? 8.5 : 7;
     if (p.assis) {                     // cuisse en avant, mollet qui pend
       fx = 13 + a * 4; fy = hy + 19;
       ctx.beginPath(); ctx.moveTo(hx, hy); ctx.lineTo(13, hy); ctx.lineTo(fx, fy); ctx.stroke();
     } else { ctx.beginPath(); ctx.moveTo(hx, hy); ctx.lineTo(fx, fy); ctx.stroke(); }
+    if (etanche) {                     // les bottillons de l'étanche
+      ctx.strokeStyle = '#111827'; ctx.beginPath(); ctx.moveTo(fx - (fx - hx) * 0.25, fy - (fy - hy) * 0.25); ctx.lineTo(fx, fy); ctx.stroke();
+    }
     ctx.fillStyle = '#0f172a';
     ctx.beginPath(); ctx.ellipse(fx + 6, fy + 1, 10, 3.2, a * 0.3, 0, Math.PI * 2); ctx.fill();
   };
-  pied(-jambe, shade(p.combi, -18));
+  pied(-jambe, shade(jambes, -18));
   // Corps
-  ctx.fillStyle = p.combi;
-  ctx.beginPath(); ctx.roundRect(-9, -50, 18, 28, 7); ctx.fill();
-  ctx.fillStyle = p.bande; ctx.fillRect(-9, -42, 18, 4);
-  ctx.fillStyle = '#111827'; ctx.fillRect(-9, -27, 18, 3);     // ceinture de plombs
-  pied(jambe, p.combi);
+  if (maillot) {
+    ctx.fillStyle = p.peau; ctx.beginPath(); ctx.roundRect(-9, -50, 18, 28, 7); ctx.fill();
+    ctx.fillStyle = p.combi;
+    if (p.genre === 'f') {             // maillot une pièce, avec ses bretelles
+      ctx.beginPath(); ctx.roundRect(-8, -46, 16, 23, 5); ctx.fill();
+      ctx.strokeStyle = p.combi; ctx.lineWidth = 1.8;
+      ctx.beginPath(); ctx.moveTo(-5, -46); ctx.lineTo(-4, -50); ctx.moveTo(5, -46); ctx.lineTo(4, -50); ctx.stroke();
+    } else { ctx.beginPath(); ctx.roundRect(-9.5, -31, 19, 9, 3); ctx.fill(); }      // short de bain
+  } else {
+    ctx.fillStyle = p.combi;
+    ctx.beginPath();
+    if (etanche) ctx.roundRect(-10.5, -51, 21, 30, 8); else ctx.roundRect(-9, -50, 18, 28, 7);
+    ctx.fill();
+    if (tenue === 'deux') { ctx.fillStyle = jambes; ctx.fillRect(-9, -29, 18, 7); }       // le bas, sous la veste
+    if (etanche) {                     // fermeture en travers, collerette, inflateur
+      ctx.strokeStyle = 'rgba(0,0,0,.5)'; ctx.lineWidth = 1.6;
+      ctx.beginPath(); ctx.moveTo(-8, -47); ctx.lineTo(8, -36); ctx.stroke();
+      ctx.fillStyle = '#111827'; ctx.fillRect(-5, -52.5, 10, 2.8);
+      ctx.fillStyle = '#9ca3af'; ctx.beginPath(); ctx.arc(4, -44, 1.9, 0, Math.PI * 2); ctx.fill();
+    } else { ctx.fillStyle = p.bande; ctx.fillRect(-9, -42, 18, 4); }
+  }
+  ctx.fillStyle = '#111827'; ctx.fillRect(etanche ? -10.5 : -9, -27, etanche ? 21 : 18, 3);     // ceinture de plombs
+  pied(jambe, jambes);
 
   // Bras
   const epaule = [3, -46];
@@ -133,7 +167,7 @@ export function dessinerPlongeur(ctx, p) {
   if (p.etat === 'nage') bras = 0.15;
   if (p.etat === 'garde') bras = p.salut > 0 ? Math.PI - 0.35 : 0.05;     // salut, puis bras le long du corps
   if (typeof p.bras === 'number') bras = p.bras;                            // imposé (tenir un carnet…)
-  ctx.strokeStyle = p.combi; ctx.lineWidth = 6;
+  ctx.strokeStyle = maillot ? p.peau : p.combi; ctx.lineWidth = etanche ? 7 : 6;
   const mx = epaule[0] + Math.sin(bras) * 15, my = epaule[1] + Math.cos(bras) * 15;
   ctx.beginPath(); ctx.moveTo(...epaule); ctx.lineTo(mx, my); ctx.stroke();
   ctx.fillStyle = p.peau; ctx.beginPath(); ctx.arc(mx, my, 3, 0, Math.PI * 2); ctx.fill();
@@ -142,28 +176,62 @@ export function dessinerPlongeur(ctx, p) {
   const hy = -60;
   const acc = new Set(p.accessoires || []);
   const cagoule = acc.has('cagoule');
-  if (p.genre === 'f' && !p.chauve && !p.degarni && !cagoule) {           // queue de cheval qui flotte
-    ctx.fillStyle = p.cheveux;
-    ctx.beginPath(); ctx.ellipse(-12, hy + 1 + Math.sin(p.phase * 0.7) * 1.5, 7, 4, -0.5 + Math.sin(p.phase * 0.5) * 0.2, 0, Math.PI * 2); ctx.fill();
+  const coiffure = cagoule ? 'cagoule'
+    : p.coiffure || (p.chauve ? 'chauve' : p.degarni ? 'degarni' : p.pics ? 'pics' : p.genre === 'f' ? 'queue' : 'cheveux');
+  const flotte = Math.sin(p.phase * 0.7) * 1.5;
+  ctx.fillStyle = p.cheveux; ctx.strokeStyle = p.cheveux;
+  // Ce qui pend derrière la tête (dessiné avant elle)
+  if (coiffure === 'queue') {
+    ctx.beginPath(); ctx.ellipse(-12, hy + 1 + flotte, 7, 4, -0.5 + Math.sin(p.phase * 0.5) * 0.2, 0, Math.PI * 2); ctx.fill();
+  } else if (coiffure === 'longs') {
+    ctx.beginPath(); ctx.moveTo(-8, hy - 8); ctx.quadraticCurveTo(-16, hy + 2, -12 + flotte * 0.6, hy + 17);
+    ctx.lineTo(-3, hy + 14); ctx.lineTo(-1, hy); ctx.closePath(); ctx.fill();
+  } else if (coiffure === 'couettes') {
+    ctx.beginPath(); ctx.ellipse(-12, hy + 8 + flotte, 3.3, 6.5, 0.35, 0, Math.PI * 2); ctx.fill();
+  } else if (coiffure === 'chignon') {
+    ctx.beginPath(); ctx.arc(-8, hy - 8, 5, 0, Math.PI * 2); ctx.fill();
+  } else if (coiffure === 'dreads') {
+    ctx.lineWidth = 2.6; ctx.lineCap = 'round';
+    for (let i = 0; i < 7; i++) {
+      const x0 = -9 + i * 1.2, y0 = hy - 8 + i * 2.2;
+      ctx.beginPath(); ctx.moveTo(x0, y0);
+      ctx.quadraticCurveTo(x0 - 6, y0 + 8, x0 - 4 + flotte * (0.5 + i * 0.1), y0 + 15 - i * 0.6); ctx.stroke();
+    }
   }
   ctx.fillStyle = p.peau; ctx.beginPath(); ctx.arc(0, hy, 10.5, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = p.cheveux; ctx.strokeStyle = p.cheveux;
   if (cagoule) {                   // la cagoule en néoprène : seul le visage dépasse
     ctx.fillStyle = '#111827'; ctx.beginPath(); ctx.arc(0, hy, 11.3, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = p.peau; ctx.beginPath(); ctx.ellipse(5, hy + 0.5, 7.2, 8.6, 0, 0, Math.PI * 2); ctx.fill();
-  } else if (p.degarni) {                 // le haut du crâne nu, une couronne derrière et sur le côté
-    ctx.strokeStyle = p.cheveux; ctx.lineWidth = 3.6; ctx.lineCap = 'round';
+  } else if (coiffure === 'degarni') {     // le haut du crâne nu, une couronne derrière et sur le côté
+    ctx.lineWidth = 3.6; ctx.lineCap = 'round';
     ctx.beginPath(); ctx.arc(0, hy, 9.4, Math.PI * 0.68, Math.PI * 1.12); ctx.stroke();
-  } else if (!p.chauve) {
-    ctx.fillStyle = p.cheveux;
+  } else if (coiffure === 'crete') {       // crête : les côtés rasés, une crête du front à la nuque
+    ctx.fillStyle = shade(p.cheveux, 30); ctx.globalAlpha = 0.35;
+    ctx.beginPath(); ctx.arc(-1, hy - 2, 10.6, Math.PI * 1.05, Math.PI * 1.95); ctx.fill(); ctx.globalAlpha = 1;
+    ctx.fillStyle = p.cheveux; ctx.beginPath(); ctx.moveTo(-10, hy - 3);
+    [[-10, -12], [-6, -10], [-4, -17], [-1, -12], [2, -18], [4, -12], [7, -15], [8, -9]].forEach(([x, y]) => ctx.lineTo(x, hy + y));
+    ctx.lineTo(-10, hy - 3); ctx.fill();
+  } else if (coiffure !== 'chauve') {
     ctx.beginPath(); ctx.arc(-1, hy - 2, 10.8, Math.PI * 1.05, Math.PI * 1.95); ctx.fill();
-    if (p.genre === 'f') { ctx.beginPath(); ctx.arc(-6, hy - 1, 7, Math.PI * 0.6, Math.PI * 1.6); ctx.fill(); }
+    if (['queue', 'longs', 'couettes', 'chignon', 'carre', 'dreads'].includes(coiffure)) {
+      ctx.beginPath(); ctx.arc(-6, hy - 1, 7, Math.PI * 0.6, Math.PI * 1.6); ctx.fill();
+    }
+    if (coiffure === 'carre') {            // carré : jusqu'à la mâchoire
+      ctx.beginPath(); ctx.arc(-1, hy - 1, 11.3, Math.PI * 0.52, Math.PI * 1.95); ctx.lineTo(-1, hy - 1); ctx.fill();
+    }
+    if (coiffure === 'couettes') { ctx.beginPath(); ctx.ellipse(-5, hy + 10 + flotte, 3, 6, -0.2, 0, Math.PI * 2); ctx.fill(); }
+    if (coiffure === 'dreads') {           // quelques mèches sur le côté
+      ctx.lineWidth = 2.6; ctx.lineCap = 'round';
+      [[-5, -6], [-2, -8]].forEach(([x, y]) => { ctx.beginPath(); ctx.moveTo(x, hy + y); ctx.quadraticCurveTo(x - 4, hy + y + 7, x - 3, hy + y + 14); ctx.stroke(); });
+    }
   }
-  if (!cagoule && (p.chauve || p.degarni)) {     // un reflet sur le crâne
+  if (coiffure === 'chauve' || coiffure === 'degarni') {     // un reflet sur le crâne
     ctx.fillStyle = 'rgba(255,255,255,.35)';
     ctx.beginPath(); ctx.ellipse(1, hy - 7, 4, 2, -0.2, 0, Math.PI * 2); ctx.fill();
   }
   if (p.barbe) { ctx.fillStyle = p.cheveux; ctx.beginPath(); ctx.arc(2, hy + 5, 7.5, 0.1, Math.PI - 0.6); ctx.fill(); }
-  if (p.pics && !cagoule) {        // la coupe en pics du Mii
+  if (coiffure === 'pics') {       // la coupe en pics du Mii
     ctx.fillStyle = p.cheveux;
     ctx.beginPath(); ctx.moveTo(-11, hy - 2);
     [[-10, -15], [-6, -9], [-3, -17], [1, -10], [4, -16], [7, -9], [11, -13], [11, -4]]
@@ -182,9 +250,10 @@ export function dessinerPlongeur(ctx, p) {
     ctx.strokeStyle = '#facc15'; ctx.lineWidth = 1.3; ctx.beginPath(); ctx.arc(-3.5, hy + 5, 1.7, 0, Math.PI * 2); ctx.stroke();
   }
   // Masque et sangle
-  ctx.strokeStyle = '#111827'; ctx.lineWidth = 2;
+  const masque = p.masque || '#111827';
+  ctx.strokeStyle = masque; ctx.lineWidth = 2;
   ctx.beginPath(); ctx.moveTo(1, hy - 3); ctx.lineTo(-10, hy - 2); ctx.stroke();
-  ctx.fillStyle = '#111827'; ctx.beginPath(); ctx.roundRect(1, hy - 8, 12, 9, 3); ctx.fill();
+  ctx.fillStyle = masque; ctx.beginPath(); ctx.roundRect(1, hy - 8, 12, 9, 3); ctx.fill();
   ctx.fillStyle = 'rgba(165,243,252,.9)'; ctx.beginPath(); ctx.roundRect(2.5, hy - 6.5, 9, 6, 2); ctx.fill();
   if (p.sourcils) {                // sourcils marqués, au-dessus du masque
     ctx.strokeStyle = p.cheveux; ctx.lineWidth = 2.2;
@@ -213,6 +282,7 @@ export function dessinerPlongeur(ctx, p) {
 }
 
 const shade = (hex, d) => {
+  if (!/^#[0-9a-f]{6}$/i.test(hex || '')) return hex;
   const n = parseInt(hex.slice(1), 16);
   const c = v => Math.max(0, Math.min(255, v + d));
   return `rgb(${c(n >> 16)},${c((n >> 8) & 255)},${c(n & 255)})`;
@@ -856,12 +926,16 @@ export function editeurMii(b, onChange, { defaut = null } = {}) {
       onclick: () => choisir({ [cle]: c }) })));
   function rendre() {
     const a = apparenceDe(b, defaut ? 'h' : genreDe(b), defaut);
-    const coiffure = a.chauve ? 'chauve' : a.degarni ? 'degarni' : a.pics ? 'pics' : 'cheveux';
+    const coiffure = a.coiffure;
     const acc = new Set(a.accessoires);
+    const g = defaut ? 'h' : genreDe(b);
+    const liste = g === 'h' ? MII.coiffuresGarcon : g === 'f' ? MII.coiffuresFille
+      : [...MII.coiffuresGarcon, ...MII.coiffuresFille].filter(([v], i, t) => t.findIndex(([w]) => w === v) === i);
+    const chips = (items, actuel, cle) => el('div.mii-acc', {}, ...items.map(([v, nom]) =>
+      el(`button.chip${actuel === v ? '.on' : ''}`, { type: 'button', text: nom, onclick: () => choisir({ [cle]: v }) })));
     zone.replaceChildren(
       el('div.mii-ligne', {}, el('span', { text: 'Peau' }), pastilles(MII.peaux, 'peau', a.peau)),
-      el('div.mii-ligne', {}, el('span', { text: 'Coiffure' }), el('div.seg.mii-seg', {}, ...MII.coiffures.map(([v, nom]) =>
-        el(`button${coiffure === v ? '.on' : ''}`, { type: 'button', text: nom, onclick: () => choisir({ coiffure: v }) })))),
+      el('div.mii-ligne', {}, el('span', { text: g === 'f' ? 'Coiffure (fille)' : g === 'h' ? 'Coiffure (garçon)' : 'Coiffure' }), chips(liste, coiffure, 'coiffure')),
       coiffure === 'chauve' && !a.barbe ? null : el('div.mii-ligne', {}, el('span', { text: coiffure === 'chauve' ? 'Barbe' : 'Couleur' }),
         pastilles(MII.cheveux, 'cheveux', a.cheveux)),
       el('div.mii-ligne', {}, el('span', { text: 'Accessoires' }), el('div.mii-acc', {}, ...MII.accessoires.map(([v, nom]) =>
@@ -869,7 +943,11 @@ export function editeurMii(b, onChange, { defaut = null } = {}) {
           const n = new Set(acc); n.has(v) ? n.delete(v) : n.add(v);
           choisir({ accessoires: n.size ? [...n] : null });
         } })))),
-      el('div.mii-ligne', {}, el('span', { text: 'Combi' }), pastilles(MII.combis, 'combi', a.combi)),
+      el('div.mii-ligne', {}, el('span', { text: 'Tenue' }), chips(MII.tenues, a.tenue, 'tenue')),
+      el('div.mii-ligne', {}, el('span', { text: a.tenue === 'maillot' ? 'Maillot' : a.tenue === 'deux' ? 'Veste' : a.tenue === 'etanche' ? 'Étanche' : 'Combi' }),
+        pastilles(MII.combis, 'combi', a.combi)),
+      a.tenue === 'deux' ? el('div.mii-ligne', {}, el('span', { text: 'Pantalon' }), pastilles(MII.combis, 'bas', a.bas || '#1f2937')) : null,
+      el('div.mii-ligne', {}, el('span', { text: 'Masque' }), pastilles(MII.masques, 'masque', a.masque || '#111827')),
       el('div.mii-ligne', {}, el('span', { text: 'Bloc' }), pastilles(MII.blocs, 'bloc', a.bloc)),
       acc.has('bandana') && !acc.has('cagoule') ? el('div.mii-ligne', {}, el('span', { text: 'Bandana' }), pastilles(MII.bandanas, 'bandana', a.bandana)) : null,
       el('div.mii-ligne', {}, el('label.switch', {},
