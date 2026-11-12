@@ -488,11 +488,13 @@ export async function apercuPlongeur(id, { onClose = null, cote = false, onMii =
 
   const rouvrir = () => apercuPlongeur(id, { onClose, cote, onMii });
   const corps = el('div', {},
+    // Depuis le Plongeurverse : son Mii d'abord (c'est ce qu'on vient régler), le reste ensuite
+    mii && cote ? el('div.apercu-grille', {}, el('div.apercu-champ.large', {}, el('span', { text: 'Son Mii' }), mii)) : null,
     el('div.apercu-grille', {},
       champ(b.structure ? 'Centre de plongée' : 'Prénom', saisie('prenom')),
       b.structure ? null : champ('Nom', saisie('nom')),
       el('div.apercu-champ.large', {}, el('span', { text: 'Genre' }), genreSeg),
-      mii ? el('div.apercu-champ.large', {}, el('span', { text: 'Son Mii' }), mii) : null,
+      mii && !cote ? el('div.apercu-champ.large', {}, el('span', { text: 'Son Mii' }), mii) : null,
       b.structure ? null : champ('Licence', saisie('licence')),
       el('div.apercu-champ.large', {}, coche('moniteur', 'Moniteur')),
       el('div.apercu-champ.large', {}, el('span', { text: 'Tags' }), zoneCats),

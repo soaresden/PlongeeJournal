@@ -512,7 +512,7 @@ export function plongeurverse({ buddies, compte = () => 0, onTap = () => {}, moi
     const vue = boite.closest('#view');
     const bas = vue ? parseFloat(getComputedStyle(vue).paddingBottom) || 0 : 0;
     const dessous = boite.nextElementSibling?.offsetHeight || 0;
-    return Math.round(Math.max(260, Math.min(1400, window.innerHeight - (r.top + (vue?.scrollTop || 0)) - bas - dessous - 10)));
+    return Math.round(Math.max(180, Math.min(1400, window.innerHeight - (r.top + (vue?.scrollTop || 0)) - bas - dessous - 10)));
   }
   let verif = 0;
   function dimensionner() {
