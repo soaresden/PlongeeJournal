@@ -35,9 +35,9 @@ export const MII = {
     ['#c4c4c4', 'Gris'], ['#f1f1f1', 'Blancs']],
   // Les coiffures, séparées garçons / filles (les deux listes si le genre n'est pas connu)
   coiffuresGarcon: [['cheveux', 'Courts'], ['pics', 'En pics'], ['crete', 'Crête'], ['longs', 'Longs'], ['dreads', 'Dreadlocks'],
-    ['degarni', 'Dégarni'], ['chauve', 'Chauve']],
+    ['clairsemes', 'Peu de cheveux'], ['degarni', 'Dégarni'], ['chauve', 'Chauve']],
   coiffuresFille: [['longs', 'Longs'], ['queue', 'Queue de cheval'], ['couettes', 'Couettes'], ['chignon', 'Chignon'],
-    ['carre', 'Carré'], ['dreads', 'Dreadlocks'], ['cheveux', 'Courts'], ['chauve', 'Rasés']],
+    ['carre', 'Carré'], ['dreads', 'Dreadlocks'], ['cheveux', 'Courts'], ['clairsemes', 'Peu de cheveux'], ['chauve', 'Rasés']],
   tenues: [['combi', 'Combi une pièce'], ['deux', 'Combi deux pièces'], ['etanche', 'Étanche'], ['maillot', '🩱 Maillot de bain']],
   masques: [['#111827', 'Noir'], ['#e2e8f0', 'Transparent'], ['#1d4ed8', 'Bleu'], ['#dc2626', 'Rouge'], ['#ec4899', 'Rose'],
     ['#facc15', 'Jaune'], ['#16a34a', 'Vert'], ['#f97316', 'Orange'], ['#7c3aed', 'Violet']],
@@ -50,7 +50,9 @@ export const MII = {
     ['#7c3aed', 'Violettes'], ['#2563eb', 'Bleues'], ['#06b6d4', 'Turquoise'], ['#22c55e', 'Vertes'], ['#f8fafc', 'Blanches']],
   bandanas: [['#dc2626', 'Rouge'], ['#2563eb', 'Bleu'], ['#0f172a', 'Noir'], ['#16a34a', 'Vert'], ['#facc15', 'Jaune'],
     ['#f97316', 'Orange'], ['#ec4899', 'Rose'], ['#7c3aed', 'Violet'], ['#f8fafc', 'Blanc'], ['#0e7490', 'Turquoise']],
-  accessoires: [['bandana', '🧣 Bandana'], ['boucle', '💛 Boucle d’oreille'], ['moustache', '〰 Moustache'],
+  corpulences: [['fin', 'Fin'], ['normal', 'Normal'], ['gros', 'Gros'], ['obese', 'Obèse']],
+  tailles: [['petit', 'Petit'], ['moyen', 'Moyen'], ['grand', 'Grand']],
+  accessoires: [['lunettes', '👓 Lunettes'], ['camera', '🎥 Caméra pro'], ['parachute', '🟠 Parachute'], ['bandana', '🧣 Bandana'], ['boucle', '💛 Boucle d’oreille'], ['moustache', '〰 Moustache'],
     ['cagoule', '🥷 Cagoule'], ['gopro', '📷 GoPro']],
 };
 
@@ -67,6 +69,7 @@ export function apparenceDe(b, genre = b?.genre || '', defaut = null) {
     peau: m.peau || defaut?.peau || PEAUX[h % PEAUX.length],
     cheveux: m.cheveux || defaut?.cheveux || CHEVEUX[(h >>> 5) % CHEVEUX.length],
     coiffure, chauve: coiffure === 'chauve', degarni: coiffure === 'degarni', pics: coiffure === 'pics',
+    corpulence: m.corpulence || 'normal', taille: m.taille || 'moyen',
     tenue: m.tenue || 'combi', bas: m.bas || null, masque: m.masque || null, palmes: m.palmes || null,
     barbe: m.barbe ?? (defaut ? !!defaut.barbe : genre === 'h' && (h >>> 13) % 4 === 0),
     accessoires: Array.isArray(m.accessoires) ? m.accessoires : [], bandana: m.bandana || '#dc2626',
@@ -89,7 +92,9 @@ const EMOJIS = { garde: '🫡', bulles: '🫧', saut: '🤸', danse: '💃', chu
 // dir (1 / -1), etat, phase, rot, couleurs (peau, cheveux, combi, bloc,
 // bande), genre, barbe, chauve ; assis et bras (angle) en option.
 export function dessinerPlongeur(ctx, p) {
-  const s = p.s;
+  // Corpulence (largeur du tronc, épaisseur des membres) et taille
+  const [cx, ep] = { fin: [0.82, 0.82], normal: [1, 1], gros: [1.22, 1.18], obese: [1.45, 1.36] }[p.corpulence] || [1, 1];
+  const s = p.s * ({ petit: 0.86, moyen: 1, grand: 1.13 }[p.taille] || 1);
   const marche = ['marche', 'attrape', 'nage', 'rang', 'sortie'].includes(p.etat);
   const jambe = marche ? Math.sin(p.phase) * (p.etat === 'attrape' ? 0.9 : 0.45) : 0;
   ctx.save();
@@ -106,12 +111,14 @@ export function dessinerPlongeur(ctx, p) {
     ctx.save(); ctx.scale(1 / p.dir, 1); ctx.fillStyle = 'rgba(0,0,0,.18)';
     ctx.beginPath(); ctx.ellipse(0, 1, 18, 4, 0, 0, Math.PI * 2); ctx.fill(); ctx.restore();
   }
-  // Bloc (dans le dos), avec le détendeur
+  // Bloc (dans le dos), avec le détendeur — reculé quand le dos est plus large
+  ctx.save(); ctx.translate(-(cx - 1) * 9, 0);
   ctx.fillStyle = p.bloc; ctx.strokeStyle = 'rgba(0,0,0,.35)'; ctx.lineWidth = 1.2;
   ctx.beginPath(); ctx.roundRect(-17, -52, 9, 26, 4); ctx.fill(); ctx.stroke();
   ctx.fillStyle = '#334155'; ctx.fillRect(-14.5, -56, 4, 5);
   ctx.strokeStyle = '#111827'; ctx.lineWidth = 2;
-  ctx.beginPath(); ctx.moveTo(-12, -55); ctx.quadraticCurveTo(-4, -66, 7, -53); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(-12, -55); ctx.quadraticCurveTo(-4, -66, 7 + (cx - 1) * 9, -53); ctx.stroke();
+  ctx.restore();
 
   // La tenue : combi une pièce (par défaut), deux pièces, étanche, maillot de bain
   const tenue = p.tenue || 'combi';
@@ -122,7 +129,7 @@ export function dessinerPlongeur(ctx, p) {
   const pied = (a, couleur) => {
     const hx = 0, hy = -25, L = 22;
     let fx = hx + Math.sin(a) * L, fy = hy + Math.cos(a) * L;
-    ctx.strokeStyle = couleur; ctx.lineWidth = etanche ? 8.5 : 7;
+    ctx.strokeStyle = couleur; ctx.lineWidth = (etanche ? 8.5 : 7) * ep;
     if (p.assis) {                     // cuisse en avant, mollet qui pend
       fx = 13 + a * 4; fy = hy + 19;
       ctx.beginPath(); ctx.moveTo(hx, hy); ctx.lineTo(13, hy); ctx.lineTo(fx, fy); ctx.stroke();
@@ -137,7 +144,8 @@ export function dessinerPlongeur(ctx, p) {
     }
   };
   pied(-jambe, shade(jambes, -18));
-  // Corps
+  // Corps (élargi selon la corpulence)
+  ctx.save(); ctx.scale(cx, 1);
   if (maillot) {
     ctx.fillStyle = p.peau; ctx.beginPath(); ctx.roundRect(-9, -50, 18, 28, 7); ctx.fill();
     ctx.fillStyle = p.combi;
@@ -159,11 +167,25 @@ export function dessinerPlongeur(ctx, p) {
       ctx.fillStyle = '#9ca3af'; ctx.beginPath(); ctx.arc(4, -44, 1.9, 0, Math.PI * 2); ctx.fill();
     } else { ctx.fillStyle = p.bande; ctx.fillRect(-9, -42, 18, 4); }
   }
+  ctx.restore();
+  if (cx > 1.1) {                    // le ventre, devant
+    ctx.fillStyle = maillot && p.genre !== 'f' ? p.peau : p.combi;
+    ctx.beginPath(); ctx.ellipse(6 * cx - 3.5, -35, (cx - 1) * 11 + 3, cx > 1.3 ? 10.5 : 8.5, 0, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.save(); ctx.scale(cx, 1);
   ctx.fillStyle = '#111827'; ctx.fillRect(etanche ? -10.5 : -9, -27, etanche ? 21 : 18, 3);     // ceinture de plombs
+  ctx.restore();
+  if ((p.accessoires || []).includes('parachute')) {     // le parachute de palier, roulé, accroché à la hanche
+    ctx.save(); ctx.translate(7 * cx, -31); ctx.rotate(0.35);
+    ctx.fillStyle = '#f97316'; ctx.beginPath(); ctx.roundRect(-2.4, -1, 4.8, 13, 2.4); ctx.fill();
+    ctx.fillStyle = '#fff7ed'; ctx.fillRect(-2.4, 4, 4.8, 1.6);
+    ctx.fillStyle = '#9ca3af'; ctx.beginPath(); ctx.arc(0, -2, 1.3, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
   pied(jambe, jambes);
 
   // Bras
-  const epaule = [3, -46];
+  const epaule = [3 * cx, -46];
   let bras = marche ? -jambe * 0.8 : 0.3;
   if (p.etat === 'coucou') bras = Math.PI - 0.5 + Math.sin(p.phase * 10) * 0.45;
   if (p.etat === 'danse') bras = Math.PI - 0.3 + Math.sin(p.phase * 4) * 0.5;
@@ -172,10 +194,22 @@ export function dessinerPlongeur(ctx, p) {
   if (p.etat === 'nage') bras = 0.15;
   if (p.etat === 'garde') bras = p.salut > 0 ? Math.PI - 0.35 : 0.05;     // salut, puis bras le long du corps
   if (typeof p.bras === 'number') bras = p.bras;                            // imposé (tenir un carnet…)
-  ctx.strokeStyle = maillot ? p.peau : p.combi; ctx.lineWidth = etanche ? 7 : 6;
+  ctx.strokeStyle = maillot ? p.peau : p.combi; ctx.lineWidth = (etanche ? 7 : 6) * ep;
   const mx = epaule[0] + Math.sin(bras) * 15, my = epaule[1] + Math.cos(bras) * 15;
   ctx.beginPath(); ctx.moveTo(...epaule); ctx.lineTo(mx, my); ctx.stroke();
   ctx.fillStyle = p.peau; ctx.beginPath(); ctx.arc(mx, my, 3, 0, Math.PI * 2); ctx.fill();
+  if ((p.accessoires || []).includes('camera')) {        // caméra pro : caisson, hublot, deux bras et leurs flashs
+    const cxm = mx + 4, cym = my - 3;
+    ctx.strokeStyle = '#475569'; ctx.lineWidth = 1.6;
+    ctx.beginPath(); ctx.moveTo(cxm, cym - 3); ctx.lineTo(cxm + 3, cym - 12); ctx.moveTo(cxm, cym + 3); ctx.lineTo(cxm + 4, cym + 10); ctx.stroke();
+    ctx.fillStyle = '#e5e7eb';
+    ctx.beginPath(); ctx.roundRect(cxm + 1.5, cym - 15.5, 5, 4, 1.2); ctx.fill();
+    ctx.beginPath(); ctx.roundRect(cxm + 2.5, cym + 9, 5, 4, 1.2); ctx.fill();
+    ctx.fillStyle = '#111827'; ctx.beginPath(); ctx.roundRect(cxm - 4, cym - 4.5, 11, 9, 2); ctx.fill();
+    ctx.fillStyle = '#334155'; ctx.fillRect(cxm - 2, cym - 6.5, 6, 2);
+    ctx.fillStyle = '#0ea5e9'; ctx.beginPath(); ctx.arc(cxm + 8.5, cym, 3.6, -Math.PI / 2, Math.PI / 2); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,.6)'; ctx.beginPath(); ctx.arc(cxm + 9, cym - 1.2, 1, 0, Math.PI * 2); ctx.fill();
+  }
 
   // Tête, cheveux
   const hy = -60;
@@ -217,6 +251,13 @@ export function dessinerPlongeur(ctx, p) {
     ctx.fillStyle = p.cheveux; ctx.beginPath(); ctx.moveTo(-10, hy - 3);
     [[-10, -12], [-6, -10], [-4, -17], [-1, -12], [2, -18], [4, -12], [7, -15], [8, -9]].forEach(([x, y]) => ctx.lineTo(x, hy + y));
     ctx.lineTo(-10, hy - 3); ctx.fill();
+  } else if (coiffure === 'clairsemes') {  // peu de cheveux : le crâne qu'on devine, quelques mèches
+    ctx.globalAlpha = 0.4;
+    ctx.beginPath(); ctx.arc(-1, hy - 2, 10.6, Math.PI * 1.05, Math.PI * 1.95); ctx.fill();
+    ctx.globalAlpha = 1; ctx.lineWidth = 1.1; ctx.lineCap = 'round';
+    [[-8, -6, -5, -11], [-5, -8, -1, -12], [-2, -9, 2, -12], [1, -9, 5, -11], [-10, -2, -9, -7]].forEach(([x0, y0, x1, y1]) => {
+      ctx.beginPath(); ctx.moveTo(x0, hy + y0); ctx.quadraticCurveTo((x0 + x1) / 2, hy + Math.min(y0, y1) - 2, x1, hy + y1); ctx.stroke();
+    });
   } else if (coiffure !== 'chauve') {
     ctx.beginPath(); ctx.arc(-1, hy - 2, 10.8, Math.PI * 1.05, Math.PI * 1.95); ctx.fill();
     if (['queue', 'longs', 'couettes', 'chignon', 'carre', 'dreads'].includes(coiffure)) {
@@ -231,7 +272,7 @@ export function dessinerPlongeur(ctx, p) {
       [[-5, -6], [-2, -8]].forEach(([x, y]) => { ctx.beginPath(); ctx.moveTo(x, hy + y); ctx.quadraticCurveTo(x - 4, hy + y + 7, x - 3, hy + y + 14); ctx.stroke(); });
     }
   }
-  if (coiffure === 'chauve' || coiffure === 'degarni') {     // un reflet sur le crâne
+  if (coiffure === 'chauve' || coiffure === 'degarni' || coiffure === 'clairsemes') {     // un reflet sur le crâne
     ctx.fillStyle = 'rgba(255,255,255,.35)';
     ctx.beginPath(); ctx.ellipse(1, hy - 7, 4, 2, -0.2, 0, Math.PI * 2); ctx.fill();
   }
@@ -264,6 +305,7 @@ export function dessinerPlongeur(ctx, p) {
     ctx.strokeStyle = p.cheveux; ctx.lineWidth = 2.2;
     ctx.beginPath(); ctx.moveTo(2.5, hy - 10); ctx.lineTo(6.5, hy - 11); ctx.moveTo(8.5, hy - 11); ctx.lineTo(12.5, hy - 10); ctx.stroke();
   }
+  const lunettes = acc.has('lunettes');
   // Yeux : normaux, ou en croix quand ça secoue
   ctx.fillStyle = '#0f172a';
   if (['chute', 'vol', 'attrape'].includes(p.etat)) {
@@ -271,6 +313,11 @@ export function dessinerPlongeur(ctx, p) {
     [[5, hy - 3.5], [9.5, hy - 3.5]].forEach(([ex, ey]) => { ctx.beginPath(); ctx.moveTo(ex - 1.5, ey - 1.5); ctx.lineTo(ex + 1.5, ey + 1.5); ctx.moveTo(ex + 1.5, ey - 1.5); ctx.lineTo(ex - 1.5, ey + 1.5); ctx.stroke(); });
   } else {
     [[5, hy - 3.5], [9.5, hy - 3.5]].forEach(([ex, ey]) => { ctx.beginPath(); ctx.arc(ex, ey, 1.3, 0, Math.PI * 2); ctx.fill(); });
+  }
+  if (lunettes) {                  // des lunettes de vue, sous le masque (on les voit à travers la vitre)
+    ctx.strokeStyle = '#1e293b'; ctx.lineWidth = 0.9;
+    [[5, hy - 3.5], [9.5, hy - 3.5]].forEach(([ex, ey]) => { ctx.beginPath(); ctx.arc(ex, ey, 2.2, 0, Math.PI * 2); ctx.stroke(); });
+    ctx.beginPath(); ctx.moveTo(7.2, hy - 3.7); ctx.lineTo(7.3, hy - 3.7); ctx.stroke();
   }
   if (acc.has('moustache')) {      // la moustache, au-dessus du détendeur
     ctx.fillStyle = p.cheveux; ctx.beginPath(); ctx.ellipse(8.5, hy + 1.9, 4.6, 1.6, 0, 0, Math.PI * 2); ctx.fill();
@@ -920,7 +967,8 @@ function buste(toile, b, defaut = null, { entier = false } = {}) {
   if (!ctx) return;
   ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, toile.width, toile.height); ctx.setTransform(2, 0, 0, 2, 0, 0);
   dessinerPlongeur(ctx, { ...(entier ? { x: 56, y: 168, s: 2.1 } : { x: 58, y: 228, s: 3 }), dir: 1, etat: 'pause', phase: 0, rot: 0, genre: genreDe(b),
-    bande: (b.categories || [])[0] ? couleurCategorie(b.categories[0]) : '#22d3ee', ...apparenceDe(b, defaut ? 'h' : genreDe(b), defaut) });
+    bande: (b.categories || [])[0] ? couleurCategorie(b.categories[0]) : '#22d3ee', ...apparenceDe(b, defaut ? 'h' : genreDe(b), defaut),
+    ...(entier ? {} : { taille: 'moyen' }) });
 }
 
 /** Son Mii en tout petit, à côté de son nom (palanquée d'une plongée). */
@@ -978,6 +1026,8 @@ export function editeurMii(b, onChange, { defaut = null } = {}) {
           const n = new Set(acc); n.has(v) ? n.delete(v) : n.add(v);
           choisir({ accessoires: n.size ? [...n] : null });
         } })))),
+      el('div.mii-ligne', {}, el('span', { text: 'Corpulence' }), chips(MII.corpulences, a.corpulence, 'corpulence')),
+      el('div.mii-ligne', {}, el('span', { text: 'Taille' }), chips(MII.tailles, a.taille, 'taille')),
       el('div.mii-ligne', {}, el('span', { text: 'Tenue' }), chips(MII.tenues, a.tenue, 'tenue')),
       el('div.mii-ligne', {}, el('span', { text: a.tenue === 'maillot' ? 'Maillot' : a.tenue === 'deux' ? 'Veste' : a.tenue === 'etanche' ? 'Étanche' : 'Combi' }),
         pastilles(MII.combis, 'combi', a.combi)),
