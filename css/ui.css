@@ -1131,3 +1131,5 @@ body { background-image: var(--deco, none), var(--bg-image); background-size: 20
 .mii-pastille { width: 26px; height: 26px; border-radius: 50%; border: 2px solid var(--line); padding: 0; cursor: pointer; }
 .mii-pastille.on { border-color: var(--accent); box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--accent); }
 .mii-seg button { padding: 5px 10px; font-size: 13px; }
+.mii-portrait { width: 56px; height: 70px; flex: 0 0 56px; border-radius: 14px; border: 1px solid var(--line);
+  background: linear-gradient(180deg, rgba(var(--accent-rgb), .14), rgba(14, 116, 144, .25)); }

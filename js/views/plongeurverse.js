@@ -776,6 +776,23 @@ export function plongeurverse({ buddies, compte = () => 0, onTap = () => {}, moi
   return boite;
 }
 
+/** Le buste d'un plongeur (son Mii) dans une toile de 120 × 150 (dessinée en ×2). */
+function buste(toile, b) {
+  const ctx = toile.getContext('2d');
+  if (!ctx) return;
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, toile.width, toile.height); ctx.setTransform(2, 0, 0, 2, 0, 0);
+  dessinerPlongeur(ctx, { x: 58, y: 228, s: 3, dir: 1, etat: 'pause', phase: 0, rot: 0, genre: genreDe(b),
+    bande: (b.categories || [])[0] ? couleurCategorie(b.categories[0]) : '#22d3ee', ...apparenceDe(b, genreDe(b)) });
+}
+
+/** Son Mii en portrait (en-tête du volet) ; .redessiner() après un changement. */
+export function portraitMii(b) {
+  const toile = el('canvas.mii-portrait', { width: 240, height: 300, role: 'img', 'aria-label': `Mii de ${nomPlongeur(b) || 'ce plongeur'}` });
+  toile.redessiner = () => buste(toile, b);
+  toile.redessiner();
+  return toile;
+}
+
 /**
  * « Son Mii » : peau, couleur des cheveux, coiffure (cheveux, dégarni,
  * chauve), barbe ; avec l'aperçu qui bouge. Les choix vont dans b.mii.
@@ -786,14 +803,7 @@ export function editeurMii(b, onChange) {
   const boite = el('div.mii-editeur');
   const toile = el('canvas.mii-apercu', { width: 240, height: 300 });
   const zone = el('div.mii-choix');
-  const dessiner = () => {
-    const ctx = toile.getContext('2d');
-    if (!ctx) return;
-    ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, toile.width, toile.height); ctx.setTransform(2, 0, 0, 2, 0, 0);
-    const a = apparenceDe(b, genreDe(b));
-    dessinerPlongeur(ctx, { x: 58, y: 228, s: 3, dir: 1, etat: 'pause', phase: 0, rot: 0, genre: genreDe(b),
-      bande: (b.categories || [])[0] ? couleurCategorie(b.categories[0]) : '#22d3ee', ...a });
-  };
+  const dessiner = () => buste(toile, b);
   const choisir = p => {
     const mii = { ...(b.mii || {}), ...p };
     for (const k of Object.keys(mii)) if (mii[k] == null) delete mii[k];

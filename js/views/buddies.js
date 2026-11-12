@@ -5,7 +5,7 @@
 import { el, fullName, nomPlongeur, couleurCategorie, toast, confirmBox, openModal } from '../lib.js';
 import { verifierTags } from '../tags.js';
 import { devinerGenre, genreDe, COULEUR_GENRE } from '../genre.js';
-import { plongeurverse, editeurMii } from './plongeurverse.js';
+import { plongeurverse, editeurMii, portraitMii } from './plongeurverse.js';
 import { store, emptyBuddy } from '../store.js';
 import { navigate } from '../router.js';
 import { ouvrirApercu, fermerApercu, ligneApercu, apercuPlongee } from '../apercu.js';
@@ -417,8 +417,9 @@ export async function apercuPlongeur(id, { onClose = null } = {}) {
     i.addEventListener('input', () => maj({ [cle]: i.value }));
     return i;
   };
-  const mii = b.structure ? null : editeurMii(b, v => maj({ mii: v }));
-  const genreSeg = choixGenre(b, v => { maj({ genre: v }); mii?.rafraichir(); });
+  const portrait = b.structure ? null : portraitMii(b);
+  const mii = b.structure ? null : editeurMii(b, v => { maj({ mii: v }); portrait.redessiner(); });
+  const genreSeg = choixGenre(b, v => { maj({ genre: v }); mii?.rafraichir(); portrait?.redessiner(); });
   const coche = (cle, label) => {
     const c = el('input', { type: 'checkbox' });
     c.checked = !!b[cle];
@@ -457,7 +458,7 @@ export async function apercuPlongeur(id, { onClose = null } = {}) {
   rendreCats();
 
   const tete = el('div.apercu-tete-plongee', {},
-    el('span.personne-av', { style: { width: '52px', height: '52px', flex: '0 0 52px', fontSize: '17px' } },
+    portrait || el('span.personne-av', { style: { width: '52px', height: '52px', flex: '0 0 52px', fontSize: '17px' } },
       ((b.prenom?.[0] || '') + (b.nom?.[0] || '')).toUpperCase() || '?'),
     el('div', {},
       el('div.apercu-t1', { text: b.structure ? (b.prenom || 'Centre') : (nomPlongeur(b) || 'Sans nom') }),
@@ -468,9 +469,9 @@ export async function apercuPlongeur(id, { onClose = null } = {}) {
     el('div.apercu-grille', {},
       champ(b.structure ? 'Centre de plongée' : 'Prénom', saisie('prenom')),
       b.structure ? null : champ('Nom', saisie('nom')),
-      b.structure ? null : champ('Licence', saisie('licence')),
       el('div.apercu-champ.large', {}, el('span', { text: 'Genre' }), genreSeg),
       mii ? el('div.apercu-champ.large', {}, el('span', { text: 'Son Mii' }), mii) : null,
+      b.structure ? null : champ('Licence', saisie('licence')),
       el('div.apercu-champ.large', {}, coche('moniteur', 'Moniteur')),
       el('div.apercu-champ.large', {}, el('span', { text: 'Tags' }), zoneCats),
       champ('Note', note, true)),
