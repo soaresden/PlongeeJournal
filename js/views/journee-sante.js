@@ -62,7 +62,11 @@ export async function carteJournee(dives, { droite = null } = {}) {
       ...plongees.map((p, k) => el('button.chip', { type: 'button', text: `n°${p.d.numero ?? '—'}`, class: zoom === k ? 'chip on' : 'chip', onclick: () => { zoom = k; afficher(); } })));
 
     // Le dessin : la profondeur en haut, l'azote et le %SNC en dessous
-    const W = 720, HT = 330, g = 40, d = W - 8, p1 = [18, 120], p2 = [146, 296];
+    // Les proportions suivent la place disponible (grand écran : la courbe prend la hauteur)
+    const large = window.matchMedia?.('(min-width: 1000px)').matches;
+    const dispoW = Math.max(400, innerWidth - 640), dispoH = Math.max(220, innerHeight - (innerWidth < 1150 ? 470 : 420));
+    const W = 720, HT = large ? Math.round(Math.min(620, Math.max(330, W * dispoH / dispoW))) : 330;
+    const g = 40, d = W - 8, p1 = [18, Math.round(HT * 0.37)], p2 = [Math.round(HT * 0.44), HT - 34];
     const x = t => g + (t - debut) / (fin - debut) * (d - g);
     const pmax = Math.max(10, ...plongees.map(p => p.prof || +p.d.profMax || 0));
     const yP = z => p1[0] + Math.min(z, pmax) / pmax * (p1[1] - p1[0]);

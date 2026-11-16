@@ -53,7 +53,7 @@ function lignesPlongee(e, lettres) {
     [`${lettres[1]}-Remontée`, cel(`${n(e.d.profMax, 1)}→${premier}`), cel(n(rem.d, 2), `Durée = (${n(e.d.profMax, 1)} − ${premier}) / 15 = ${n(rem.d, 2)} min (15 m/min)`), cel(g), paC(+e.d.profMax), cel(n(rem.pp, 3), 'même PpO₂ qu’au fond'), noaaC(rem), pctC(rem), '', ''],
   ];
   if (r.paliers.length) {
-    r.paliers.forEach((p, i) => out.push([`${lettres[2]}-Palier`, cel(String(p.z)), cel(String(p.t), `MN90 : ${p.tAir} min à ${p.z} m (au ${g})`), cel(g), paC(p.z), ppC(reste[i], 1 + p.z / 10, f), noaaC(reste[i]), pctC(reste[i]), '', '']));
+    r.paliers.forEach((p, i) => out.push([`${lettres[2]}-Palier ${p.z} m`, cel(String(p.z)), cel(String(p.t), `MN90 : ${p.tAir} min à ${p.z} m (au ${g})`), cel(g), paC(p.z), ppC(reste[i], 1 + p.z / 10, f), noaaC(reste[i]), pctC(reste[i]), '', '']));
     const s = reste[r.paliers.length], z = r.paliers[r.paliers.length - 1].z;
     out.push([`${lettres[3]}-Remontée`, cel(`${z}→0`), cel(n(s.d, 2), `Durée = ${z} / 6 = ${n(s.d, 2)} min (6 m/min)`), cel(g), paC(z), cel(n(s.pp, 3), 'PpO₂ du palier'), noaaC(s), pctC(s), '', '']);
   } else {
