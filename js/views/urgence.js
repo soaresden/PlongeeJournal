@@ -11,7 +11,7 @@ const CLE_PAYS = 'plongee-journal:secours-pays';
 
 export async function urgenceView() {
   const f = lire();
-  const wrap = el('div');
+  const wrap = el('div.urgence-page');
 
   if (!f) {
     return {

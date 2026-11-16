@@ -619,11 +619,12 @@ export async function diveView({ id }) {
   const paliersTxt = [d.palier9 && `${d.palier9}′ à 9 m`, d.palier6 && `${d.palier6}′ à 6 m`, d.palier3 && `${d.palier3}′ à 3 m`]
     .filter(Boolean).join(', ');
   if (tuiles || courbe?.length) {
+    if (tuiles && courbe?.length) wrap.append(el('div.section.fiche-chiffres', {}, el('h2', { text: 'Les chiffres de la montre' }), el('div.card', {}, tuiles)));
     wrap.append(el('div.section', {},
       el('h2', { text: courbe?.length ? 'La plongée, d’après la montre' : 'Les chiffres' }),
-      el('div.card', {},
-        tuiles,
-        courbe?.length ? el('div', { style: { marginTop: '12px' } }, graphiquePlongee(courbe, { dive: d })) : null,
+      el('div.card.montre-carte', {},
+        courbe?.length ? null : tuiles,
+        courbe?.length ? el('div', {}, graphiquePlongee(courbe, { dive: d })) : null,
         (d.suuntoKeys || []).length > 1
           ? el('div.hint', { text: `Fusion de ${d.suuntoKeys.length} enregistrements Suunto.` }) : null,
         el('div.hint', { style: { marginBottom: 0 }, text: [
@@ -789,5 +790,14 @@ export async function diveView({ id }) {
     wrap.append(el('div.section', {}, el('h2', { text: 'Matériel' }), matCard));
   }
 
+  // Des onglets plutôt qu'une longue fiche (l'en-tête et les boutons restent en haut)
+  const { enOnglets } = await import('../onglets.js');
+  enOnglets(wrap, 'fiche', [
+    { id: 'plongee', titre: '📈 Courbe', motif: /d’après la montre|^Les chiffres$|Données|vérifier/i },
+    { id: 'chiffres', titre: '🔢 Chiffres', motif: /chiffres de la montre/i },
+    { id: 'recit', titre: '📝 Récit', motif: /Ma plongée|Conditions|Palanquée|Notes|Observations/i },
+    { id: 'lieu', titre: '📍 Lieu & vidéos', motif: /Lieu|Vidéos|Carnet/i },
+    { id: 'materiel', titre: '🎒 Matériel', motif: /Matériel/i },
+  ], { garder: 2 });
   return { title: `Plongée n°${d.numero ?? ''}`, node: wrap, back: true };
 }

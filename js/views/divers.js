@@ -49,7 +49,7 @@ export async function diversView() {
     .slice().sort((a, b) => (a.dateObtention || '').localeCompare(b.dateObtention || ''));
   const { rangNiveau } = await import('../config.js');
 
-  const tb = el('div.tb');
+  const tb = el('div.tb.profil-tb');
   wrap.append(tb);
 
   tb.append(el('div.tb-carte.plein', {},
@@ -100,8 +100,6 @@ export async function diversView() {
         navigate('divers', true);
       })))));
   }
-  tb.append(el('div.tb-carte', {}, el('div.liens', {},
-    lien('＋', 'Ajouter un plongeur', 'Un autre carnet sur cet appareil', () => navigate('diver/new')))));
 
   // --- Sauvegarde des données ---
   const { backendKind } = await import('../store.js');

@@ -30,7 +30,7 @@ const duree = ms => { const m = Math.round(ms / 6e4); return m >= 60 ? `${Math.f
 /** Les jours avec des plongées (avec une heure d'immersion), du plus récent au plus ancien. */
 const joursDe = dives => [...new Set(dives.filter(d => d.date && !d.seance && /^\d\d:\d\d/.test(d.heureImmersion || '')).map(d => d.date))].sort().reverse();
 
-export async function carteJournee(dives) {
+export async function carteJournee(dives, { droite = null } = {}) {
   const jours = joursDe(dives);
   if (!jours.length) return null;
   let jour = jours[0], zoom = null;
@@ -150,9 +150,12 @@ export async function carteJournee(dives) {
       if (xx >= g) montrerA(debut + (xx - g) / (d - g) * (fin - debut));
     });
 
-    corps.replaceChildren(nav, zoomer, el('div.js-svg', {}, svg), el('div.corps-timeline-ligne', {}, range), sauts, lecture,
+    const infos = [lecture,
       el('details.js-details', {}, el('summary', { text: 'Les 16 tissus à cet instant' }), tissus),
-      el('div.hint', { text: 'Sur les courbes de ta montre : Bühlmann ZHL-16C pour l’azote (100 % = la limite du tissu le plus chargé), table NOAA pour le %SNC, qui se divise par deux toutes les 90 min en surface. Pour comprendre : ton ordinateur fait foi.' }));
+      el('div.hint', { text: 'Sur les courbes de ta montre : Bühlmann ZHL-16C pour l’azote (100 % = la limite du tissu le plus chargé), table NOAA pour le %SNC, qui se divise par deux toutes les 90 min en surface. Pour comprendre : ton ordinateur fait foi.' })];
+    // Sur grand écran, l'état à l'instant choisi va dans la colonne de droite (pas de défilement)
+    if (droite) droite.replaceChildren(el('div.tb-carte.js-etat', {}, el('div.tb-titre', {}, el('h2', { text: '⏱ À cet instant' })), ...infos));
+    corps.replaceChildren(nav, zoomer, el('div.js-svg', {}, svg), el('div.corps-timeline-ligne', {}, range), sauts, ...(droite ? [] : infos));
     montrerA(zp ? zp.debut + (zp.fin - zp.debut) / 2 : plongees[0].debut + (plongees[0].fin - plongees[0].debut) / 2);
   };
   afficher();

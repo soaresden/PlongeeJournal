@@ -96,7 +96,21 @@ export async function statsView() {
 
   // ---------- Barres ----------
   /** entries : [label, n, filtre, {b1,b2}?] */
-  const barres = (entries, max = Math.max(1, ...entries.map(e => e[1]))) => el('div.barres', {},
+  const barres = (entries, max = Math.max(1, ...entries.map(e => e[1]))) => {
+    const liste = barresCompletes(entries, max);
+    const LIM = 5;
+    if (entries.length <= LIM + 1) return liste;
+    const lignes = [...liste.children];
+    lignes.slice(LIM).forEach(l => { l.hidden = true; });
+    const plus = el('button.btn.sm.ghost.barres-plus', { type: 'button', text: `＋ ${entries.length - LIM} autres`, onclick: () => {
+      const ouvert = plus.dataset.ouvert === '1';
+      lignes.slice(LIM).forEach(l => { l.hidden = ouvert; });
+      plus.dataset.ouvert = ouvert ? '' : '1';
+      plus.textContent = ouvert ? `＋ ${entries.length - LIM} autres` : '− moins';
+    } });
+    return el('div', {}, liste, plus);
+  };
+  const barresCompletes = (entries, max) => el('div.barres', {},
     ...entries.map(([label, n, filtre, couleurs]) => el('button.barre', {
       type: 'button', onclick: () => montrer(label, filtre),
       style: couleurs ? { '--b1': couleurs.c1, '--b2': couleurs.c2 } : null,
@@ -173,14 +187,18 @@ export async function statsView() {
 
   // Azote & oxygène sur 7 jours : en tête, c'est ce qui sert avant la prochaine plongée
   const corps = await (await import('./corps.js')).carteCorps().catch(() => null);
-  const journee = await (await import('./journee-sante.js')).carteJournee(dives).catch(e => { console.warn(e); return null; });
+  const larges = typeof window !== 'undefined' && window.matchMedia?.('(min-width: 1000px)').matches;
+  const etatJournee = larges ? el('div.sante-etat') : null;
+  const journee = await (await import('./journee-sante.js')).carteJournee(dives, { droite: etatJournee }).catch(e => { console.warn(e); return null; });
   // Des onglets plutôt qu'une longue page
   const { onglets } = await import('../onglets.js');
   const grille = (...cartes) => el('div.tb', {}, ...cartes);
   const wrap = el('div', {}, onglets('stats', [
-    { id: 'sante', titre: '🫁 Santé', contenu: grille(corps ? el('div.tb-carte.plein.corps-place', {}, corps) : null, journee) },
+    { id: 'sante', titre: '🫁 Santé', contenu: larges && journee
+      ? el('div.sante-grille', {}, journee, el('div.sante-droite', {}, corps ? el('div.tb-carte.corps-place', {}, corps) : null, etatJournee))
+      : grille(corps ? el('div.tb-carte.plein.corps-place', {}, corps) : null, journee) },
     { id: 'chiffres', titre: '📊 Chiffres', contenu: grille(impact, tuiles, carte('Par année', histo, { aide: 'touche une année', classe: '.plein' })) },
-    { id: 'repartition', titre: '🗂 Répartition', contenu: grille(
+    { id: 'repartition', titre: '🗂 Répartition', contenu: el('div.tb.repartition', {},
       niveaux.length ? carte('Par niveau', barres(niveaux), { aide: st.niveau ? `aujourd’hui : ${st.niveau}` : '' }) : null,
       carte('Par région', barres(regions)),
       tranches.length ? carte('Par profondeur', barres(tranches)) : null,

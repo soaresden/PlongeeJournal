@@ -233,7 +233,7 @@ export async function corpsView() {
 
   // La timeline : de 7 jours en arrière à 48 h devant, par quarts d'heure
   const maintenant = b.fin, debutT = maintenant - 7 * 864e5, finT = maintenant + 48 * 36e5;
-  const zoneHaut = el('div'), zoneTableau = el('div');
+  const zoneHaut = el('div.corps-zonehaut'), zoneTableau = el('div');
   const etiquette = el('div.corps-instant');
   const curseur = el('input.corps-curseur', { type: 'range', min: debutT, max: finT, step: 15 * 60e3, value: maintenant });
   const relatif = t => {
@@ -353,5 +353,12 @@ export async function corpsView() {
     el('details.card.corps-plie', {}, el('summary', { text: '📈 La charge en azote sur 7 jours, avec ses limites' }), zoom),
     b.plongees.length ? el('details.card.corps-plie', {}, el('summary', { text: `🤿 Mes plongées des 7 jours (${b.plongees.length})` }), ...liste) : null,
     el('div.hint', { text: 'Estimation pour comprendre et anticiper (Bühlmann ZHL-16C sur les courbes de tes plongées, CNS : tables NOAA, OTU : REPEX, avion : DAN). Ton ordinateur fait foi.' }));
+  const { enOnglets } = await import('../onglets.js');
+  enOnglets(node, 'corps', [
+    { id: 'maintenant', titre: '⏱ Maintenant', motif: null },
+    { id: 'ou', titre: '🧭 Où j’en suis', motif: /Où j’en suis/i },
+    { id: 'prochaine', titre: '🤿 Prochaine plongée', motif: /prochaine plongée|Recommandations/i },
+    { id: 'sept', titre: '📈 7 jours', motif: /7 jours|charge en azote/i },
+  ]);
   return { title: 'Mon corps · azote & oxygène', node, back: true };
 }

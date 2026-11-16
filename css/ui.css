@@ -1264,3 +1264,50 @@ html.apercu-cote .apercu-fond { display: none; }
 @media (min-width: 1000px) {
   .js-carte .js-lecture { flex-direction: row; flex-wrap: wrap; gap: 4px 24px; align-items: baseline; }
 }
+
+/* Stats sans défilement sur grand écran */
+@media (min-width: 1000px) {
+  .sante-grille { display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 12px; align-items: start; }
+  .sante-grille > .tb-carte { margin: 0; }
+  .sante-droite { display: flex; flex-direction: column; gap: 12px; }
+  .sante-droite .tb-carte { margin: 0; }
+  .sante-grille .js-svg svg { max-height: 40vh; }
+  .js-etat .js-lecture { flex-direction: column !important; }
+  .tb.repartition { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .tb.repartition > * { grid-column: auto !important; }
+}
+.barres-plus { margin-top: 4px; }
+.barre[hidden] { display: none !important; }
+@media (min-width: 1000px) and (max-height: 800px) {
+  .sante-grille .js-svg svg { max-height: 30vh; }
+  .sante-grille .js-carte { padding-top: 10px; padding-bottom: 10px; }
+  .tb.repartition .barre { padding-top: 5px; padding-bottom: 5px; }
+  .tb.repartition .tb-carte { padding-top: 10px; padding-bottom: 10px; }
+}
+@media (min-width: 1000px) { #view { padding-bottom: 16px; } }
+
+/* ---------- Tablette : les pages tiennent dans l'écran ---------- */
+.onglet-panneau[hidden] { display: none !important; }
+@media (min-width: 1000px) {
+  .fiche .onglet-grille { display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: 14px; align-items: start; }
+  .fiche .onglet-grille > * { margin: 0 !important; }
+  .fiche-tete { padding-top: 12px !important; padding-bottom: 12px !important; }
+  .fiche .onglets { padding-bottom: 6px; }
+  .fiche .onglet-grille > .fiche-chiffres { grid-column: 1 / -1; }
+  .fiche-chiffres .tuiles { grid-template-columns: repeat(6, minmax(0, 1fr)) !important; }
+  .corps-zonehaut { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 16px; align-items: start; }
+  .corps-comp { max-height: 34vh; }
+  .corps .onglet-grille { display: flex; flex-direction: column; gap: 12px; }
+  .urgence-page { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; align-items: start; }
+  .urgence-page > .urgence-tete, .urgence-page > .hint, .urgence-page > .btn-row { grid-column: 1 / -1; }
+  .urgence-page > .section { margin: 0 !important; }
+  .tb.profil-tb { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); }
+  .tb.profil-tb .liens { display: grid; grid-template-columns: 1fr 1fr; gap: 0 14px; }
+  .reglages-grille { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)) !important; }
+  .tb.profil-tb > .plein { grid-column: 1 / -1; }
+}
+.fiche > .onglets-wrap, .corps > .onglets-wrap, .reglages > .onglets-wrap { grid-column: 1 / -1; min-width: 0; }
+@media (min-width: 1000px) {
+  .urgence-page > .urgence-tete { display: flex; align-items: center; justify-content: center; gap: 18px; padding-top: 10px !important; padding-bottom: 10px !important; }
+  .urgence-page > .urgence-tete > * { margin: 0 !important; }
+}
