@@ -73,6 +73,8 @@ route('suunto-cloud',     suuntoCloudView);
 route('montre',           montreView);
 route('visites',          async () => (await import('./views/visites.js')).visitesView());
 route('corps',            async () => (await import('./views/corps.js')).corpsView());
+route('oxygene',          async () => (await import('./views/oxygene.js')).oxygeneView());
+route('oxygene/:date',    async p => (await import('./views/oxygene.js')).oxygeneView(p));
 route('videos',           async () => (await import('./views/videos.js')).videosView());
 route('montre-aide',      montreAideView);
 route('urgence',          urgenceView);

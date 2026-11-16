@@ -1198,3 +1198,29 @@ html.apercu-cote .apercu-fond { display: none; }
   .apercu.cote .apercu-pied { padding-top: 6px; padding-bottom: 6px; }
   .apercu.cote .apercu-corps { padding-top: 10px; }
 }
+
+/* ---------- 🫁 Oxygène de la journée : le tableau du cours ---------- */
+.oxy { display: flex; flex-direction: column; gap: 10px; padding-bottom: 70px; }
+.oxy-nav { display: flex; gap: 8px; align-items: center; justify-content: center; }
+.oxy-jour { flex: 0 1 200px; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--text); font: inherit; font-weight: 700; text-align: center; }
+.oxy-bilan { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.oxy-chiffre { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; }
+.oxy-chiffre b { font-size: 20px; line-height: 1.1; }
+.oxy-chiffre span { font-size: 11.5px; color: var(--text-mute); }
+.oxy-chiffre.vert b { color: var(--ok); } .oxy-chiffre.orange b { color: var(--warn); } .oxy-chiffre.rouge b { color: var(--danger); }
+.oxy-scroll { overflow-x: auto; scrollbar-width: none; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.oxy-scroll::-webkit-scrollbar { display: none; }
+.oxy-tab { border-collapse: collapse; width: 100%; font-size: 13px; font-variant-numeric: tabular-nums; }
+.oxy-tab th { position: sticky; top: 0; background: var(--surface-2); color: var(--text-mute); font-weight: 650; padding: 6px 5px; white-space: nowrap; }
+.oxy-tab td { padding: 6px 5px; text-align: center; white-space: nowrap; border-top: 1px solid var(--line); }
+.oxy-tab td:first-child { text-align: left; color: var(--text-mute); }
+.oxy-tab th:first-child, .oxy-tab tr:not(.oxy-titre) td:first-child { position: sticky; left: 0; z-index: 1; background: var(--surface); }
+.oxy-tab th:first-child { background: var(--surface-2); z-index: 2; }
+.oxy-tab td.clic { cursor: pointer; }
+.oxy-tab td.sel { background: rgba(var(--accent-rgb), .22); }
+.oxy-tab tr.tot td { color: var(--accent); font-weight: 750; }
+.oxy-tab tr.oxy-titre td { text-align: left; font-weight: 750; padding-top: 12px; color: var(--text); background: var(--bg-2); }
+.oxy-tab tr.oxy-titre a { color: inherit; text-decoration: none; }
+.oxy-detail { position: sticky; bottom: 8px; z-index: 5; background: var(--surface-2); border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 10px; padding: 9px 12px; font-size: 13.5px; line-height: 1.4; color: var(--text-mute); box-shadow: var(--shadow); }
+.oxy-detail.on { color: var(--text); }
+@media (max-width: 520px) { .oxy-bilan { grid-template-columns: 1fr 1fr; } .oxy-bilan > :last-child { grid-column: 1 / -1; } .oxy-tab { font-size: 12px; } }

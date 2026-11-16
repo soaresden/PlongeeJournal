@@ -581,6 +581,8 @@ export async function diveView({ id }) {
     el('button.btn.primary', { text: '✎ Modifier', onclick: () => navigate(`dive/${d.id}/edit`) }),
     el('button.btn.ghost', { text: '🕘 Historique', title: 'Revenir à une version précédente',
       onclick: async () => (await import('./historique.js')).ouvrirHistoriqueFiche(d.id, { apres: () => navigate(`dive/${d.id}`, true) }) }),
+    el('button.btn.ghost', { text: '🫁 Oxygène du jour', title: '%SNC et OTU de la journée : le tableau du cours Nitrox et la vraie courbe',
+      onclick: () => navigate(`oxygene/${d.date}`) }),
     voisines.length ? el('button.btn.ghost', {
       text: '🔗 Joindre', title: 'Avec la plongée d’avant ou d’après : c’était la même',
       onclick: () => joindreDepuisFiche(d, voisines),
