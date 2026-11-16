@@ -1250,3 +1250,17 @@ html.apercu-cote .apercu-fond { display: none; }
 .js-details svg { width: 100%; height: auto; }
 .js-zoom { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; justify-content: center; margin-bottom: 4px; }
 .js-zoom .chip.on { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+
+/* ---------- Onglets (Stats, Réglages) ---------- */
+.onglets { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; padding: 2px 0 10px; position: sticky; top: 0; z-index: 4; background: linear-gradient(var(--bg) 80%, transparent); }
+.onglets::-webkit-scrollbar { display: none; }
+.onglet { flex: 0 0 auto; border: 1px solid var(--line); background: var(--surface); color: var(--text-mute); border-radius: 999px; padding: 8px 14px; font: inherit; font-weight: 700; font-size: 14px; cursor: pointer; white-space: nowrap; }
+.onglet.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+@media (min-width: 900px) {
+  .reglages-grille { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 14px; align-items: start; }
+  .reglages-grille > * { margin: 0 !important; }
+}
+.js-svg svg { max-height: 46vh; }
+@media (min-width: 1000px) {
+  .js-carte .js-lecture { flex-direction: row; flex-wrap: wrap; gap: 4px 24px; align-items: baseline; }
+}

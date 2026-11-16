@@ -262,6 +262,7 @@ check('la liste affiche le compagnon', view().includes('Jean Moniteur'), '');
 }
 
 // --- Réglages : l'état du carnet, en clair ---
+localStorage.setItem('plongee-journal:onglet:reglages', 'comptes');   // l'onglet de Réglages à ouvrir
 window.location.hash = '#/reglages';
 window.dispatchEvent(new window.Event('hashchange'));
 await tick(150);
@@ -294,6 +295,8 @@ check('réglages : l’état du stockage est expliqué',
 }
 check('réglages : le branchement GitHub est proposé',
   /Dépôt GitHub privé/.test(view()) && /Jeton d’accès/.test(view()), '');
+document.querySelector('.onglet[data-id="donnees"]')?.click();   // l'onglet Données
+await tick(50);
 check('réglages : l’historique des changements est proposé',
   /Historique des changements/.test(view()), '');
 check('réglages : sauvegarde manuelle proposée',
@@ -307,6 +310,7 @@ fausseRelease = { installee: 40, publiee: 42 };
 window.location.hash = '#/dives';
 window.dispatchEvent(new window.Event('hashchange'));
 await tick(80);
+localStorage.setItem('plongee-journal:onglet:reglages', 'appli');   // l'onglet de Réglages à ouvrir
 window.location.hash = '#/reglages';
 window.dispatchEvent(new window.Event('hashchange'));
 await tick(200);
@@ -329,6 +333,7 @@ fausseRelease = { installee: 42, publiee: 42 };
 window.location.hash = '#/dives';
 window.dispatchEvent(new window.Event('hashchange'));
 await tick(80);
+localStorage.setItem('plongee-journal:onglet:reglages', 'appli');   // l'onglet de Réglages à ouvrir
 window.location.hash = '#/reglages';
 window.dispatchEvent(new window.Event('hashchange'));
 await tick(200);
@@ -341,6 +346,7 @@ delete window.Capacitor;
 window.location.hash = '#/dives';
 window.dispatchEvent(new window.Event('hashchange'));
 await tick(80);
+localStorage.setItem('plongee-journal:onglet:reglages', 'comptes');   // l'onglet de Réglages à ouvrir
 window.location.hash = '#/reglages';
 window.dispatchEvent(new window.Event('hashchange'));
 await tick(200);
@@ -379,6 +385,7 @@ window.localStorage.setItem('plongee-journal:suunto', JSON.stringify({ version: 
 window.location.hash = '#/dives';
 window.dispatchEvent(new window.Event('hashchange'));
 await tick(80);
+localStorage.setItem('plongee-journal:onglet:reglages', 'comptes');   // l'onglet de Réglages à ouvrir
 window.location.hash = '#/reglages';
 window.dispatchEvent(new window.Event('hashchange'));
 await tick(200);

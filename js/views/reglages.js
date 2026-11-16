@@ -52,24 +52,14 @@ const ETAT = {
 const ico = id => el('span.ico-wrap', { html: `<svg class="ico"><use href="#${id}"/></svg>` });
 
 export async function reglagesView() {
-  const wrap = el('div.reglages');
-
-  // Seulement des réglages, rangés par thème. Les actions (import Suunto,
-  // ajout de plongées…) vivent dans leurs écrans.
-  wrap.append(el('div.section', {},
-    el('h2', { text: 'Comptes' }),
-    carteGitHub(),
-    carteSuunto(),
-    carteAgenda()));
-
-  wrap.append(await sectionPartage());
-  {
-    const { carteVideosReglages } = await import('./videos.js');
-    wrap.append(el('div.section', {}, el('h2', { text: 'Vidéos' }), await carteVideosReglages()));
-  }
-  wrap.append(sectionDonnees());
-
-  const appli = el('div.section', {}, el('h2', { text: 'Application' }));
+  // Seulement des réglages, rangés par thème, un onglet chacun. Les actions
+  // (import Suunto, ajout de plongées…) vivent dans leurs écrans.
+  const { onglets } = await import('../onglets.js');
+  const { carteVideosReglages } = await import('./videos.js');
+  const sans = sec => [...sec.childNodes].filter(n => n.tagName !== 'H2');   // le titre devient l'onglet
+  const partage = await sectionPartage();
+  const donnees = sectionDonnees();
+  const appli = el('div.section', {});
   if (estApk()) appli.append(carteMiseAJour());
   appli.append(el('div.card', {},
     el('div.kv', {}, el('span.k', { text: 'Site web' }),
@@ -77,7 +67,13 @@ export async function reglagesView() {
     el('div.kv', {}, el('span.k', { text: 'Appli Android' }),
       el('a.v', { href: APK, target: '_blank', rel: 'noopener', text: 'Télécharger l’APK ↗' })),
     el('div.hint', { text: 'Même carnet partout : il suffit de brancher le même dépôt GitHub sur chaque appareil.' })));
-  wrap.append(appli);
+  const wrap = el('div.reglages', {}, onglets('reglages', [
+    { id: 'comptes', titre: '🔑 Comptes', contenu: el('div.section.reglages-grille', {}, carteGitHub(), carteSuunto(), carteAgenda()) },
+    { id: 'partage', titre: '🔗 Partage', contenu: el('div.section', {}, ...sans(partage)) },
+    { id: 'videos', titre: '🎬 Vidéos', contenu: el('div.section', {}, await carteVideosReglages()) },
+    { id: 'donnees', titre: '💾 Données', contenu: el('div.section.reglages-grille', {}, ...sans(donnees)) },
+    { id: 'appli', titre: '📱 Application', contenu: appli },
+  ]));
 
   return { title: 'Réglages', node: wrap, back: true };
 }

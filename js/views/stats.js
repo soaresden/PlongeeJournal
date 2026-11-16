@@ -174,22 +174,22 @@ export async function statsView() {
   // Azote & oxygène sur 7 jours : en tête, c'est ce qui sert avant la prochaine plongée
   const corps = await (await import('./corps.js')).carteCorps().catch(() => null);
   const journee = await (await import('./journee-sante.js')).carteJournee(dives).catch(e => { console.warn(e); return null; });
-  const tb = el('div.tb', {},
-    corps ? el('div.tb-carte.plein.corps-place', {}, corps) : null,
-    journee,
-    impact,
-    tuiles,
-    carte('Par année', histo, { aide: 'touche une année', classe: '.plein' }),
-    niveaux.length ? carte('Par niveau', barres(niveaux), { aide: st.niveau ? `aujourd’hui : ${st.niveau}` : '' }) : null,
-    carte('Par région', barres(regions)),
-    tranches.length ? carte('Par profondeur', barres(tranches)) : null,
-    top.length ? carte('Compagnons', barres(top)) : null,
-    types.length ? carte('Par type', barres(types)) : null,
-    carte('Apnée', apneeBloc, { aide: 'vraiment sous l’eau', classe: '.plein' }),
-    carte('Séances', seancesBloc, { aide: 'fosse, piscine, apnée…', classe: '.plein' }),
-  );
-
-  const wrap = el('div', {}, tb,
-    st.lastDate ? el('div.hint', { style: { marginTop: '14px' }, text: `Dernière plongée le ${fmtDate(st.lastDate)}.` }) : null);
+  // Des onglets plutôt qu'une longue page
+  const { onglets } = await import('../onglets.js');
+  const grille = (...cartes) => el('div.tb', {}, ...cartes);
+  const wrap = el('div', {}, onglets('stats', [
+    { id: 'sante', titre: '🫁 Santé', contenu: grille(corps ? el('div.tb-carte.plein.corps-place', {}, corps) : null, journee) },
+    { id: 'chiffres', titre: '📊 Chiffres', contenu: grille(impact, tuiles, carte('Par année', histo, { aide: 'touche une année', classe: '.plein' })) },
+    { id: 'repartition', titre: '🗂 Répartition', contenu: grille(
+      niveaux.length ? carte('Par niveau', barres(niveaux), { aide: st.niveau ? `aujourd’hui : ${st.niveau}` : '' }) : null,
+      carte('Par région', barres(regions)),
+      tranches.length ? carte('Par profondeur', barres(tranches)) : null,
+      top.length ? carte('Compagnons', barres(top)) : null,
+      types.length ? carte('Par type', barres(types)) : null) },
+    { id: 'apnee', titre: '🤿 Apnée & séances', contenu: grille(
+      carte('Apnée', apneeBloc, { aide: 'vraiment sous l’eau', classe: '.plein' }),
+      carte('Séances', seancesBloc, { aide: 'fosse, piscine, apnée…', classe: '.plein' })) },
+  ]),
+  st.lastDate ? el('div.hint', { style: { marginTop: '14px' }, text: `Dernière plongée le ${fmtDate(st.lastDate)}.` }) : null);
   return { title: 'Statistiques', node: wrap };
 }
