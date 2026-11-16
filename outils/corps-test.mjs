@@ -60,6 +60,12 @@ check('40 m à l’air : narcose en rouge (PpN2 > 4 bar)', rq.find(r => r.id ===
 const rqN = C.risques(C.bilanCorps([plongee('2026-06-01', '10:00', 40, 15, 40)], { maintenant: t('2026-06-01T10:20:00') }));
 check('40 m au nitrox 40 : PpO2 2 bar → Paul Bert en rouge', rqN.find(r => r.id === 'paul-bert').niveau === 'rouge');
 
+// Un instant pris pendant la plongée : le calcul s'arrête là (pas la plongée entière)
+const pend = C.bilanCorps([plongee('2026-06-01', '10:00', 30, 40, 32)], { maintenant: t('2026-06-01T10:15:00') });
+const apres = C.bilanCorps([plongee('2026-06-01', '10:00', 30, 40, 32)], { maintenant: t('2026-06-01T10:41:00') });
+check('au milieu de la plongée : moins de %SNC et d’azote qu’à la sortie', pend.maintenant.cns < apres.maintenant.cns * 0.6 && pend.maintenant.sat < apres.maintenant.sat, `${pend.maintenant.cns} / ${apres.maintenant.cns}`);
+check('au milieu de la plongée : elle finit à l’instant choisi', pend.plongees[0].fin <= t('2026-06-01T10:15:00'));
+
 console.log(results.join('\n'));
 const ko = results.filter(r => r.startsWith(' FAIL'));
 console.log(`\n${results.length - ko.length}/${results.length} vérifications azote & oxygène`);

@@ -1224,3 +1224,29 @@ html.apercu-cote .apercu-fond { display: none; }
 .oxy-detail { position: sticky; bottom: 8px; z-index: 5; background: var(--surface-2); border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 10px; padding: 9px 12px; font-size: 13.5px; line-height: 1.4; color: var(--text-mute); box-shadow: var(--shadow); }
 .oxy-detail.on { color: var(--text); }
 @media (max-width: 520px) { .oxy-bilan { grid-template-columns: 1fr 1fr; } .oxy-bilan > :last-child { grid-column: 1 / -1; } .oxy-tab { font-size: 12px; } }
+
+/* ---------- 📈 Ma journée sous l'eau (stats, santé) ---------- */
+.js-nav { display: flex; gap: 8px; align-items: center; justify-content: center; margin-bottom: 6px; }
+.js-jour { flex: 0 1 220px; padding: 7px 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--text); font: inherit; font-weight: 700; text-align: center; }
+.js-svg svg { width: 100%; height: auto; display: block; cursor: crosshair; }
+.js-lbl { font-size: 12px; fill: var(--text-mute); }
+.js-plongee { fill: var(--text); font-weight: 700; cursor: pointer; }
+.js-heure { stroke: var(--line); stroke-width: 1; }
+.js-surface { stroke: #3b8fd6; stroke-width: 1.5; stroke-dasharray: 5 4; }
+.js-prof { fill: none; stroke: #3b8fd6; stroke-width: 2; stroke-linejoin: round; }
+.js-aire-prof { fill: rgba(59, 143, 214, .16); stroke: none; }
+.js-azote { fill: none; stroke: var(--accent); stroke-width: 2.5; stroke-linejoin: round; }
+.js-snc { fill: none; stroke: #a855f7; stroke-width: 2; stroke-dasharray: 6 3; }
+.js-leg-azote { fill: var(--accent); font-weight: 700; } .js-leg-snc { fill: #a855f7; font-weight: 700; }
+.js-limite { stroke: var(--danger); stroke-width: 1.2; } .js-prudence { stroke: var(--warn); stroke-width: 1; stroke-dasharray: 4 3; } .js-repere { stroke: var(--line); stroke-width: 1; stroke-dasharray: 2 3; }
+.js-curseur { stroke: var(--text); stroke-width: 1.5; stroke-dasharray: 3 2; }
+.js-lecture { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
+.js-instant { font-size: 14px; line-height: 1.4; }
+.js-chiffres { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 4px; }
+.js-chiffres span { display: flex; flex-direction: column; font-size: 11.5px; color: var(--text-mute); }
+.js-chiffres b { font-size: 18px; color: var(--text); line-height: 1.15; }
+.js-details { margin-top: 8px; }
+.js-details summary { cursor: pointer; font-weight: 700; padding: 4px 0; }
+.js-details svg { width: 100%; height: auto; }
+.js-zoom { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; justify-content: center; margin-bottom: 4px; }
+.js-zoom .chip.on { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }

@@ -147,7 +147,7 @@ function courbe(b, { hauteur = 300, mini = false, debut = b.debut } = {}) {
  * Les 16 compartiments à l'instant choisi, chacun avec sa limite ;
  * avec `sans` (le même instant sans la dernière plongée), la part qu'elle a ajoutée respire.
  */
-function compartiments(b, sans = null) {
+export function compartiments(b, sans = null) {
   const W = 700, H = 330, haut = 30, bas = 270, l = (W - 44) / 16;
   const y = v => bas - Math.min(110, v) / 110 * (bas - haut);
   const svg = s('svg', { viewBox: `0 0 ${W} ${H}`, class: 'corps-comp', role: 'img', 'aria-label': 'Les 16 tissus : charge en azote' });

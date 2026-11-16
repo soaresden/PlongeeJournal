@@ -108,7 +108,7 @@ export function bilanCorps(dives, { maintenant = Date.now(), jours = 7 } = {}) {
   const T = ZHL16C.map(() => EQUILIBRE);
   let t = avant, cns = 0;
   const serie = [], plongees = [], otus = [];
-  const noter = (tt, prof) => { if (tt >= debutFenetre) { const s = sat(T); serie.push({ t: tt, sat: s.v, comp: s.i, prof }); } };
+  const noter = (tt, prof) => { if (tt >= debutFenetre) { const s = sat(T); serie.push({ t: tt, sat: s.v, comp: s.i, prof, cns }); } };
   // La surface entre deux plongées : on respire de l'air à 1 bar, les tissus se vident
   const surface = jusqua => {
     while (t < jusqua) {
@@ -125,8 +125,11 @@ export function bilanCorps(dives, { maintenant = Date.now(), jours = 7 } = {}) {
     const fo2 = fo2De(x.d), fn2 = 1 - fo2, douce = x.d.eau === 'douce';
     const pts = x.profil.points;
     let pic = 0, otuPlongee = 0;
+    let finS = pts[pts.length - 1][0];
     for (let j = 1; j < pts.length; j++) {
       const [t0, d0] = pts[j - 1], [t1, d1] = pts[j];
+      // Un instant pris pendant la plongée : on s'arrête là (pas la plongée entière)
+      if (x.debut + t1 * 1000 > maintenant) { finS = t0; break; }
       const dt = (t1 - t0) / 60;
       if (dt <= 0) continue;
       charger(T, pAmb(d0, douce), pAmb(d1, douce), dt, fn2);
@@ -137,7 +140,7 @@ export function bilanCorps(dives, { maintenant = Date.now(), jours = 7 } = {}) {
       noter(x.debut + t1 * 1000, d1);
     }
     const finAvant = plongees.length ? plongees[plongees.length - 1].fin : null;
-    t = x.debut + pts[pts.length - 1][0] * 1000;
+    t = x.debut + finS * 1000;
     otus.push({ t, otu: otuPlongee });
     plongees.push({ d: x.d, debut: x.debut, fin: t, pic, estime: x.profil.estime, deco: decoDe(x.d), fo2, cns,
       vmax: x.profil.estime ? null : vitesseMontee(pts), intervalle: finAvant != null ? x.debut - finAvant : null,

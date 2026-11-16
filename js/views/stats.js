@@ -173,8 +173,10 @@ export async function statsView() {
 
   // Azote & oxygène sur 7 jours : en tête, c'est ce qui sert avant la prochaine plongée
   const corps = await (await import('./corps.js')).carteCorps().catch(() => null);
+  const journee = await (await import('./journee-sante.js')).carteJournee(dives).catch(e => { console.warn(e); return null; });
   const tb = el('div.tb', {},
     corps ? el('div.tb-carte.plein.corps-place', {}, corps) : null,
+    journee,
     impact,
     tuiles,
     carte('Par année', histo, { aide: 'touche une année', classe: '.plein' }),
