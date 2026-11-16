@@ -69,6 +69,16 @@ export function heureDuNom(nom) {
   return m ? { date: `${m[1]}-${m[2]}-${m[3]}`, min: +m[4] * 60 + +m[5] } : null;
 }
 
+/**
+ * L'heure d'un dossier rangé par plongée (« 2026-11-08 - 12h34 Kandooma Thila », « 2026-11-08 12:34 »), en minutes.
+ * @returns {number|null}
+ */
+export function heureDossier(nom) {
+  const s = String(nom || '').replace(/(?:19|20)\d\d[-_.]?\d\d[-_.]?\d\d/, ' ');
+  const m = /(?:^|\D)([01]?\d|2[0-3]) ?[hH:] ?([0-5]\d)(?!\d)/.exec(s);
+  return m ? +m[1] * 60 + +m[2] : null;
+}
+
 export const estVideo = f => /^video\//.test(f?.contenttype || '') || f?.category === 2 || /\.(mp4|mov|m4v|avi|mkv|insv|360)$/i.test(f?.name || '');
 export const estPhoto = f => /^image\//.test(f?.contenttype || '') || f?.category === 1 || /\.(jpe?g|png|heic|webp|gpr|dng)$/i.test(f?.name || '');
 
@@ -155,19 +165,29 @@ export function videosDePlongee(dive, dossiers, toutes = [], { autres = {} } = {
   const sans = (dive.videoSans || []).map(String);
   let choisis = lies.map(id => dossiers.find(x => meme(x.folderid, id))).filter(Boolean);
   const auto = !lies.length;
+  const h = s => (/^\d\d:\d\d/.test(s || '') ? Number(s.slice(0, 2)) * 60 + Number(s.slice(3, 5)) : null);
+  const debut = h(heureDe(dive));
+  let parDossier = false;
   if (auto) {
-    const x = dossiers.find(y => y.date === dive.date && !(String(y.folderid) in (autres || {}))
+    const libres = dossiers.filter(y => y.date === dive.date && !(String(y.folderid) in (autres || {}))
       && !sans.includes(String(y.folderid))
       && !toutes.some(d => d.id !== dive.id && dossiersLies(d).some(id => meme(id, y.folderid))));
+    // Un dossier par plongée (« 2026-11-08 - 12h34 Kandooma Thila ») : celui de son heure, à moins d'une heure près.
+    // Sinon le dossier du jour, sans heure.
+    let x = null;
+    if (debut != null) {
+      const ecart = y => Math.abs(heureDossier(y.nom) - debut);
+      x = libres.filter(y => heureDossier(y.nom) != null && ecart(y) <= 60).sort((a, b) => ecart(a) - ecart(b))[0] || null;
+      parDossier = !!x;
+    }
+    if (!x) x = libres.find(y => heureDossier(y.nom) == null) || null;
     choisis = x ? [x] : [];
   }
   if (!choisis.length) return null;
   let fichiers = choisis.flatMap(x => x.fichiers);
   let parHeure = false;
   const memeJour = toutes.filter(d => d.date === dive.date && d.id !== dive.id && !dossiersLies(d).length && /^\d\d:\d\d/.test(heureDe(d)));
-  const h = s => (/^\d\d:\d\d/.test(s || '') ? Number(s.slice(0, 2)) * 60 + Number(s.slice(3, 5)) : null);
-  const debut = h(heureDe(dive));
-  if (auto && memeJour.length && debut != null) {
+  if (auto && !parDossier && memeJour.length && debut != null) {
     const dates = fichiers.map(f => heureDuNom(f.nom));
     if (dates.filter(Boolean).length >= fichiers.length / 2) {
       const fin = debut + (Number(dive.dureeMin) || 60);

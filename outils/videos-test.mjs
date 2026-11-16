@@ -49,6 +49,27 @@ check('une seule plongée ce jour-là : tout le dossier', V.videosDePlongee({ da
 check('dossier choisi à la main', V.videosDePlongee({ date: '2020-01-01', videoDossier: 10 }, dossiers)?.dossier.folderid === 10);
 check('pas de dossier ce jour-là', V.videosDePlongee({ date: '2020-01-01' }, dossiers) === null);
 
+// Un dossier par plongée (rangé par Ranger-GoPro) : chaque plongée du jour retrouve le sien par l'heure
+check('heure de dossier : « 2026-11-08 - 12h34 Kandooma Thila »', V.heureDossier('2026-11-08 - 12h34 Kandooma Thila') === 754);
+check('heure de dossier : aucune dans « 2026-11-08 » ni « 30.08.2026 - plongée »', V.heureDossier('2026-11-08') === null && V.heureDossier('30.08.2026 - plongée') === null);
+{
+  const parPlongee = V.dossiersDates({ name: 'GoPro', isfolder: true, folderid: 1, contents: [
+    { name: '2026-11-08 - 07h50 Hulhumalé Harbor', isfolder: true, folderid: 51, contents: [f(511, '2026-11-08_03h55_4K.mp4')] },
+    { name: '2026-11-08 - 12h34 Kandooma Thila', isfolder: true, folderid: 52, contents: [f(521, '2026-11-08_08h49_4K.mp4'), f(522, '2026-11-08_09h02_4K.mp4')] },
+    { name: '2026-11-08', isfolder: true, folderid: 53, contents: [f(531, '2026-11-08_14h20_4K.mp4')] },
+    { name: 'TOSORT', isfolder: true, folderid: 54, contents: [{ name: '100GOPRO', isfolder: true, folderid: 55, contents: [f(551, 'GX010001.MP4')] }] },
+  ] });
+  const p1 = { id: 'a', date: '2026-11-08', heureImmersion: '07:50', dureeMin: 33 };
+  const p2 = { id: 'b', date: '2026-11-08', heureImmersion: '12:34', dureeMin: 51 };
+  const p3 = { id: 'c', date: '2026-11-08', heureImmersion: '18:11', dureeMin: 51 };
+  const toutes = [p1, p2, p3];
+  const ids = d => V.videosDePlongee(d, parPlongee, toutes)?.fichiers.map(x => x.fileid).join() ?? null;
+  check('dossier par plongée : la 1re a le sien', ids(p1) === '511', ids(p1));
+  check('dossier par plongée : la 2e a le sien, en entier (heure de la GoPro ignorée)', ids(p2) === '521,522', ids(p2));
+  check('dossier par plongée : sinon le dossier du jour sans heure', ids(p3) === '531', ids(p3));
+  check('TOSORT/100GOPRO : pas un dossier daté', !parPlongee.some(x => x.folderid === 54 || x.folderid === 55));
+}
+
 // Séances et dossiers mis de côté
 {
   const fosse = { id: 'f', type: 'fosse', date: '2026-08-30', heure: '19:00' };
