@@ -291,6 +291,20 @@ export function fichiersPlats(racine) {
   return out;
 }
 
+/**
+ * Ce que dit le nom du fichier (ou de son dossier) : « Snork Bateau »,
+ * « Kayak », « Plongée Full »…
+ * @returns {'snorkeling'|'surface'|'plongee'|null}
+ */
+export function genreDuNom(texte) {
+  const s = String(texte || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  if (/snork|\bpmt\b|palme|masque.?tuba/.test(s)) return 'snorkeling';
+  if (/kayak|paddle|bateau|(^|[^a-z])boat|plage|beach|partyboat/.test(s)) return 'surface';
+  // (« épave » ne dit rien : on en survole aussi en snorkeling.)
+  if (/plongee|(^|[^a-z])dive([^a-z]|$)|(^|[^a-z])drop\s?\d/.test(s)) return 'plongee';
+  return null;
+}
+
 const ecartA = (m, w) => (m < w.debut ? w.debut - m : m > w.fin ? m - w.fin : 0);
 
 /**
@@ -304,9 +318,19 @@ const ecartA = (m, w) => (m < w.debut ? w.debut - m : m > w.fin ? m - w.fin : 0)
  * @returns {{dive:object|null, raison:string, confiance:'forte'|'bonne'|'moyenne'|'faible'|null, partie:number|null, ecart:number|null, decalage:number|null, jour:object[]}}
  */
 export function proposer(f, sorties) {
-  const avecDate = (sorties || []).filter(d => d && d.date);
+  // Le nom dit snorkeling, bateau, plongée… : on ne propose que ce qui va avec.
+  const genre = genreDuNom(f.nom) || genreDuNom(f.dossier ? f.dossier.split(' / ').pop() : '');
+  const va = d => (genre === 'snorkeling' ? d.seance && d.type === 'snorkeling'
+    : genre === 'surface' ? false
+      : genre === 'plongee' ? !d.seance || d.type === 'fosse'
+        : true);
+  const avecDate = (sorties || []).filter(d => d && d.date && va(d));
   const jour = avecDate.filter(d => d.date === f.date || (f.dossierDate && d.date === f.dossierDate));
-  const rien = raison => ({ dive: null, raison, confiance: null, partie: null, ecart: null, decalage: null, jour });
+  const memeJourTous = (sorties || []).filter(d => d && d.date && (d.date === f.date || (f.dossierDate && d.date === f.dossierDate)));
+  const rien0 = raison => ({ dive: null, raison, confiance: null, partie: null, ecart: null, decalage: null, jour: memeJourTous, genre });
+  // Bateau, kayak… ou snorkeling sans séance notée : on propose « aucune plongée ».
+  const rien = raison => (genre === 'surface' || genre === 'snorkeling'
+    ? { ...rien0(raison), raison: genre, aucune: true, confiance: 'bonne' } : rien0(raison));
   const partieA = (d, m) => {
     const fen = fenetres(d);
     if (m == null || fen.length < 2) return null;
@@ -318,7 +342,7 @@ export function proposer(f, sorties) {
       .map(d => ({ d, e: Math.abs(hm(heureDe(d)) - f.dossierHeure) })).filter(x => x.e <= 20).sort((a, b) => a.e - b.e)[0];
     if (c) {
       const ok = f.date === f.dossierDate;
-      return { ...rien('dossier'), dive: c.d, confiance: 'forte', partie: ok ? partieA(c.d, f.min) : null };
+      return { ...rien0('dossier'), dive: c.d, confiance: 'forte', partie: ok ? partieA(c.d, f.min) : null };
     }
   }
   // 2. L'heure du nom du fichier.
@@ -335,17 +359,17 @@ export function proposer(f, sorties) {
     };
     const b = meilleur(0);
     if (b) {
-      return { ...rien(b.e === 0 ? 'pendant' : b.m < b.w.debut ? 'avant' : 'apres'), dive: b.d,
+      return { ...rien0(b.e === 0 ? 'pendant' : b.m < b.w.debut ? 'avant' : 'apres'), dive: b.d,
         confiance: b.e === 0 ? 'forte' : 'bonne', partie: b.w.partie, ecart: b.e };
     }
     for (const k of [-60, 60]) {
       const c = meilleur(k);
-      if (c) return { ...rien('decalage'), dive: c.d, confiance: 'moyenne', partie: c.w.partie, ecart: c.e, decalage: k };
+      if (c) return { ...rien0('decalage'), dive: c.d, confiance: 'moyenne', partie: c.w.partie, ecart: c.e, decalage: k };
     }
     return rien(duJour.length ? 'hors' : 'aucune');
   }
   // 3. Pas d'heure : la seule sortie du jour.
-  if (jour.length === 1) return { ...rien('jour'), dive: jour[0], confiance: 'faible' };
+  if (jour.length === 1) return { ...rien0('jour'), dive: jour[0], confiance: 'faible' };
   return rien(jour.length ? 'plusieurs' : 'aucune');
 }
 

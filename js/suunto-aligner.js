@@ -205,7 +205,7 @@ export function proposer(act, dec, connues, seances = []) {
     // sans profondeur connue reste une plongée (pas une piscine).
     profMax: dec.profMax ?? (genre === 'plongee' ? 10 : null), date: dec.start, lieu: dec.lieu,
     samples: dec.samples,
-  }, seances);
+  }, seances, (connues || []).filter(x => !x.seance));
   return { action: 'ajouter', rangement };
 }
 

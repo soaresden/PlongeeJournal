@@ -132,7 +132,7 @@ check('heure de dossier : aucune dans « 2026-11-08 » ni « 30.08.2026 - plong�
   check('deux drops : drop1 → partie 1', P(1).dive === five && P(1).partie === 1 && P(1).raison === 'pendant');
   check('deux drops : drop2 → partie 2 (24 min après la sortie)', P(2).dive === five && P(2).partie === 2 && P(2).raison === 'apres');
   check('à 1 h près : décalage de la caméra', P(4).dive === lily && P(4).raison === 'decalage' && P(4).decalage === -60);
-  check('rien à cette heure (snorkeling)', P(9).dive === null && P(9).raison === 'hors' && P(9).jour.length === 2);
+  check('« snorkeling » sans séance à cette heure : pas une plongée, les plongées du jour en choix', P(9).dive === null && P(9).aucune && P(9).raison === 'snorkeling' && P(9).jour.length === 2);
   check('dossier de la plongée : il l’emporte sur l’heure du nom', P(5).dive === miyaru && P(5).raison === 'dossier');
   check('sans heure : la seule plongée du jour (faible)', P(6).dive === roussay && P(6).confiance === 'faible');
 
@@ -145,6 +145,22 @@ check('heure de dossier : aucune dans « 2026-11-08 » ni « 30.08.2026 - plong�
   check('assigné à Lily : il quitte Five Rocks et va sur Lily', !ids(five, { 2: 'lily' }).split(',').includes('2') && ids(lily, { 2: 'lily' }).split(',').includes('2'), ids(five, { 2: 'lily' }) + ' / ' + ids(lily, { 2: 'lily' }));
   check('assigné à aucune : il ne s’affiche nulle part', !ids(five, { 1: '' }).split(',').includes('1'));
   check('assigné d’un autre dossier, sans dossier du jour', ids({ id: 'x', date: '2020-01-01' }, { 5: 'x' }) === '5');
+}
+
+// Ce que dit le nom
+{
+  const albanie = [
+    { id: 'pis', seance: true, type: 'piscine', date: '2026-06-26', heure: '17:19', dureeMin: 21 },
+    { id: 'sn', seance: true, type: 'snorkeling', date: '2026-06-26', heure: '16:08', dureeMin: 36 },
+  ];
+  const f = (nom, min) => ({ nom, date: '2026-06-26', min, dossier: '2026-06-21 Albanie', dossierDate: '2026-06-21', dossierHeure: null });
+  check('nom : Snork → snorkeling, Kayak → surface, Plongee → plongée', V.genreDuNom('20260626_18h27_Snork Bateau') === 'snorkeling'
+    && V.genreDuNom('20260622_11h46_Kayak Gx010109') === 'surface' && V.genreDuNom('20260624_13h18_Plongee Full') === 'plongee'
+    && V.genreDuNom('2026-11-11_07h13_4K drop1.mp4') === 'plongee' && V.genreDuNom('20260626_16h06_Epave Froid') === null);
+  const sb = V.proposer(f('20260626_18h27_Snork Bateau Gx010115.mp4', 18 * 60 + 27), albanie);
+  check('« Snork Bateau » : jamais la piscine', sb.dive?.id !== 'pis' && sb.aucune === true, JSON.stringify(sb.dive));
+  check('« Epave » à 16h14 : le snorkeling de 16:08', V.proposer(f('20260626_16h14_Epave Gx010134.mp4', 16 * 60 + 14), albanie).dive?.id === 'sn');
+  check('« Kayak » : pas une plongée', V.proposer(f('20260626_16h10_Kayak.mp4', 16 * 60 + 10), albanie).aucune === true);
 }
 
 // API simulée : le lien est en fait américain, le serveur européen répond 7001.

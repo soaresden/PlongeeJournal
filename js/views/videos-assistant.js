@@ -9,7 +9,7 @@
 // ============================================================
 
 import { el, fmtDate } from '../lib.js';
-import { proposer, videosDePlongee } from '../videos.js';
+import { proposer, videosDePlongee, urlMiniature } from '../videos.js';
 import { typeSeance } from '../store.js';
 
 const hhmm = m => (m == null ? '' : `${String(Math.floor(m / 60) % 24).padStart(2, '0')}h${String(m % 60).padStart(2, '0')}`);
@@ -28,6 +28,8 @@ const RAISONS = {
   apres: p => `⏱ ${p.ecart} min après la sortie${p.partie ? ` (drop ${p.partie})` : ''}`,
   decalage: p => `⏱ à 1 h près (caméra ${p.decalage > 0 ? 'en retard' : 'en avance'} d’1 h ?)${p.partie ? ` · drop ${p.partie}` : ''}`,
   jour: () => '📅 pas d’heure, mais seule plongée du jour',
+  snorkeling: () => '🤿 « snorkeling » dans le nom, rien de noté à cette heure : pas une plongée',
+  surface: () => '🚤 bateau, kayak, plage… dans le nom : pas une plongée',
   hors: () => 'aucune plongée à cette heure-là',
   plusieurs: () => 'pas d’heure, plusieurs plongées ce jour-là',
   aucune: () => 'rien dans le carnet ce jour-là',
@@ -55,7 +57,7 @@ export function etatsFichiers({ plats, dossiers, toutes, autres, aff }) {
     const a = k in aff ? aff[k] : undefined;
     const valide = a === undefined ? null : a === '' ? { aucune: true } : { dive: toutes.find(d => String(d.id) === String(a)) || null };
     return { f, p, valide, sur: montre.get(k) || [],
-      statut: valide ? (valide.aucune ? 'refusee' : 'validee') : p.dive ? 'proposee' : 'seule' };
+      statut: valide ? (valide.aucune ? 'refusee' : 'validee') : p.dive || p.aucune ? 'proposee' : 'seule' };
   });
 }
 
@@ -70,6 +72,7 @@ export function ongletVideosPlongee(ctx) {
   const compter = statut => etats.filter(e => (photos || e.f.video) && (statut === 'tout' || groupe(e) === statut)).length;
   const groupe = e => (e.statut === 'proposee' ? 'a-valider' : e.statut === 'seule' ? 'sans' : e.statut === 'validee' ? 'validees' : 'refusees');
 
+  const valeurProposee = e => (e.p.dive ? String(e.p.dive.id) : '');
   const assigner = async (rows, valeur) => {
     const patch = {};
     for (const e of rows) patch[e.f.fileid] = valeur(e);
@@ -85,6 +88,10 @@ export function ongletVideosPlongee(ctx) {
       .map(([id, t]) => el(`button.chip${filtre === id ? '.solid' : ''}`, { type: 'button', text: `${t} (${compter(id)})`,
         onclick: () => { filtre = id; garder('plongee-journal:videos-filtre', id); rendre(); } }));
     const ligne = e => {
+      const miniature = el('td.va-mini', {}, el('button.video-vignette', { type: 'button', title: 'Voir', onclick: () => ctx.lireFichier(e.f) },
+        el('img', { src: urlMiniature(cfg, e.f.fileid, '160x120'), alt: '', loading: 'lazy',
+          onerror: ev => { ev.target.replaceWith(el('span.video-sans', { text: e.f.video ? '🎬' : '🖼' })); } }),
+        e.f.video ? el('span.video-play', { text: '▶' }) : null));
       const { f, p } = e;
       const choix = el('select.va-autre', { title: 'Une autre plongée' },
         el('option', { value: '', text: 'Autre…' }),
@@ -103,12 +110,13 @@ export function ongletVideosPlongee(ctx) {
           el('button.btn.sm.ghost', { type: 'button', text: '↺', title: 'Annuler : revenir à la proposition', onclick: () => assigner([e], () => null) }));
       } else {
         cellAssign = el('td.va-boutons', {},
-          p.dive ? el('button.btn.sm.primary', { type: 'button', text: '✓', title: `Valider : ${nomSortie(p.dive)}`, onclick: () => assigner([e], () => String(p.dive.id)) }) : null,
+          p.dive || p.aucune ? el('button.btn.sm.primary', { type: 'button', text: '✓', title: p.dive ? `Valider : ${nomSortie(p.dive)}` : 'Valider : aucune plongée', onclick: () => assigner([e], valeurProposee) }) : null,
           el('button.btn.sm.ghost', { type: 'button', text: '✗', title: 'Aucune plongée (snorkeling, bateau, test…)', onclick: () => assigner([e], () => '') }),
           choix);
       }
       const ailleurs = e.sur.filter(d => d !== (e.valide?.dive || p.dive));
       return el(`tr.va-${e.statut}.va-${p.confiance || 'rien'}`, {},
+        miniature,
         el('td.va-dossier', { text: f.dossier || '(racine)', title: f.dossier || 'À la racine du lien' }),
         el('td.va-fichier', {},
           el('button.lien-texte', { type: 'button', text: `${f.video ? '🎬' : '🖼'} ${f.nom}`, title: 'Voir', onclick: () => ctx.lireFichier(f) })),
@@ -116,7 +124,7 @@ export function ongletVideosPlongee(ctx) {
           el('b', { text: f.date ? fmtDate(f.date) : '?' }), f.min != null ? ` ${hhmm(f.min)}` : '',
           el('small', { text: f.source === 'nom' ? 'lu dans le nom' : f.source === 'nom-jour' ? 'jour lu dans le nom' : f.source === 'dossier' ? 'jour du dossier' : 'introuvable' })),
         el('td.va-candidate', {},
-          p.dive ? el('b', { text: nomSortie(p.dive) }) : el('span.hint', { style: { margin: 0 }, text: '—' }),
+          p.dive ? el('b', { text: nomSortie(p.dive) }) : p.aucune ? el('b', { text: '✗ Pas une plongée' }) : el('span.hint', { style: { margin: 0 }, text: '—' }),
           el('small', { text: raisonTexte(p) }),
           ailleurs.length ? el('small.va-sur', { text: `aujourd’hui sur ${ailleurs.map(nomSortie).join(', ')}` }) : null),
         cellAssign);
@@ -126,9 +134,9 @@ export function ongletVideosPlongee(ctx) {
         el('div.chips', {}, ...chips,
           el('label.chip', {}, el('input', { type: 'checkbox', checked: photos, onchange: ev => { photos = ev.target.checked; garder('plongee-journal:videos-photos', photos ? '1' : ''); rendre(); } }), ' Photos aussi')),
         !lecture && sures.length ? el('button.btn.sm.primary', { type: 'button', text: `✓ Valider les ${sures.length} propositions sûres`,
-          title: 'Dossier de la plongée, ou heure pendant / juste autour de la plongée', onclick: () => assigner(sures, e => String(e.p.dive.id)) }) : null),
+          title: 'Dossier de la plongée, ou heure pendant / juste autour de la plongée', onclick: () => assigner(sures, valeurProposee) }) : null),
       visibles.length ? el('div.va-table.va-cartes', {}, el('table', {},
-        el('thead', {}, el('tr', {}, ...['Dossier', 'Fichier', 'Jour et heure', 'Plongée proposée', 'Assignation'].map(t => el('th', { text: t })))),
+        el('thead', {}, el('tr', {}, ...['', 'Dossier', 'Fichier', 'Jour et heure', 'Plongée proposée', 'Assignation'].map(t => el('th', { text: t })))),
         el('tbody', {}, ...visibles.map(ligne))))
         : el('div.hint', { text: filtre === 'a-valider' ? 'Plus rien à valider 👌' : 'Rien ici.' }));
   };
@@ -141,7 +149,7 @@ export function ongletPlongeesVideos(ctx) {
   const { dives, dossiers, toutes, autres, aff, plats, navigate } = ctx;
   const etats = etatsFichiers(ctx);
   const enAttente = new Map();
-  for (const e of etats) if (e.statut === 'proposee') {
+  for (const e of etats) if (e.statut === 'proposee' && e.p.dive) {
     const k = String(e.p.dive.id);
     enAttente.set(k, (enAttente.get(k) || 0) + 1);
   }

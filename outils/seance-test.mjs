@@ -91,6 +91,14 @@ const piscineGarenne = { lat: 48.9054, lng: 2.2433 };
 const fosseVilleneuve = { lat: 48.9425, lng: 2.3170 };
 check('natation sans profondeur → piscine', S.suggererRangement({ genre: 'autre', profMax: null }) === 'piscine');
 check('petit bain 1,8 m → piscine', S.suggererRangement({ genre: 'bouteille', profMax: 1.8, date: '2026-10-21' }) === 'piscine');
+{
+  const albanie = { date: '2026-06-24', lat: 40.1, lng: 19.7 };
+  const beaumont = { date: '2026-06-24', lat: 49.14, lng: 2.28, eau: 'douce' };
+  check('en voyage : l’apnée de la montre → snorkeling', S.suggererRangement({ genre: 'apnee', profMax: 4.5, date: '2026-06-22' }, [], [albanie]) === 'snorkeling');
+  check('en voyage : la « piscine » → snorkeling', S.suggererRangement({ genre: 'autre', profMax: null, date: '2026-06-26' }, [], [albanie]) === 'snorkeling');
+  check('à la maison : l’apnée reste l’apnée', S.suggererRangement({ genre: 'apnee', profMax: 1.8, date: '2026-06-22' }, [], [beaumont]) === 'apnee');
+  check('voyage fini depuis 3 jours : piscine', S.suggererRangement({ genre: 'autre', profMax: null, date: '2026-06-28' }, [], [albanie]) === 'piscine');
+}
 check('jeudi soir à 19,6 m → fosse', S.suggererRangement({ genre: 'bouteille', profMax: 19.6, date: '2026-10-15' }) === 'fosse');
 check('un samedi à 25 m → plongée', S.suggererRangement({ genre: 'bouteille', profMax: 25, date: '2026-10-17' }) === 'plongee');
 check('mode apnée de la montre → apnée', S.suggererRangement({ genre: 'apnee', profMax: 6 }) === 'apnee');

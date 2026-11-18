@@ -116,12 +116,41 @@ function jeudiDeFosse(date, lieu, connu, prof) {
 }
 
 /**
+ * Une plongée « dehors » : à l'étranger (point GPS hors de la France
+ * métropolitaine) ou en mer.
+ */
+function plongeeDehors(d) {
+  if (!d || d.seance || d.eau === 'piscine' || (d.options || []).includes('Plongée en fosse')) return false;
+  if (d.lat != null && d.lng != null) return !(d.lat > 41 && d.lat < 51.5 && d.lng > -5.5 && d.lng < 9.8) || d.eau === 'salee';
+  return d.eau === 'salee';
+}
+
+/**
+ * En voyage ce jour-là ? Une plongée dehors à 2 jours près. En vacances,
+ * l'« apnée » ou la « piscine » de la montre, c'est du snorkeling (même en
+ * descendant à quelques mètres).
+ */
+export function enVoyage(date, plongees = []) {
+  if (!date || !plongees.length) return false;
+  const j = x => new Date(`${String(x).slice(0, 10)}T12:00:00`).getTime() / 86400000;
+  const iso = typeof date === 'string' ? date : new Date(date).toISOString();
+  const t = j(iso);
+  return plongees.some(d => d.date && plongeeDehors(d) && Math.abs(j(d.date) - t) <= 2);
+}
+
+/**
  * Plongée ou séance ? D'après ce que la montre en dit.
  * @param {{genre?:string, profMax?:number|null, date?:Date|string, lieu?:{lat,lng}|null}} a
  * @param {object[]} seances  les séances déjà rangées (pour reconnaître le lieu)
+ * @param {object[]} plongees  les plongées du carnet (en voyage : snorkeling plutôt qu'apnée ou piscine)
  * @returns {'plongee'|'fosse'|'piscine'|'apnee'|'snorkeling'}
  */
-export function suggererRangement({ genre = '', profMax = null, date = null, lieu = null, samples = null } = {}, seances = []) {
+export function suggererRangement(activite = {}, seances = [], plongees = []) {
+  const r = rangementBrut(activite, seances);
+  return (r === 'apnee' || r === 'piscine') && enVoyage(activite.date, plongees) ? 'snorkeling' : r;
+}
+
+function rangementBrut({ genre = '', profMax = null, date = null, lieu = null, samples = null } = {}, seances = []) {
   const prof = Number(profMax) || 0;
   const connu = lieu ? typeDuLieu(lieu, seances) : null;
 
@@ -196,7 +225,7 @@ export function plongeesARanger(dives, seances = []) {
       type = suggererRangement({
         genre: d.suunto?.genre === 'apnee' || d.suunto?.genre === 'autre' ? d.suunto.genre : '',
         profMax: d.profMax, date: d.date, lieu: d.lat != null ? { lat: d.lat, lng: d.lng } : null,
-      }, seances);
+      }, seances, dives);
     } else if (fit && (Number(d.profMax) || 0) < 3) {
       // Un vieux .fit : seul le petit bain est sans ambiguïté.
       type = 'piscine';
