@@ -163,7 +163,7 @@ export async function divesView() {
   let vue = lire(CLE_VUE, 'liste');
   if (vue === 'seances') { discipline = 'seances'; vue = 'liste'; }      // ancien réglage
   if (!['plongees', 'fosses', 'seances'].includes(discipline)) discipline = 'plongees';
-  if (!['liste', 'calendrier', 'carte'].includes(vue)) vue = 'liste';
+  if (!['liste', 'tableau', 'calendrier', 'carte'].includes(vue)) vue = 'liste';
 
   const segDisc = el('div.seg.seg-discipline');
   const segVue = el('div.seg.seg-vue');
@@ -210,7 +210,7 @@ export async function divesView() {
 
     segVue.innerHTML = '';
     segVue.hidden = discipline === 'seances';
-    const vues = [['liste', '☰ Liste'], ['calendrier', '▦ Agenda'], ...(discipline === 'plongees' ? [['carte', '🗺 Carte']] : [])];
+    const vues = [['liste', '☰ Liste'], ...(discipline === 'plongees' ? [['tableau', '▤ Tableau']] : []), ['calendrier', '▦ Agenda'], ...(discipline === 'plongees' ? [['carte', '🗺 Carte']] : [])];
     if (!vues.some(([id]) => id === vue)) vue = 'liste';
     vues.forEach(([id, label]) => {
       const b = el('button', { type: 'button', text: label });
@@ -218,7 +218,7 @@ export async function divesView() {
       b.onclick = () => { vue = id; garder(CLE_VUE, id); rendreSegments(); afficher(); };
       segVue.append(b);
     });
-    search.hidden = vue !== 'liste' || discipline === 'seances';
+    search.hidden = !['liste', 'tableau'].includes(vue) || discipline === 'seances';
     if ((vue !== 'liste' || discipline !== 'plongees') && choix) { choix = null; majJoindre(); }
   }
 
@@ -488,6 +488,10 @@ export async function divesView() {
     } else if (vue === 'carte') {
       const { carteDesPlongees } = await import('./carte.js');
       contenu.append(carteDesPlongees(dives, { buddies }));
+    } else if (vue === 'tableau' && discipline === 'plongees') {
+      const { tableauPlongees } = await import('./dives-tableau.js');
+      contenu.append(tableauPlongees(dives, { pays: paysPlongee, drapeau, nomPays, buddyName, aDesVideos,
+        ouvrir: d => apercuPlongee(d.id, { onClose: rafraichir }), chercher: () => search.value }));
     } else if (discipline === 'fosses') {
       contenu.append(listeParAnnee(fosses, { etat: etats.fosses, fabrique: carteFosse, mot: 'fosse' }));
     } else {

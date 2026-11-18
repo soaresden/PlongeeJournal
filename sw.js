@@ -54,6 +54,7 @@ const ASSETS = [
   './js/videos.js',
   './js/views/videos.js',
   './js/views/videos-assistant.js',
+  './js/views/dives-tableau.js',
   './js/verifs.js',
   './js/views/verifs.js',
   './js/views/maj-progres.js',

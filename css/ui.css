@@ -1362,3 +1362,25 @@ tr.va-vide td { color: var(--text-mute); }
   .va-cartes .va-candidate { grid-column: 1 / -1; margin-top: 2px; }
   .va-cartes .va-boutons, .va-cartes .va-ok { grid-column: 1 / -1; margin-top: 4px; }
 }
+
+/* ---------- Plongées : la vue Tableau ---------- */
+.tp-filtres { display: flex; flex-direction: column; gap: 5px; margin-bottom: 8px; }
+.tp-groupe { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; }
+.tp-groupe .chip { padding: 4px 9px; font-size: 12.5px; }
+.tp-groupe .chip small { opacity: .65; font-size: 11px; }
+.tp-groupe .chip.tp-vide { opacity: .4; }
+.tp-titre { font-size: 11px; font-weight: 650; color: var(--text-mute); text-transform: uppercase; letter-spacing: .04em; min-width: 62px; }
+.tp-vue { display: inline-flex; align-items: center; gap: 4px; }
+.tp-vue .lien-texte { color: inherit; font-size: 12.5px; }
+.tp-resume { font-size: 12.5px; color: var(--text-mute); margin: 4px 0 6px; }
+.tp-table th { cursor: pointer; user-select: none; }
+.tp-table th.trie { color: var(--accent); }
+.tp-table td.lieu { font-weight: 600; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tp-table td.pal { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-mute); }
+.tp-table td { white-space: nowrap; }
+@media (max-width: 700px) {
+  .tp-titre { min-width: 0; width: 100%; }
+  .tp-table td.lieu { max-width: 140px; }
+}
+.tp-plier { display: flex; align-items: baseline; gap: 8px; background: none; border: 0; padding: 2px 0 6px; color: var(--text); font-weight: 650; font-size: 13px; cursor: pointer; text-align: left; }
+.tp-plier small { font-weight: 400; color: var(--text-mute); font-size: 12px; }
