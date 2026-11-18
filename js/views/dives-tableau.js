@@ -18,6 +18,7 @@ const typeCourt = t => {
 
 /**
  * @param {object[]} dives
+ * Avec `liste` : les mêmes filtres au-dessus de la liste par année (au lieu du tableau).
  * @param {{pays:(d)=>string|null, drapeau:(c)=>string, nomPays:(c)=>string, buddyName:(id)=>string,
  *          aDesVideos:(d)=>boolean, ouvrir:(d)=>void, chercher:()=>string}} o
  */
@@ -172,7 +173,7 @@ export function tableauPlongees(dives, o) {
           el('button.lien-texte.tp-aucun', { type: 'button', text: 'Tout effacer', onclick: () => { etat.filtres = {}; changer(); } })) : null),
       el('div.tp-resume', { text: `${vis.length} plongée${vis.length > 1 ? 's' : ''}${vis.length !== lignes.length ? ` sur ${lignes.length}` : ''}`
         + (vis.length ? ` · ${Math.floor(minutes / 60)} h ${String(minutes % 60).padStart(2, '0')} sous l’eau · max ${prof} m · moy. ${moy.toFixed(1).replace('.', ',')} m` : '') }),
-      vis.length ? el('div.va-table.tp-table', {}, el('table', {},
+      o.liste ? o.liste(vis.map(l => l.d)) : vis.length ? el('div.va-table.tp-table', {}, el('table', {},
         el('thead', {}, el('tr', {}, ...COLONNES.map(col => el(`th.${col.cls || 'txt'}${etat.tri.col === col.id ? '.trie' : ''}`, {
           onclick: () => { etat.tri = { col: col.id, sens: etat.tri.col === col.id ? -etat.tri.sens : (col.id === 'date' || col.id === 'prof' || col.id === 'duree' || col.id === 'numero' ? -1 : 1) }; changer(); },
           text: col.titre + (etat.tri.col === col.id ? (etat.tri.sens > 0 ? ' ▲' : ' ▼') : '') })))),

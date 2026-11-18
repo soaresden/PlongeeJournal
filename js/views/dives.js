@@ -408,12 +408,12 @@ export async function divesView() {
     return { drapeau: sj.pays ? drapeau(sj.pays) : '📍', pays: sj.pays ? nomPays(sj.pays) : '', lieu, periode };
   };
 
-  function listeParAnnee(elements, { etat, fabrique, mot }) {
+  function listeParAnnee(elements, { etat, fabrique, mot, filtre = false }) {
     const q = search.value.trim().toLowerCase();
     const shown = elements.filter(d => matches(d, q));
     const box = el('div.dive-list');
     if (!shown.length) {
-      box.append(el('div.empty', { text: elements.length ? 'Rien ne correspond.' : `Aucune ${mot} pour l’instant.` }));
+      box.append(el('div.empty', { text: elements.length || filtre ? 'Rien ne correspond.' : `Aucune ${mot} pour l’instant.` }));
       return box;
     }
     const parAnnee = new Map();
@@ -428,7 +428,7 @@ export async function divesView() {
       // Repliée : les pays de l'année, en drapeaux, avec le nombre de plongées.
       const parPays = new Map();
       if (mot === 'plongée') lot.forEach(d => { const c = paysPlongee(d); if (c) parPays.set(c, (parPays.get(c) || 0) + 1); });
-      const ouvert = q ? true : etat.ouvertes.has(y);
+      const ouvert = q || filtre ? true : etat.ouvertes.has(y);
       const heures = Math.round(lot.reduce((t, d) => t + (Number(d.dureeMin) || 0), 0) / 60);
 
       const groupe = el('details.annee-groupe', { open: ouvert },
@@ -461,7 +461,7 @@ export async function divesView() {
       if (ouvert) remplir();
       groupe.addEventListener('toggle', () => {
         if (groupe.open) remplir();
-        if (q) return;
+        if (q || filtre) return;
         if (groupe.open) etat.ouvertes.add(y); else etat.ouvertes.delete(y);
         garder(etat.cle, JSON.stringify([...etat.ouvertes]));
       });
@@ -495,7 +495,11 @@ export async function divesView() {
     } else if (discipline === 'fosses') {
       contenu.append(listeParAnnee(fosses, { etat: etats.fosses, fabrique: carteFosse, mot: 'fosse' }));
     } else {
-      contenu.append(listeParAnnee(dives, { etat: etats.plongees, fabrique: carte, mot: 'plongée' }));
+      // Les mêmes chips de filtre que le tableau, au-dessus de la liste par année.
+      const { tableauPlongees } = await import('./dives-tableau.js');
+      contenu.append(tableauPlongees(dives, { pays: paysPlongee, drapeau, nomPays, buddyName, aDesVideos,
+        ouvrir: d => apercuPlongee(d.id, { onClose: rafraichir }), chercher: () => search.value,
+        liste: ds => listeParAnnee(ds, { etat: etats.plongees, fabrique: carte, mot: 'plongée', filtre: ds.length !== dives.length }) }));
     }
     if (garderScroll && vueEl) vueEl.scrollTop = y;
   }
