@@ -122,7 +122,7 @@ export function bilanCorps(dives, { maintenant = Date.now(), jours = 7 } = {}) {
 
   for (const x of liste) {
     surface(Math.max(t, x.debut));
-    const fo2 = fo2De(x.d), fn2 = 1 - fo2, douce = x.d.eau === 'douce';
+    const fo2 = fo2De(x.d), fn2 = 1 - fo2, douce = x.d.eau === 'douce' || x.d.eau === 'piscine';
     const pts = x.profil.points;
     let pic = 0, otuPlongee = 0;
     let finS = pts[pts.length - 1][0];
@@ -371,7 +371,7 @@ export const niveauDe = pct => (pct >= 85 ? 'rouge' : pct >= 50 ? 'orange' : 've
 export function risques(b, { maintenant = b.fin } = {}) {
   const m = b.maintenant;
   const recentes = b.plongees.filter(p => p.fin > maintenant - 48 * 36e5);
-  const pp = p => pAmb(p.prof, p.d.eau === 'douce');
+  const pp = p => pAmb(p.prof, p.d.eau === 'douce' || p.d.eau === 'piscine');
   const plusProfonde = recentes.reduce((x, p) => (!x || pp(p) * (1 - p.fo2) > pp(x) * (1 - x.fo2) ? p : x), null);
   const plusO2 = recentes.reduce((x, p) => (!x || pp(p) * p.fo2 > pp(x) * x.fo2 ? p : x), null);
   const picAzote = recentes.reduce((x, p) => (!x || p.pic > x.pic ? p : x), null);

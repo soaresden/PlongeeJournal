@@ -99,7 +99,7 @@ export function emptyDive(diverId, numero) {
     lieuNom: '',          // ce que l'utilisateur a cherché : "Lac de Beaumont-sur-Oise"
     lieuDetail: '',       // adresse complète renvoyée par la recherche
     lat: null, lng: null, // point cliqué dans l'eau
-    eau: '',              // 'douce' | 'salee'
+    eau: '',              // 'douce' | 'salee' | 'piscine' (fosse, TODI, Nemo 33…)
     site: '',             // nom du site précis / point de mise à l'eau
     centreNom: '',        // le centre ou club avec qui on a plongé
     centreAdresse: '',
@@ -420,11 +420,12 @@ export function pmuNitrox(o2, ppo2 = 1.4) {
   return Math.floor(Number((((ppo2 / f) - 1) * 10).toFixed(6)));
 }
 
-/** Devine eau douce / eau salée à partir du libellé du lieu. Toujours modifiable à la main. */
+/** Devine eau douce / eau salée / piscine à partir du libellé du lieu. Toujours modifiable à la main. */
 export function guessWater(label = '') {
   const s = label.toLowerCase();
+  if (/(^|[^a-zà-ÿ])(piscine|fosse|todi|nemo ?33|blue abyss|y-40|deepspot)s?($|[^a-zà-ÿ])/.test(s)) return 'piscine';
   const douce = ['lac', 'étang', 'etang', 'carrière', 'carriere', 'gravière', 'graviere',
-                 'rivière', 'riviere', 'fleuve', 'barrage', 'retenue', 'fosse', 'piscine',
+                 'rivière', 'riviere', 'fleuve', 'barrage', 'retenue',
                  'source', 'canal', "plan d'eau", 'réservoir', 'reservoir', 'ballastière', 'ballastiere'];
   const salee = ['mer', 'méditerranée', 'mediterranee', 'atlantique', 'manche', 'océan', 'ocean',
                  'baie', 'calanque', 'plage', 'port', 'crique', 'cap ', 'île', 'ile ', 'golfe',
@@ -520,6 +521,7 @@ export function computeStats(list, certifications = []) {
     nuit: list.filter(d => (d.type || '').toLowerCase().includes('nuit')).length,
     salee: list.filter(d => d.eau === 'salee').length,
     douce: list.filter(d => d.eau === 'douce').length,
+    piscine: list.filter(d => d.eau === 'piscine').length,
     lastDate: list.map(d => d.date).filter(Boolean).sort().pop() || null,
     byType, buddyCount, years,
     niveau: niveauCourant(list, certifications),

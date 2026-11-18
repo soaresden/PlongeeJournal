@@ -91,7 +91,7 @@ export function incoherences(d) {
   const m = mois ? Number(mois) : null;
   // Hiver de l'hémisphère du lieu (nord par défaut).
   const hiver = m != null && (lat != null && lat < 0 ? [5, 6, 7, 8, 9].includes(m) : [11, 12, 1, 2, 3, 4].includes(m));
-  const fosse = (d.options || []).includes('Plongée en fosse') || /fosse|piscine|nemo|todi|y-?40/i.test(`${d.lieuNom} ${d.site}`);
+  const fosse = d.eau === 'piscine' || (d.options || []).includes('Plongée en fosse') || /fosse|piscine|nemo|todi|y-?40/i.test(`${d.lieuNom} ${d.site}`);
 
   if (t && lat != null && !fosse) {
     if (Math.abs(lat) > 43 && hiver && t.min >= 18) {
@@ -111,7 +111,8 @@ export function incoherences(d) {
   const devine = guessWater(nom);
   // Pas quand l'eau vient du point GPS (plus sûr que le nom) ou d'un choix à la main.
   if (d.eau && devine && devine !== d.eau && !d.eauManuelle && !d.eauAuto) {
-    out.push({ code: 'eau', texte: `Noté « eau ${d.eau === 'douce' ? 'douce' : 'salée'} », mais « ${String(d.lieuNom || d.site).trim()} » fait penser à de l’eau ${devine === 'douce' ? 'douce' : 'salée'}.` });
+    const nomEau = e => (e === 'douce' ? 'eau douce' : e === 'piscine' ? 'piscine' : 'eau salée');
+    out.push({ code: 'eau', devine, texte: `Noté « ${nomEau(d.eau)} », mais « ${String(d.lieuNom || d.site).trim()} » fait penser à : ${nomEau(devine)}.` });
   }
   return out;
 }

@@ -37,7 +37,9 @@ check('incohérence : 23 °C dans un lac du nord en mars', inc.some(i => i.code 
 check('incohérence : rien à redire en Égypte', V.incoherences({ ...m48, lat: 27.2, lng: 33.9, eau: 'salee', lieuNom: 'Hurghada' }).length === 0);
 check('incohérence : l’été au nord, 23 °C, ça passe', V.incoherences({ ...m48, date: '2025-08-10' }).length === 0);
 check('incohérence : 16 °C sous les tropiques', V.incoherences({ lat: 14.7, lng: -61, date: '2026-03-30', samples: courbe(16) }).some(i => i.code === 'froid'));
-check('incohérence : une fosse chauffée ne compte pas', V.incoherences({ ...m48, lieuNom: 'Fosse Nemo 33' }).length === 0);
+check('incohérence : une fosse chauffée ne compte pas', !V.incoherences({ ...m48, lieuNom: 'Fosse Nemo 33' }).some(i => i.code === 'chaud'));
+check('incohérence : Nemo 33 noté en eau douce → piscine proposée', V.incoherences({ ...m48, lieuNom: 'Fosse Nemo 33' }).some(i => i.code === 'eau' && i.devine === 'piscine'));
+check('piscine : TODI, Nemo 33, fosse', M.guessWater('TODI') === 'piscine' && M.guessWater('Nemo 33') === 'piscine' && M.guessWater('Fosse de Villeneuve') === 'piscine' && M.guessWater('Lac de Beaumont') === 'douce');
 check('incohérence : eau douce aux Açores', V.incoherences({ lieuNom: 'oceaneye acores', eau: 'douce' }).some(i => i.code === 'eau'));
 check('incohérence : sauf si l’eau vient du GPS', V.incoherences({ lieuNom: 'oceaneye acores', eau: 'douce', eauAuto: true }).length === 0);
 check('nom du lieu : « Ravaillac » n’est pas un lac', M.guessWater('Port de Ravaillac - Cherbourg') === 'salee' && M.guessWater('Lac de Beaumont') === 'douce');

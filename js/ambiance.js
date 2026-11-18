@@ -30,6 +30,7 @@ const entre = (v, a, b) => v >= a && v <= b;
 export function ambianceId(d = {}) {
   const lieu = `${d.lieuNom || ''} ${d.site || ''}`.toLowerCase();
   if ((d.options || []).includes('Plongée en fosse') || /\bfosse\b/.test(lieu)) return 'fosse';
+  if (d.eau === 'piscine') return 'fosse';
   if (d.eau === 'douce') return 'douce';
 
   const { lat, lng } = d;

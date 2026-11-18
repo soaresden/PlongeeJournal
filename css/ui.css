@@ -1384,3 +1384,21 @@ tr.va-vide td { color: var(--text-mute); }
 }
 .tp-plier { display: flex; align-items: baseline; gap: 8px; background: none; border: 0; padding: 2px 0 6px; color: var(--text); font-weight: 650; font-size: 13px; cursor: pointer; text-align: left; }
 .tp-plier small { font-weight: 400; color: var(--text-mute); font-size: 12px; }
+.tp-boutons { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.tp-deroulant { position: relative; }
+.tp-deroulant > .chip { padding: 5px 11px; font-size: 13px; }
+.tp-liste { position: absolute; z-index: 20; top: calc(100% + 6px); left: 0; width: max-content; max-width: min(460px, 90vw);
+  display: flex; flex-wrap: wrap; gap: 5px; padding: 10px; border-radius: var(--radius-sm); border: 1px solid var(--line);
+  background: var(--surface); box-shadow: var(--shadow); }
+.tp-liste .chip { padding: 4px 9px; font-size: 12.5px; }
+.tp-liste .chip small, .tp-deroulant > .chip small { opacity: .7; font-size: 11px; }
+.tp-liste .chip.tp-vide { opacity: .4; }
+.tp-actifs { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+.tp-actifs .chip { padding: 3px 4px 3px 10px; font-size: 12px; }
+.tp-aucun { font-size: 12px; color: var(--accent); }
+@media (max-width: 700px) {
+  .tp-filtres { position: relative; }
+  .tp-deroulant { position: static; }
+  .tp-liste { left: 0; right: 0; width: auto; max-width: none; top: auto; margin-top: 6px; }
+}
+.tp-raccourci { border-style: dashed; }

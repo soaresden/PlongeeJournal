@@ -121,9 +121,9 @@ export function alertesFiche(d, toutes, { lecture = false, rafraichir = () => {}
     el('div', { style: { fontWeight: '650', marginBottom: '6px' }, text: '⚠ À vérifier' }),
     ...inc.map(i => el('div.alerte-ligne', {}, el('span', { text: i.texte }),
       lecture ? null : i.code === 'eau'
-        ? el('button.btn.sm', { type: 'button', text: `Passer en eau ${d.eau === 'douce' ? 'salée' : 'douce'}`, onclick: async () => {
+        ? el('button.btn.sm', { type: 'button', text: `Passer en ${{ douce: 'eau douce', salee: 'eau salée', piscine: 'piscine' }[i.devine] || 'eau douce'}`, onclick: async () => {
             const x = await store.getDive(d.id);
-            Object.assign(x, { eau: d.eau === 'douce' ? 'salee' : 'douce', eauManuelle: true });
+            Object.assign(x, { eau: i.devine || (d.eau === 'douce' ? 'salee' : 'douce'), eauManuelle: true });
             await store.saveDive(x); toast('Corrigé'); rafraichir();
           } })
         : el('button.btn.sm.ghost', { type: 'button', text: 'Corriger la fiche', onclick: () => navigate(`dive/${d.id}/edit`) }))),

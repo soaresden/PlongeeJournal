@@ -88,6 +88,7 @@ export async function statsView() {
     tuile(st.nuit, 'de nuit', () => montrer('Plongées de nuit', nuit), fois(nuit)),
     tuile(st.salee, 'en mer', () => montrer('En mer', d => d.eau === 'salee'), fois(d => d.eau === 'salee')),
     tuile(st.douce, 'en eau douce', () => montrer('En eau douce', d => d.eau === 'douce'), fois(d => d.eau === 'douce')),
+    st.piscine ? tuile(st.piscine, 'en piscine', () => montrer('En piscine', d => d.eau === 'piscine'), fois(d => d.eau === 'piscine')) : null,
   );
   const impact = derniere ? el('div.stats-impact.plein', {},
     el('span', { text: '✨' }),

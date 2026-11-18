@@ -726,14 +726,14 @@ export async function diveFormView({ id, ancienne = false }) {
     waterSeg.innerHTML = '';
     if (dive.lat != null && dive.eau && !dive.eauManuelle && !corriger) {
       waterSeg.append(el('div.eau-auto', {},
-        el('b', { text: dive.eau === 'douce' ? '💧 Eau douce' : '🌊 Eau salée' }),
+        el('b', { text: dive.eau === 'douce' ? '💧 Eau douce' : dive.eau === 'piscine' ? '🏊 Piscine' : '🌊 Eau salée' }),
         el('span.badge', { text: '✨ d’après le point GPS' }),
         el('button.btn.sm.ghost', { type: 'button', text: 'Corriger',
           onclick: () => { corriger = true; renderWater(); } })));
       return;
     }
     waterSeg.append(segmented(
-      [{ id: 'douce', label: 'Eau douce' }, { id: 'salee', label: 'Eau salée' }],
+      [{ id: 'salee', label: '🌊 Eau salée' }, { id: 'douce', label: '💧 Eau douce' }, { id: 'piscine', label: '🏊 Piscine' }],
       dive.eau, v => { set({ eau: v }); dive.eauManuelle = true; majOptionsAuto(); }));
     if (dive.eauManuelle && dive.lat != null) {
       waterSeg.append(el('button.btn.sm.ghost', { type: 'button', style: { marginTop: '6px' },
@@ -765,7 +765,7 @@ export async function diveFormView({ id, ancienne = false }) {
 
       set({ altitude: info.altitude, indiceEau: '' });
 
-      if (info.eau && !dive.eauManuelle) set({ eau: info.eau, eauAuto: true });
+      if (info.eau && !dive.eauManuelle && dive.eau !== 'piscine') set({ eau: info.eau, eauAuto: true });
       renderWater();
 
       const bouts = [];

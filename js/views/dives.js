@@ -726,7 +726,7 @@ export async function diveView({ id }) {
     d.courant ? `${COURANTS.find(c => c.id === d.courant)?.icone || ''} courant ${String(picto(COURANTS, d.courant) || '').replace(/^\S+\s*/, '').toLowerCase()}`.trim() : null,
     d.tempAir != null ? `🌡 air ${d.tempAir} °C` : null,
     d.tempSurface != null ? `🌊 surface ${d.tempSurface} °C` : null,
-    d.eau ? (d.eau === 'salee' ? '🧂 eau salée' : '💧 eau douce') : null,
+    d.eau ? (d.eau === 'salee' ? '🧂 eau salée' : d.eau === 'piscine' ? '🏊 piscine' : '💧 eau douce') : null,
   ].filter(Boolean);
   if (conditions.length) {
     wrap.append(el('div.section', {}, el('h2', { text: 'Conditions' }),

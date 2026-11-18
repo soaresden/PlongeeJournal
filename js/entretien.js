@@ -118,7 +118,7 @@ export async function entretenir({ analyser = null, nommer = null, visites: reli
     try { info = await a(d0.lat, d0.lng); } catch { /* service indisponible */ }
     if (info?.horsLigne) break;
     const d = await store.getDive(d0.id);
-    if (!d || d.eauManuelle) continue;
+    if (!d || d.eauManuelle || d.eau === 'piscine') continue;
     if (info?.eau) {
       Object.assign(d, { eau: info.eau, eauAuto: true });
       if (info.altitude != null) d.altitude = info.altitude;

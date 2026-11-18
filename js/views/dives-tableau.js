@@ -13,7 +13,7 @@ const garder = v => { try { localStorage.setItem(CLE, JSON.stringify(v)); } catc
 
 const typeCourt = t => {
   const s = String(t || '').toLowerCase();
-  return s.includes('nuit') ? '🌙 Nuit' : s.includes('enseign') ? '🎓 Enseignement' : s.includes('explo') ? '☀️ Explo' : t ? t : '—';
+  return s.includes('enseign') ? '🎓 Enseignement' : s.includes('nuit') ? '🌙 Explo de nuit' : s.includes('explo') ? '☀️ Explo de jour' : t ? t : '—';
 };
 
 /**
@@ -28,7 +28,7 @@ export function tableauPlongees(dives, o) {
     return { d, annee: (d.date || '').slice(0, 4), pays, type: typeCourt(d.type), niveau: d.niveau || '',
       gaz: d.gazType === 'nitrox' ? `Nitrox${d.gazO2 ? ` ${d.gazO2}` : ''}` : d.gazType === 'trimix' ? 'Trimix' : 'Air',
       gazGroupe: d.gazType === 'nitrox' ? 'Nitrox' : d.gazType === 'trimix' ? 'Trimix' : 'Air',
-      eau: d.eau === 'douce' ? 'Douce' : d.eau === 'salee' ? 'Salée' : '',
+      eau: d.eau === 'douce' ? 'Douce' : d.eau === 'salee' ? 'Salée' : d.eau === 'piscine' ? 'Piscine' : '',
       video: o.aDesVideos(d) ? 'Avec vidéos' : 'Sans vidéo',
       palanquee: (d.buddyIds || []).map(o.buddyName).filter(Boolean).join(', ') };
   });
@@ -37,10 +37,10 @@ export function tableauPlongees(dives, o) {
   const GROUPES = [
     { id: 'annee', titre: 'Année', val: l => l.annee, ordre: (a, b) => b.localeCompare(a) },
     { id: 'pays', titre: 'Pays', val: l => l.pays || '', libelle: c => (c ? `${o.drapeau(c)} ${o.nomPays(c)}` : '📍 ?') },
-    { id: 'type', titre: 'Type', val: l => l.type },
+    { id: 'type', titre: 'Type', val: l => l.type, raccourcis: [{ texte: '🤿 Explo (jour + nuit)', valeurs: ['☀️ Explo de jour', '🌙 Explo de nuit'] }] },
     { id: 'niveau', titre: 'Niveau', val: l => l.niveau, libelle: v => v || 'sans' },
     { id: 'gaz', titre: 'Gaz', val: l => l.gazGroupe },
-    { id: 'eau', titre: 'Eau', val: l => l.eau, libelle: v => (v === 'Douce' ? '💧 Douce' : v === 'Salée' ? '🌊 Salée' : '?') },
+    { id: 'eau', titre: 'Eau', val: l => l.eau, libelle: v => (v === 'Douce' ? '💧 Douce' : v === 'Salée' ? '🌊 Salée' : v === 'Piscine' ? '🏊 Piscine' : '?') },
     { id: 'video', titre: 'Vidéos', val: l => l.video, libelle: v => (v === 'Avec vidéos' ? '🎬 Avec' : '🚫 Sans') },
   ];
   const COLONNES = [
@@ -97,55 +97,79 @@ export function tableauPlongees(dives, o) {
     rendre();
   };
 
-  let ouverts = (() => { try { const v = localStorage.getItem(CLE + ':ouverts'); return v == null ? innerWidth > 700 : v === '1'; } catch { return true; } })();
+  let ouvert = null;     // le groupe dont la liste est ouverte
+  const fermer = e => { if (ouvert && !e.target.closest('.tp-deroulant')) { ouvert = null; rendre(); } };
+  document.addEventListener('pointerdown', fermer);
+  const appliquerVue = v => { etat.filtres = { ...v.filtres }; etat.tri = { ...(v.tri || etat.tri) }; ouvert = null; changer(); };
   function rendre() {
+    if (!zone.isConnected && zone.dejaRendu) { document.removeEventListener('pointerdown', fermer); return; }
+    zone.dejaRendu = true;
     const avantFiltre = lignes.filter(cherche);
     const vis = avantFiltre.filter(garde);
     const c = COLONNES.find(x => x.id === etat.tri.col) || COLONNES[1];
     vis.sort((a, b) => { const x = c.val(a), y = c.val(b); return (x < y ? -1 : x > y ? 1 : 0) * etat.tri.sens; });
     const actifs = GROUPES.filter(g => etat.filtres[g.id]?.length).length;
+    const nom = (g, v) => (g.libelle ? g.libelle(v) : v) || '—';
+    const basculer = (g, v) => {
+      const s = new Set(etat.filtres[g.id] || []);
+      s.has(v) ? s.delete(v) : s.add(v);
+      etat.filtres = { ...etat.filtres, [g.id]: [...s] };
+      changer();
+    };
 
-    const chipsGroupe = g => {
-      // Le nombre de plongées de chaque valeur, avec les AUTRES filtres appliqués.
+    // Un bouton par groupe ; il ouvre sa liste de chips (avec le nombre de
+    // plongées de chaque valeur, les AUTRES filtres appliqués).
+    const deroulant = g => {
       const autres = avantFiltre.filter(l => GROUPES.every(h => h === g || !etat.filtres[h.id]?.length || etat.filtres[h.id].includes(h.val(l))));
       const n = new Map();
       lignes.forEach(l => n.set(g.val(l), 0));
       autres.forEach(l => n.set(g.val(l), (n.get(g.val(l)) || 0) + 1));
       const valeurs = [...n.keys()].sort(g.ordre || ((a, b) => (n.get(b) - n.get(a)) || String(a).localeCompare(String(b))));
-      if (valeurs.length < 2 && !etat.filtres[g.id]?.length) return null;
       const choisis = etat.filtres[g.id] || [];
-      return el('div.tp-groupe', {},
-        el('span.tp-titre', { text: g.titre }),
-        ...valeurs.map(v => el(`button.chip${choisis.includes(v) ? '.solid' : ''}${n.get(v) ? '' : '.tp-vide'}`, { type: 'button',
-          onclick: () => {
-            const s = new Set(choisis);
-            s.has(v) ? s.delete(v) : s.add(v);
-            etat.filtres = { ...etat.filtres, [g.id]: [...s] };
-            changer();
-          } }, (g.libelle ? g.libelle(v) : v) || '—', el('small', { text: ` ${n.get(v)}` }))));
+      if (valeurs.length < 2 && !choisis.length) return null;
+      const estOuvert = ouvert === g.id;
+      return el(`div.tp-deroulant${estOuvert ? '.ouvert' : ''}`, {},
+        el(`button.chip${choisis.length ? '.solid' : ''}`, { type: 'button', onclick: () => { ouvert = estOuvert ? null : g.id; rendre(); } },
+          g.titre, choisis.length ? el('small', { text: ` ${choisis.length}` }) : null, ' ▾'),
+        estOuvert ? el('div.tp-liste', {},
+          ...(g.raccourcis || []).map(r => {
+            const tous = r.valeurs.every(v => choisis.includes(v));
+            return el(`button.chip.tp-raccourci${tous ? '.solid' : ''}`, { type: 'button', text: r.texte, onclick: () => {
+              const s = new Set(choisis);
+              r.valeurs.forEach(v => (tous ? s.delete(v) : s.add(v)));
+              etat.filtres = { ...etat.filtres, [g.id]: [...s] };
+              changer();
+            } });
+          }),
+          ...valeurs.map(v => el(`button.chip${choisis.includes(v) ? '.solid' : ''}${n.get(v) ? '' : '.tp-vide'}`, { type: 'button', onclick: () => basculer(g, v) },
+            nom(g, v), el('small', { text: ` ${n.get(v)}` }))),
+          choisis.length ? el('button.lien-texte.tp-aucun', { type: 'button', text: 'Effacer', onclick: () => { etat.filtres = { ...etat.filtres, [g.id]: [] }; changer(); } }) : null) : null);
+    };
+    const deroulantVues = () => {
+      if (!vues.length && !actifs) return null;
+      const estOuvert = ouvert === 'vues';
+      return el(`div.tp-deroulant${estOuvert ? '.ouvert' : ''}`, {},
+        el('button.chip', { type: 'button', onclick: () => { ouvert = estOuvert ? null : 'vues'; rendre(); } }, `⭐ Mes vues${vues.length ? ` ${vues.length}` : ''} ▾`),
+        estOuvert ? el('div.tp-liste', {},
+          ...vues.map(v => el('span.chip.tp-vue', {},
+            el('button.lien-texte', { type: 'button', text: v.nom, onclick: () => appliquerVue(v) }),
+            el('button.x', { type: 'button', text: '×', title: 'Oublier cette vue', onclick: () => oublierVue(v.nom) }))),
+          actifs ? el('button.chip', { type: 'button', text: '💾 Enregistrer les filtres', onclick: () => { ouvert = null; enregistrerVue(); } }) : null,
+          !vues.length && !actifs ? el('span.hint', { text: 'Choisis des filtres, puis enregistre-les ici.' }) : null) : null);
     };
 
     const prof = Math.max(0, ...vis.map(l => Number(l.d.profMax) || 0));
     const minutes = vis.reduce((t, l) => t + (Number(l.d.dureeMin) || 0), 0);
     const moy = vis.length ? vis.reduce((t, l) => t + (Number(l.d.profMax) || 0), 0) / vis.length : 0;
 
-    const resumeFiltres = GROUPES.filter(g => etat.filtres[g.id]?.length)
-      .map(g => etat.filtres[g.id].map(v => (g.libelle ? g.libelle(v) : v) || '—').join(' ou ')).join(' · ');
     zone.replaceChildren(...[
-      el('button.tp-plier', { type: 'button', onclick: () => { ouverts = !ouverts; try { localStorage.setItem(CLE + ':ouverts', ouverts ? '1' : '0'); } catch { /* privé */ } rendre(); } },
-        el('span', { text: `${ouverts ? '▾' : '▸'} Filtres` }),
-        el('small', { text: resumeFiltres || 'aucun : tout le carnet' })),
-      !ouverts ? null : el('div.tp-filtres', {},
-        vues.length || actifs ? el('div.tp-groupe.tp-vues', {},
-          el('span.tp-titre', { text: 'Mes vues' }),
-          ...vues.map(v => el('span.chip.tp-vue', {},
-            el('button.lien-texte', { type: 'button', text: `⭐ ${v.nom}`, onclick: () => { etat.filtres = { ...v.filtres }; etat.tri = { ...(v.tri || etat.tri) }; changer(); } }),
-            el('button.x', { type: 'button', text: '×', title: 'Oublier cette vue', onclick: () => oublierVue(v.nom) }))),
-          actifs ? el('button.chip', { type: 'button', text: '💾 Enregistrer cette vue', onclick: enregistrerVue }) : null,
-          actifs ? el('button.chip', { type: 'button', text: '✕ Tout effacer', onclick: () => { etat.filtres = {}; changer(); } }) : null) : null,
-        ...GROUPES.map(chipsGroupe)),
-      !ouverts && vues.length ? el('div.tp-groupe.tp-vues', {}, ...vues.map(v => el('button.chip', { type: 'button', text: `⭐ ${v.nom}`,
-        onclick: () => { etat.filtres = { ...v.filtres }; etat.tri = { ...(v.tri || etat.tri) }; changer(); } }))) : null,
+      el('div.tp-filtres', {},
+        el('div.tp-boutons', {}, ...GROUPES.map(deroulant).filter(Boolean), deroulantVues()),
+        actifs ? el('div.tp-actifs', {},
+          ...GROUPES.flatMap(g => (etat.filtres[g.id] || []).map(v => el('span.chip.solid.tp-vue', {},
+            el('span', { text: nom(g, v) }),
+            el('button.x', { type: 'button', text: '×', title: 'Retirer ce filtre', onclick: () => basculer(g, v) })))),
+          el('button.lien-texte.tp-aucun', { type: 'button', text: 'Tout effacer', onclick: () => { etat.filtres = {}; changer(); } })) : null),
       el('div.tp-resume', { text: `${vis.length} plongée${vis.length > 1 ? 's' : ''}${vis.length !== lignes.length ? ` sur ${lignes.length}` : ''}`
         + (vis.length ? ` · ${Math.floor(minutes / 60)} h ${String(minutes % 60).padStart(2, '0')} sous l’eau · max ${prof} m · moy. ${moy.toFixed(1).replace('.', ',')} m` : '') }),
       vis.length ? el('div.va-table.tp-table', {}, el('table', {},
