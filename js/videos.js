@@ -431,5 +431,26 @@ export async function urlLecture(cfg, fichier, { http = null } = {}) {
   return `https://${j.hosts[0]}${j.path}`;
 }
 
+/** L'adresse du fichier original (à télécharger, ou à donner à un autre lecteur). */
+export async function urlTelechargement(cfg, fichier, { http = null } = {}) {
+  const j = await appeler(cfg, 'getpublinkdownload', { fileid: fichier.fileid }, http || await httpParDefaut());
+  if (!j.hosts?.length) throw new Error('Lien de téléchargement indisponible');
+  return `https://${j.hosts[0]}${j.path}`;
+}
+
+/**
+ * L'image est-elle figée alors que le son avance ? (4K en H.265 trop lourd
+ * pour le lecteur de l'appli). Mesuré après quelques secondes de lecture.
+ */
+export function imageFigee(video) {
+  if (!video || video.paused || video.currentTime < 2) return false;
+  if (!video.videoWidth) return true;
+  const q = video.getVideoPlaybackQuality?.();
+  if (!q) return false;
+  const vues = q.totalVideoFrames - q.droppedVideoFrames;
+  // Moins de 2 images par seconde réellement affichées : c'est figé.
+  return vues < Math.max(4, video.currentTime * 2);
+}
+
 /** Le dossier dans le site de pCloud. */
 export const lienDossier = (cfg, folderid) => `${cfg.lien.split('#')[0]}#folder=${folderid}`;

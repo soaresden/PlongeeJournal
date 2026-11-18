@@ -1402,3 +1402,21 @@ tr.va-vide td { color: var(--text-mute); }
   .tp-liste { left: 0; right: 0; width: auto; max-width: none; top: auto; margin-top: 6px; }
 }
 .tp-raccourci { border-style: dashed; }
+/* Tableau : la bouteille du gaz, et des colonnes en moins quand c'est étroit (portrait) */
+.tp-gaz { display: inline-flex; align-items: center; gap: 4px; }
+.tp-gaz svg { flex: none; display: block; }
+.tp-gaz span { font-variant-numeric: tabular-nums; font-size: 12px; }
+.tp-table .court { display: none; }
+/* D'après la largeur du tableau lui-même (menu latéral ou non, portrait ou paysage) */
+.tp-table { container-type: inline-size; }
+.tp-table td.pal { max-width: 150px; }
+@container (max-width: 940px) { .tp-table .cache-m { display: none; } }
+@container (max-width: 700px) {
+  .tp-table .cache-s { display: none; }
+  .tp-table .long { display: none; }
+  .tp-table .court { display: inline; }
+  .tp-table table { font-size: 11.5px; }
+  .tp-table td, .tp-table th { padding: 6px 4px; }
+  .tp-table td.lieu { max-width: none; white-space: normal; overflow-wrap: anywhere; line-height: 1.25; }
+}
+.video-figee { margin-top: 8px; padding: 8px 10px; border-radius: var(--radius-sm); background: rgba(226, 131, 67, .15); border: 1px solid #e28343; font-size: 13px; }

@@ -6,7 +6,7 @@
 import { el, toast, openModal, fmtDate } from '../lib.js';
 import { store, typeSeance } from '../store.js';
 import { lirePublink, chargerDossiers, videosDePlongee, urlMiniature, urlLecture, lienDossier,
-         dossiersLies, avecDossier, sansDossier, fichiersEnCache, luA } from '../videos.js';
+         dossiersLies, avecDossier, sansDossier, fichiersEnCache, luA, urlTelechargement, imageFigee } from '../videos.js';
 import { onglets } from '../onglets.js';
 
 /** Le lien enregistré dans les réglages, prêt pour l'API. */
@@ -108,6 +108,47 @@ export async function carteVideosReglages() {
 //  Lecteur
 // ------------------------------------------------------------
 
+const taille = o => (o >= 1e9 ? `${(o / 1e9).toFixed(1).replace('.', ',')} Go` : `${Math.max(1, Math.round(o / 1e6))} Mo`);
+
+/**
+ * Le fichier original dans un vrai lecteur de l'appareil (VLC, Galerie…) :
+ * dans l'APK, téléchargé dans le cache de l'appli (une seule vidéo gardée)
+ * puis proposé à Android ; sur le site, le lien de téléchargement.
+ */
+async function ouvrirAvecUnLecteur(cfg, f, signaler = () => {}) {
+  const { modulesNatifs } = await import('../maj-apk.js');
+  const url = await urlTelechargement(cfg, f);
+  const natif = modulesNatifs();
+  if (!natif) { window.open(url, '_blank', 'noopener'); return; }
+  const ext = (/\.[a-z0-9]{2,4}$/i.exec(f.nom)?.[0] || '.mp4').toLowerCase();
+  const nom = `video-${f.fileid}${ext}`;
+  try {
+    const l = await natif.fs.readdir({ path: '', directory: 'CACHE' });
+    for (const x of l.files || []) {
+      const n = typeof x === 'string' ? x : x.name;
+      if (/^video-\d+\./.test(n) && n !== nom) await natif.fs.deleteFile({ path: n, directory: 'CACHE' }).catch(() => {});
+    }
+  } catch { /* rien à ranger */ }
+  let chemin = null;
+  try {
+    const st = await natif.fs.stat({ path: nom, directory: 'CACHE' });
+    if (f.taille && Number(st.size) === Number(f.taille)) chemin = (await natif.fs.getUri({ path: nom, directory: 'CACHE' })).uri.replace(/^file:\/\//, '');
+  } catch { /* pas encore là */ }
+  if (!chemin) {
+    const ecoute = await natif.fs.addListener?.('progress', ev => {
+      if (ev?.url && ev.url !== url) return;
+      signaler(ev?.contentLength ? `Téléchargement… ${Math.round(ev.bytes * 100 / ev.contentLength)} %` : `Téléchargement… ${taille(ev?.bytes || 0)}`);
+    });
+    try {
+      signaler('Téléchargement…');
+      const r = await natif.fs.downloadFile({ url, path: nom, directory: 'CACHE', progress: true, connectTimeout: 30000, readTimeout: 300000 });
+      chemin = r.path;
+    } finally { try { await ecoute?.remove?.(); } catch { /* déjà retiré */ } }
+  }
+  signaler('Choisis un lecteur (VLC, Galerie…)');
+  await natif.opener.open({ filePath: chemin, contentType: /\.mov$/i.test(f.nom) ? 'video/quicktime' : 'video/mp4', openWithDefault: false });
+}
+
 function lire(cfg, fichiers, i) {
   openModal(close => {
     const zone = el('div.video-zone');
@@ -122,12 +163,32 @@ function lire(cfg, fichiers, i) {
       bulle.classList.add(d > 0 ? 'droite' : 'gauche');
       zone.append(bulle); setTimeout(() => bulle.remove(), 600);
     };
+    const alerte = el('div.video-figee', { hidden: true });
+    const etatLecteur = el('span.hint', { style: { margin: 0 } });
+    const autreLecteur = el('button.btn.sm', { type: 'button', text: '📲 Ouvrir avec un lecteur de la tablette', onclick: async () => {
+      const f = fichiers[courant];
+      // Gros fichier : un 2e toucher pour confirmer (il sera téléchargé sur l'appareil).
+      if (f.taille > 5e8 && window.Capacitor?.isNativePlatform?.() && autreLecteur.dataset.ok !== String(f.fileid)) {
+        autreLecteur.dataset.ok = String(f.fileid);
+        autreLecteur.textContent = `⬇ Télécharger ${taille(f.taille)} sur la tablette, puis ouvrir ?`;
+        etatLecteur.textContent = 'Touche encore pour confirmer.';
+        return;
+      }
+      autreLecteur.textContent = '📲 Ouvrir avec un lecteur de la tablette';
+      autreLecteur.disabled = true;
+      try { video?.pause(); await ouvrirAvecUnLecteur(cfg, f, t => { etatLecteur.textContent = t; }); } catch (e) { etatLecteur.textContent = `✗ ${e.message}`; }
+      autreLecteur.disabled = false;
+    } });
+    let guet = null;
     const sauts = el('div.btn-row.video-sauts', { hidden: true },
       el('button.btn.sm', { type: 'button', text: '⏪ 5 s', title: 'Reculer de 5 secondes', onclick: () => sauter(-5) }),
       el('button.btn.sm', { type: 'button', text: '5 s ⏩', title: 'Avancer de 5 secondes', onclick: () => sauter(5) }));
     const montrer = async () => {
       const f = fichiers[courant];
-      titre.textContent = `${courant + 1}/${fichiers.length} · ${f.nom}`;
+      titre.textContent = `${courant + 1}/${fichiers.length} · ${f.nom}${f.taille ? ` · ${taille(f.taille)}` : ''}`;
+      alerte.hidden = true; etatLecteur.textContent = ''; clearTimeout(guet);
+      autreLecteur.hidden = !f.video;
+      delete autreLecteur.dataset.ok; autreLecteur.textContent = '📲 Ouvrir avec un lecteur de la tablette';
       zone.replaceChildren(el('div.hint', { text: 'Chargement…' }));
       try {
         const url = await urlLecture(cfg, f);
@@ -135,6 +196,18 @@ function lire(cfg, fichiers, i) {
           ? el('video', { src: url, controls: true, autoplay: true, playsinline: true, preload: 'metadata', poster: urlMiniature(cfg, f.fileid, '640x480') })
           : null;
         sauts.hidden = !video;
+        // Le son passe mais l'image reste figée (4K H.265) : on le dit, et on propose un vrai lecteur.
+        if (video) {
+          video.addEventListener('playing', () => {
+            clearTimeout(guet);
+            guet = setTimeout(() => {
+              if (!imageFigee(video)) return;
+              alerte.hidden = false;
+              alerte.replaceChildren(el('b', { text: '🎞 L’image ne suit pas' }),
+                el('span', { text: ` : cette vidéo${/4k/i.test(f.nom) ? ' 4K' : ''} est trop lourde pour le lecteur de l’appli (le son passe, pas l’image). pCloud ne donne pas de version allégée pour un lien public : ouvre-la avec un lecteur de la tablette.` }));
+            }, 4000);
+          });
+        }
         // Double-toucher à gauche / à droite de l'image : −5 s / +5 s
         if (video) {
           let dernier = 0;
@@ -155,7 +228,8 @@ function lire(cfg, fichiers, i) {
     };
     montrer();
     return el('div.video-lecteur', {},
-      zone, sauts, titre,
+      zone, sauts, alerte, titre,
+      el('div.btn-row', { style: { alignItems: 'center' } }, autreLecteur, etatLecteur),
       el('div.btn-row', {},
         fichiers.length > 1 ? el('button.btn.sm', { type: 'button', text: '‹', onclick: () => { courant = (courant - 1 + fichiers.length) % fichiers.length; montrer(); } }) : null,
         fichiers.length > 1 ? el('button.btn.sm', { type: 'button', text: '›', onclick: () => { courant = (courant + 1) % fichiers.length; montrer(); } }) : null,

@@ -11,6 +11,20 @@ const CLE = 'plongee-journal:tableau';
 const lire = () => { try { return JSON.parse(localStorage.getItem(CLE) || 'null') || {}; } catch { return {}; } };
 const garder = v => { try { localStorage.setItem(CLE, JSON.stringify(v)); } catch { /* privé */ } };
 
+/** Une petite bouteille : jaune et verte au nitrox, blanche et noire à l'air (codes couleur des blocs). */
+export function bouteilleGaz(d) {
+  const nx = d.gazType === 'nitrox', tx = d.gazType === 'trimix' || d.gazType === 'recycleur';
+  const corps = nx ? '#f2c200' : tx ? '#8e98a8' : '#e9ecf0';
+  const ogive = nx
+    ? '<path d="M2 9 Q2 4 7 4 Q12 4 12 9 Z" fill="#1fa34a"/>'
+    : tx ? '<path d="M2 9 Q2 4 7 4 Q12 4 12 9 Z" fill="#7a57c9"/>'
+      : '<path d="M2 9 Q2 4 7 4 L7 9 Z" fill="#fff"/><path d="M7 4 Q12 4 12 9 L7 9 Z" fill="#222"/>';
+  const svg = `<svg viewBox="0 0 14 26" width="11" height="20" aria-hidden="true"><rect x="5" y="0.5" width="4" height="3.5" rx="1" fill="#6b7280"/>${ogive}`
+    + `<rect x="2" y="8.5" width="10" height="17" rx="3" fill="${corps}" stroke="rgba(0,0,0,.35)" stroke-width=".8"/></svg>`;
+  const texte = nx ? String(d.gazO2 || '?') : d.gazType === 'trimix' ? `${d.gazO2 || '?'}/${d.gazHe || '?'}` : d.gazType === 'recycleur' ? 'CCR' : 'Air';
+  return el('span.tp-gaz', { title: nx ? `Nitrox ${d.gazO2 || '?'} %` : texte === 'Air' ? 'Air' : texte, html: svg }, el('span', { text: texte }));
+}
+
 const typeCourt = t => {
   const s = String(t || '').toLowerCase();
   return s.includes('enseign') ? '🎓 Enseignement' : s.includes('nuit') ? '🌙 Explo de nuit' : s.includes('explo') ? '☀️ Explo de jour' : t ? t : '—';
@@ -40,24 +54,25 @@ export function tableauPlongees(dives, o) {
     { id: 'pays', titre: 'Pays', val: l => l.pays || '', libelle: c => (c ? `${o.drapeau(c)} ${o.nomPays(c)}` : '📍 ?') },
     { id: 'type', titre: 'Type', val: l => l.type, raccourcis: [{ texte: '🤿 Explo (jour + nuit)', valeurs: ['☀️ Explo de jour', '🌙 Explo de nuit'] }] },
     { id: 'niveau', titre: 'Niveau', val: l => l.niveau, libelle: v => v || 'sans' },
-    { id: 'gaz', titre: 'Gaz', val: l => l.gazGroupe },
+    { id: 'gaz', titre: 'Gaz', val: l => l.gazGroupe, libelle: v => (v === 'Nitrox' ? '🟡🟢 Nitrox' : v === 'Air' ? '⚪⚫ Air' : v) },
     { id: 'eau', titre: 'Eau', val: l => l.eau, libelle: v => (v === 'Douce' ? '💧 Douce' : v === 'Salée' ? '🌊 Salée' : v === 'Piscine' ? '🏊 Piscine' : '?') },
     { id: 'video', titre: 'Vidéos', val: l => l.video, libelle: v => (v === 'Avec vidéos' ? '🎬 Avec' : '🚫 Sans') },
   ];
   const COLONNES = [
     { id: 'numero', titre: 'N°', val: l => Number(l.d.numero) || 0, txt: l => l.d.numero ?? '—', cls: 'num' },
-    { id: 'date', titre: 'Date', val: l => `${l.d.date || ''} ${l.d.heureImmersion || ''}`, txt: l => fmtDate(l.d.date) },
-    { id: 'heure', titre: 'Heure', val: l => l.d.heureImmersion || '', txt: l => l.d.heureImmersion || '' },
+    { id: 'date', titre: 'Date', val: l => `${l.d.date || ''} ${l.d.heureImmersion || ''}`,
+      node: l => [el('span.long', { text: fmtDate(l.d.date) }), el('span.court', { text: l.d.date ? `${l.d.date.slice(8, 10)}/${l.d.date.slice(5, 7)}/${l.d.date.slice(2, 4)}` : '' })] },
+    { id: 'heure', titre: 'Heure', val: l => l.d.heureImmersion || '', txt: l => l.d.heureImmersion || '', cls: 'num.cache-s' },
     { id: 'lieu', titre: 'Lieu', val: l => (l.d.lieuNom || l.d.site || '').toLowerCase(), txt: l => l.d.lieuNom || l.d.site || '—', cls: 'lieu' },
     { id: 'pays', titre: 'Pays', val: l => (l.pays ? o.nomPays(l.pays) : 'zz'), txt: l => (l.pays ? o.drapeau(l.pays) : ''), titreCase: l => (l.pays ? o.nomPays(l.pays) : '') },
-    { id: 'type', titre: 'Type', val: l => l.type, txt: l => l.type },
-    { id: 'niveau', titre: 'Niveau', val: l => l.niveau || 'zz', txt: l => l.niveau },
-    { id: 'prof', titre: 'Prof.', val: l => Number(l.d.profMax) || 0, txt: l => (l.d.profMax ? `${l.d.profMax} m` : '—'), cls: 'num' },
+    { id: 'type', titre: 'Type', val: l => l.type, node: l => [el('span', { text: l.type.split(' ')[0] }), el('span.long', { text: ` ${l.type.split(' ').slice(1).join(' ')}` })], titreCase: l => l.type },
+    { id: 'niveau', titre: 'Niveau', val: l => l.niveau || 'zz', txt: l => l.niveau, cls: 'cache-s' },
+    { id: 'prof', titre: 'Prof.', val: l => Number(l.d.profMax) || 0, txt: l => (l.d.profMax ? `${Math.round(Number(l.d.profMax) * 10) / 10} m` : '—'), cls: 'num' },
     { id: 'duree', titre: 'Durée', val: l => Number(l.d.dureeMin) || 0, txt: l => fmtDuration(l.d.dureeMin), cls: 'num' },
-    { id: 'gaz', titre: 'Gaz', val: l => l.gaz, txt: l => l.gaz },
-    { id: 'temp', titre: 'Eau', val: l => (l.d.tempFond == null ? 99 : Number(l.d.tempFond)), txt: l => (l.d.tempFond != null ? `${l.d.tempFond}°` : ''), cls: 'num' },
-    { id: 'palanquee', titre: 'Palanquée', val: l => l.palanquee.toLowerCase(), txt: l => l.palanquee, cls: 'pal' },
-    { id: 'video', titre: '🎬', val: l => l.video, txt: l => (l.video === 'Avec vidéos' ? '🎬' : ''), cls: 'num' },
+    { id: 'gaz', titre: 'Gaz', val: l => l.gaz, node: l => bouteilleGaz(l.d) },
+    { id: 'temp', titre: 'Eau', val: l => (l.d.tempFond == null ? 99 : Number(l.d.tempFond)), txt: l => (l.d.tempFond != null ? `${l.d.tempFond}°` : ''), cls: 'num.cache-s' },
+    { id: 'palanquee', titre: 'Palanquée', val: l => l.palanquee.toLowerCase(), txt: l => l.palanquee, cls: 'pal.cache-m' },
+    { id: 'video', titre: '🎬', val: l => l.video, txt: l => (l.video === 'Avec vidéos' ? '🎬' : ''), cls: 'num.cache-s' },
   ];
 
   const zone = el('div.tableau-plongees');
@@ -178,7 +193,7 @@ export function tableauPlongees(dives, o) {
           onclick: () => { etat.tri = { col: col.id, sens: etat.tri.col === col.id ? -etat.tri.sens : (col.id === 'date' || col.id === 'prof' || col.id === 'duree' || col.id === 'numero' ? -1 : 1) }; changer(); },
           text: col.titre + (etat.tri.col === col.id ? (etat.tri.sens > 0 ? ' ▲' : ' ▼') : '') })))),
         el('tbody', {}, ...vis.map(l => el('tr.clickable', { onclick: () => o.ouvrir(l.d) },
-          ...COLONNES.map(col => el(`td.${col.cls || 'txt'}`, { text: col.txt(l), title: col.titreCase ? col.titreCase(l) : undefined })))))))
+          ...COLONNES.map(col => el(`td.${col.cls || 'txt'}`, { title: col.titreCase ? col.titreCase(l) : undefined }, col.node ? col.node(l) : String(col.txt(l) ?? ''))))))))
         : el('div.empty', { text: 'Aucune plongée avec ces filtres.' })].filter(Boolean));
   }
   rendre();
