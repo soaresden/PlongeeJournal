@@ -177,7 +177,7 @@ async function regarderEnStreaming(cfg, f, signaler = () => {}) {
 function lire(cfg, fichiers, i) {
   openModal(close => {
     const zone = el('div.video-zone');
-    const titre = el('div.hint', { style: { marginTop: '6px' } });
+    const titre = el('div.hint.video-titre');
     let courant = i;
     let video = null;
     // Sauter de 5 s (en arrière ou en avant)
@@ -190,7 +190,7 @@ function lire(cfg, fichiers, i) {
     };
     const alerte = el('div.video-figee', { hidden: true });
     const etatLecteur = el('span.hint', { style: { margin: 0 } });
-    const TEXTE_LECTEUR = '📺 Regarder dans VLC / un lecteur (streaming)';
+    const TEXTE_LECTEUR = '📺 Regarder dans VLC…';
     const autreLecteur = el('button.btn.sm', { type: 'button', text: TEXTE_LECTEUR, onclick: async () => {
       const f = fichiers[courant];
       const enStreaming = !!lecteurExterne();
@@ -235,7 +235,7 @@ function lire(cfg, fichiers, i) {
               if (!imageFigee(video)) return;
               alerte.hidden = false;
               alerte.replaceChildren(el('b', { text: '🎞 L’image ne suit pas' }),
-                el('span', { text: ` : cette vidéo${/4k/i.test(f.nom) ? ' 4K' : ''} est trop lourde pour le lecteur de l’appli (le son passe, pas l’image). pCloud ne donne pas de version allégée pour un lien public : regarde-la dans VLC ou un autre lecteur (bouton ci-dessous) : il la lit en streaming.` }));
+                el('span', { text: ` : cette vidéo${/4k/i.test(f.nom) ? ' 4K' : ''} est trop lourde pour le lecteur de l’appli (le son passe, pas l’image). pCloud ne donne pas de version allégée pour un lien public : regarde-la dans VLC ou un autre lecteur (bouton « 📺 Regarder dans VLC ») : il la lit en streaming.` }));
             }, 4000);
           });
         }
@@ -258,13 +258,15 @@ function lire(cfg, fichiers, i) {
       }
     };
     montrer();
+    // Tout tient à l'écran : la vidéo prend la hauteur qui reste, une seule rangée de boutons.
     return el('div.video-lecteur', {},
-      zone, sauts, alerte, titre,
-      el('div.btn-row', { style: { alignItems: 'center' } }, autreLecteur, etatLecteur),
-      el('div.btn-row', {},
-        fichiers.length > 1 ? el('button.btn.sm', { type: 'button', text: '‹', onclick: () => { courant = (courant - 1 + fichiers.length) % fichiers.length; montrer(); } }) : null,
-        fichiers.length > 1 ? el('button.btn.sm', { type: 'button', text: '›', onclick: () => { courant = (courant + 1) % fichiers.length; montrer(); } }) : null,
-        el('button.btn.primary.sm', { type: 'button', text: 'Fermer', onclick: close })));
+      el('div.video-cadre', {}, zone, alerte),
+      el('div.video-infos', {}, titre, etatLecteur),
+      el('div.video-actions', {},
+        fichiers.length > 1 ? el('button.btn.sm', { type: 'button', text: '‹', title: 'Précédente', onclick: () => { courant = (courant - 1 + fichiers.length) % fichiers.length; montrer(); } }) : null,
+        fichiers.length > 1 ? el('button.btn.sm', { type: 'button', text: '›', title: 'Suivante', onclick: () => { courant = (courant + 1) % fichiers.length; montrer(); } }) : null,
+        sauts, autreLecteur,
+        el('button.btn.primary.sm.video-fermer', { type: 'button', text: 'Fermer', onclick: close })));
   });
 }
 

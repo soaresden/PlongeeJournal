@@ -1432,3 +1432,19 @@ tr.va-vide td { color: var(--text-mute); }
   .va-cartes .va-candidate { grid-column: 2 / -1; }
   .va-cartes .va-boutons, .va-cartes .va-ok { grid-column: 1 / -1; }
 }
+
+/* ---------- Lecteur vidéo : tout à l'écran, sans défiler ---------- */
+.modal:has(.video-lecteur) { max-width: min(1200px, 98vw); max-height: 98vh; max-height: 98dvh; padding: 10px 12px calc(10px + var(--safe-b)); overflow: hidden; }
+.video-lecteur { display: flex; flex-direction: column; gap: 6px; }
+.video-cadre { position: relative; }
+.video-lecteur .video-zone video, .video-lecteur .video-zone img { max-height: calc(98vh - 120px); max-height: calc(98dvh - 120px); width: 100%; object-fit: contain; }
+.video-titre { margin: 0; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.video-infos { display: flex; gap: 10px; align-items: baseline; min-width: 0; }
+.video-infos .hint { margin: 0; }
+.video-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.video-actions .video-sauts { display: contents; }
+.video-actions .video-sauts[hidden] { display: none; }
+.video-actions .video-fermer { margin-left: auto; }
+.video-cadre .video-figee { position: absolute; left: 8px; right: 8px; bottom: 8px; margin: 0; background: rgba(30, 18, 8, .88); color: #fff; }
+.video-actions .btn { flex: none; white-space: nowrap; min-width: 0; }
+@media (max-width: 480px) { .video-actions .btn { padding-left: 9px; padding-right: 9px; } }
