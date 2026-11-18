@@ -63,10 +63,27 @@ export function dateDuNom(nom, anneeParent = null) {
   return null;
 }
 
-/** L'heure de prise de vue lue dans un nom de fichier (VID_20260830_123805, 20260830_123805…). */
+/**
+ * Le jour et l'heure de prise de vue lus dans un nom de fichier :
+ * 2026-11-08_08h49_4K, 2026-11-08 at 12.34.56 (WhatsApp), 2026-11-08 12:34,
+ * VID_20260830_123805, IMG_20260830_1238, 20260622_11h46_Kayak…
+ * Sans heure, le jour seul (min null).
+ * @returns {{date:string, min:number|null}|null}
+ */
+export function dateHeureDuNom(nom) {
+  const s = String(nom || '');
+  let m = /((?:19|20)\d\d)-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])(?:[ _T-]+|\s+at\s+)([01]\d|2[0-3])[hH:.]([0-5]\d)(?![\d])/i.exec(s);
+  if (m && valide(+m[1], +m[2], +m[3])) return { date: `${m[1]}-${m[2]}-${m[3]}`, min: +m[4] * 60 + +m[5] };
+  m = /((?:19|20)\d\d)(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])[-_ T]?([01]\d|2[0-3])[hH]?([0-5]\d)([0-5]\d)?(?!\d)/.exec(s);
+  if (m && valide(+m[1], +m[2], +m[3])) return { date: `${m[1]}-${m[2]}-${m[3]}`, min: +m[4] * 60 + +m[5] };
+  const d = dateDuNom(s);
+  return d ? { date: d, min: null } : null;
+}
+
+/** L'heure de prise de vue lue dans un nom de fichier (null sans heure). */
 export function heureDuNom(nom) {
-  const m = /((?:19|20)\d\d)(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])[-_ T]?([01]\d|2[0-3])([0-5]\d)([0-5]\d)?/.exec(String(nom || ''));
-  return m ? { date: `${m[1]}-${m[2]}-${m[3]}`, min: +m[4] * 60 + +m[5] } : null;
+  const r = dateHeureDuNom(nom);
+  return r && r.min != null ? r : null;
 }
 
 /**
@@ -79,8 +96,12 @@ export function heureDossier(nom) {
   return m ? +m[1] * 60 + +m[2] : null;
 }
 
-export const estVideo = f => /^video\//.test(f?.contenttype || '') || f?.category === 2 || /\.(mp4|mov|m4v|avi|mkv|insv|360)$/i.test(f?.name || '');
-export const estPhoto = f => /^image\//.test(f?.contenttype || '') || f?.category === 1 || /\.(jpe?g|png|heic|webp|gpr|dng)$/i.test(f?.name || '');
+// Les fichiers à côté des vidéos GoPro (.LRV basse définition, .THM vignette) ne comptent pas.
+const annexe = f => /\.(lrv|thm|srt|wav)$/i.test(f?.name || '');
+export const estVideo = f => !annexe(f) && (/^video\//.test(f?.contenttype || '') || f?.category === 2 || /\.(mp4|mov|m4v|avi|mkv|insv|360)$/i.test(f?.name || ''));
+/** Un dossier à trier plus tard (TOSORT, « À trier ») : SDManager s'en occupe, on n'y touche pas. */
+export const aTrier = nom => /^\s*(to[ _-]?sort|[àa][ _-]?trier)\s*$/i.test(String(nom || ''));
+export const estPhoto = f => !annexe(f) && /^image\//.test(f?.contenttype || '') || f?.category === 1 || /\.(jpe?g|png|heic|webp|gpr|dng)$/i.test(f?.name || '');
 
 /**
  * L'arbre pCloud → les dossiers datés, chacun avec ses vidéos et photos
@@ -92,7 +113,7 @@ export function dossiersDates(racine) {
   const medias = dossier => {
     const l = [];
     for (const x of dossier.contents || []) {
-      if (x.isfolder) l.push(...medias(x));
+      if (x.isfolder) { if (!aTrier(x.name)) l.push(...medias(x)); }
       else if (estVideo(x) || estPhoto(x)) {
         l.push({ fileid: x.fileid, nom: x.name, video: estVideo(x), taille: x.size || 0,
           type: x.contenttype || '', miniature: x.thumb !== false, duree: x.duration ? Number(x.duration) : null });
@@ -102,7 +123,7 @@ export function dossiersDates(racine) {
   };
   const parcourir = (dossier, chemin, annee) => {
     for (const x of dossier.contents || []) {
-      if (!x.isfolder) continue;
+      if (!x.isfolder || aTrier(x.name)) continue;
       const ici = [...chemin, x.name];
       const a = /^(19|20)\d\d$/.test(String(x.name).trim()) ? +x.name.trim() : annee;
       const date = dateDuNom(x.name, a);
@@ -153,14 +174,18 @@ export function sansDossier(d, folderid) {
  * caméra… —, retiré de cette sortie, ou relié à la main à une autre).
  * Deux sorties le même jour : si les noms des fichiers donnent l'heure,
  * chacune ne garde que les siens. Les vidéos retirées une à une
- * (`videosRetirees`) ne s'affichent pas.
+ * (`videosRetirees`) ne s'affichent pas. Les fichiers assignés un à un
+ * dans l'assistant (`affectations` : { fileid: id de la sortie, ou '' pour
+ * aucune }) passent avant tout : ils viennent ici d'où qu'ils soient
+ * rangés, et quittent les autres.
  * @param {object} dive  plongée ou séance
  * @param {Array} toutes plongées et séances (pour le partage d'un même jour)
  * @param {{autres?:object}} options  dossiers mis de côté : { folderid: libellé }
  * @returns {{dossier, dossiers, fichiers, retirees, parHeure:boolean, auto:boolean}|null}
  */
-export function videosDePlongee(dive, dossiers, toutes = [], { autres = {} } = {}) {
+export function videosDePlongee(dive, dossiers, toutes = [], { autres = {}, affectations = null, fichiers: plats = null } = {}) {
   if (!dive || !dossiers?.length) return null;
+  const aff = affectations || {};
   const lies = dossiersLies(dive);
   const sans = (dive.videoSans || []).map(String);
   let choisis = lies.map(id => dossiers.find(x => meme(x.folderid, id))).filter(Boolean);
@@ -183,22 +208,145 @@ export function videosDePlongee(dive, dossiers, toutes = [], { autres = {} } = {
     if (!x) x = libres.find(y => heureDossier(y.nom) == null) || null;
     choisis = x ? [x] : [];
   }
-  if (!choisis.length) return null;
   let fichiers = choisis.flatMap(x => x.fichiers);
+  const assignes = (plats || []).filter(f => meme(aff[f.fileid], dive.id));
+  if (!choisis.length && !assignes.length) return null;
   let parHeure = false;
   const memeJour = toutes.filter(d => d.date === dive.date && d.id !== dive.id && !dossiersLies(d).length && /^\d\d:\d\d/.test(heureDe(d)));
   if (auto && !parDossier && memeJour.length && debut != null) {
     const dates = fichiers.map(f => heureDuNom(f.nom));
     if (dates.filter(Boolean).length >= fichiers.length / 2) {
-      const fin = debut + (Number(dive.dureeMin) || 60);
-      const garde = fichiers.filter((f, i) => dates[i] && dates[i].min >= debut - 20 && dates[i].min <= fin + 20);
-      if (garde.length) { fichiers = garde; parHeure = true; }
+      const fen = fenetres(dive);
+      const garde = fichiers.filter((f, i) => dates[i] && fen.some(w => dates[i].min >= w.debut - AVANT && dates[i].min <= w.fin + APRES));
+      if (garde.length) { fichiers = garde; parHeure = true; } else {
+        // Rien à son heure : elle ne prend pas ce qui est à l'heure d'une autre plongée du jour.
+        const autresFen = memeJour.flatMap(fenetres);
+        const libres = fichiers.filter((f, i) => !dates[i] || !autresFen.some(w => dates[i].min >= w.debut - AVANT && dates[i].min <= w.fin + APRES));
+        if (libres.length < fichiers.length) { fichiers = libres; parHeure = true; }
+      }
     }
   }
+  // Assignés ailleurs (ou à rien) dans l'assistant : ils s'en vont ; assignés ici : ils viennent.
+  fichiers = fichiers.filter(f => !(String(f.fileid) in aff) || meme(aff[f.fileid], dive.id));
+  const ajoutes = assignes.filter(f => !fichiers.some(g => meme(g.fileid, f.fileid)));
+  fichiers.push(...ajoutes);
   const retirees = (dive.videosRetirees || []).map(String);
   const avant = fichiers.length;
   fichiers = fichiers.filter(f => !retirees.includes(String(f.fileid)));
-  return { dossier: choisis[0], dossiers: choisis, fichiers, retirees: avant - fichiers.length, parHeure, auto };
+  return { dossier: choisis[0] || null, dossiers: choisis, fichiers, retirees: avant - fichiers.length, parHeure, auto,
+    assignes: ajoutes.length, dossierFichier: ajoutes[0]?.parent ?? null };
+}
+
+// --- l'assistant : chaque fichier, sa plongée --------------------
+
+/** Marges autour d'une plongée (min) : la caméra tourne un peu avant la mise à l'eau, un peu après. */
+export const AVANT = 20, APRES = 30;
+const hm = s => (/^\d\d:\d\d/.test(s || '') ? Number(s.slice(0, 2)) * 60 + Number(s.slice(3, 5)) : null);
+
+/**
+ * Les moments sous l'eau d'une sortie, en minutes du jour : un seul, ou un
+ * par drop pour deux plongées jumelées (`parties`).
+ * @returns {Array<{debut, fin, partie:number|null}>}
+ */
+export function fenetres(d) {
+  if (!d) return [];
+  const parts = !d.seance && Array.isArray(d.parties) && d.parties.length > 1 ? d.parties : [d];
+  return parts.map((p, i) => {
+    const a = hm(heureDe(p));
+    if (a == null) return null;
+    let b = hm(p.heureSortie);
+    if (b == null) b = a + (Number(p.dureeMin) || (d.seance ? 60 : 45));
+    if (b < a) b += 1440;
+    return { debut: a, fin: b, partie: parts.length > 1 ? i + 1 : null };
+  }).filter(Boolean);
+}
+
+/**
+ * Tous les fichiers (vidéos et photos) de l'arbre, avec le dossier qui
+ * les contient, et le jour et l'heure lus dans leur nom ou, à défaut,
+ * dans celui du dossier. TOSORT et compagnie sont laissés de côté.
+ * @returns {Array<{fileid, nom, video, dossier, parent, dossierDate, dossierHeure, date, min, source}>}
+ */
+export function fichiersPlats(racine) {
+  const out = [];
+  const go = (d, chemin, dDate, dHeure, annee) => {
+    for (const x of d.contents || []) {
+      if (x.isfolder) {
+        if (aTrier(x.name)) continue;
+        const a = /^(19|20)\d\d$/.test(String(x.name).trim()) ? +x.name.trim() : annee;
+        const dd = dateDuNom(x.name, a);
+        go(x, [...chemin, x.name], dd || dDate, dd ? heureDossier(x.name) : dHeure, a);
+      } else if (estVideo(x) || estPhoto(x)) {
+        const n = dateHeureDuNom(x.name);
+        out.push({ fileid: x.fileid, nom: x.name, video: estVideo(x), taille: x.size || 0, type: x.contenttype || '',
+          miniature: x.thumb !== false, duree: x.duration ? Number(x.duration) : null,
+          dossier: chemin.join(' / '), parent: x.parentfolderid ?? d.folderid,
+          dossierDate: dDate || null, dossierHeure: dHeure ?? null,
+          date: n?.date || dDate || null, min: n?.min ?? null,
+          source: n?.min != null ? 'nom' : n ? 'nom-jour' : dDate ? 'dossier' : null });
+      }
+    }
+  };
+  go(racine || {}, [], null, null, null);
+  return out;
+}
+
+const ecartA = (m, w) => (m < w.debut ? w.debut - m : m > w.fin ? m - w.fin : 0);
+
+/**
+ * La plongée (ou séance) que l'assistant propose pour un fichier, et pourquoi :
+ *  - 'dossier'  : rangé dans le dossier d'une plongée (« 2026-11-08 - 12h34 … ») ;
+ *  - 'pendant' / 'avant' / 'apres' : l'heure du nom tombe sous l'eau, ou juste autour ;
+ *    pour deux drops jumelés, on dit lequel (partie 1, 2) ;
+ *  - 'decalage' : à une heure près (montre de la caméra pas à l'heure locale) ;
+ *  - 'jour'     : pas d'heure, mais une seule sortie ce jour-là.
+ * Sinon dive null, avec les sorties du jour pour choisir à la main.
+ * @returns {{dive:object|null, raison:string, confiance:'forte'|'bonne'|'moyenne'|'faible'|null, partie:number|null, ecart:number|null, decalage:number|null, jour:object[]}}
+ */
+export function proposer(f, sorties) {
+  const avecDate = (sorties || []).filter(d => d && d.date);
+  const jour = avecDate.filter(d => d.date === f.date || (f.dossierDate && d.date === f.dossierDate));
+  const rien = raison => ({ dive: null, raison, confiance: null, partie: null, ecart: null, decalage: null, jour });
+  const partieA = (d, m) => {
+    const fen = fenetres(d);
+    if (m == null || fen.length < 2) return null;
+    return [...fen].sort((a, b) => ecartA(m, a) - ecartA(m, b))[0].partie;
+  };
+  // 1. Le dossier d'une plongée : son heure, à 20 min près.
+  if (f.dossierHeure != null && f.dossierDate) {
+    const c = avecDate.filter(d => d.date === f.dossierDate && hm(heureDe(d)) != null)
+      .map(d => ({ d, e: Math.abs(hm(heureDe(d)) - f.dossierHeure) })).filter(x => x.e <= 20).sort((a, b) => a.e - b.e)[0];
+    if (c) {
+      const ok = f.date === f.dossierDate;
+      return { ...rien('dossier'), dive: c.d, confiance: 'forte', partie: ok ? partieA(c.d, f.min) : null };
+    }
+  }
+  // 2. L'heure du nom du fichier.
+  if (f.min != null && f.date) {
+    const duJour = avecDate.filter(d => d.date === f.date);
+    const meilleur = decal => {
+      let best = null;
+      for (const d of duJour) for (const w of fenetres(d)) {
+        const m = f.min + decal, e = ecartA(m, w);
+        const dedans = m < w.debut ? e <= (decal ? 10 : AVANT) : e <= (decal ? 10 : APRES);
+        if (dedans && (!best || e < best.e)) best = { d, w, e, m };
+      }
+      return best;
+    };
+    const b = meilleur(0);
+    if (b) {
+      return { ...rien(b.e === 0 ? 'pendant' : b.m < b.w.debut ? 'avant' : 'apres'), dive: b.d,
+        confiance: b.e === 0 ? 'forte' : 'bonne', partie: b.w.partie, ecart: b.e };
+    }
+    for (const k of [-60, 60]) {
+      const c = meilleur(k);
+      if (c) return { ...rien('decalage'), dive: c.d, confiance: 'moyenne', partie: c.w.partie, ecart: c.e, decalage: k };
+    }
+    return rien(duJour.length ? 'hors' : 'aucune');
+  }
+  // 3. Pas d'heure : la seule sortie du jour.
+  if (jour.length === 1) return { ...rien('jour'), dive: jour[0], confiance: 'faible' };
+  return rien(jour.length ? 'plusieurs' : 'aucune');
 }
 
 // --- API publique pCloud ------------------------------------------
@@ -232,6 +380,18 @@ export function dossiersEnCache(cfg) {
   return c && cfg && c.code === cfg.code ? c.dossiers : null;
 }
 
+/** Tous les fichiers du lien, à plat (après un chargerDossiers). */
+export function fichiersEnCache(cfg) {
+  const c = memoire || (() => { try { return JSON.parse(globalThis.localStorage?.getItem(CLE_CACHE) || 'null'); } catch { return null; } })();
+  return c && cfg && c.code === cfg.code ? c.fichiers || [] : [];
+}
+
+/** L'heure de la dernière lecture de pCloud (ms), null sans cache. */
+export function luA(cfg) {
+  const c = memoire;
+  return c && cfg && c.code === cfg.code ? c.at : null;
+}
+
 /**
  * Les dossiers datés du lien (mis en cache 30 min).
  * @returns {Promise<Array>}
@@ -239,10 +399,10 @@ export function dossiersEnCache(cfg) {
 export async function chargerDossiers(cfg, { forcer = false, http = null } = {}) {
   if (!cfg?.code) return [];
   const c = memoire || (() => { try { return JSON.parse(globalThis.localStorage?.getItem(CLE_CACHE) || 'null'); } catch { return null; } })();
-  if (!forcer && c && c.code === cfg.code && Date.now() - c.at < DUREE_CACHE) { memoire = c; return c.dossiers; }
+  if (!forcer && c && c.code === cfg.code && c.fichiers && Date.now() - c.at < DUREE_CACHE) { memoire = c; return c.dossiers; }
   const j = await appeler(cfg, 'showpublink', {}, http || await httpParDefaut());
   const dossiers = dossiersDates(j.metadata || {});
-  memoire = { code: cfg.code, api: cfg.api, at: Date.now(), racine: j.metadata?.name || '', dossiers };
+  memoire = { code: cfg.code, api: cfg.api, at: Date.now(), racine: j.metadata?.name || '', dossiers, fichiers: fichiersPlats(j.metadata || {}) };
   try { globalThis.localStorage?.setItem(CLE_CACHE, JSON.stringify(memoire)); } catch { /* trop gros : mémoire seule */ }
   return dossiers;
 }

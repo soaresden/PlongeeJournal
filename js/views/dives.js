@@ -14,7 +14,7 @@ import { analyserProfil } from '../profil-analyse.js';
 import { ambianceDe, stylesAmbiance, vignetteLieu, etiquetteAmbiance } from '../ambiance.js';
 import { plongeesARanger } from '../seances.js';
 import { bilanDonnees, debutOrdinateur, listeMontre, LIBELLE_SOURCE } from '../donnees.js';
-import { configVideos, autresVideos, sectionVideos } from './videos.js';
+import { configVideos, optionsVideos, sectionVideos } from './videos.js';
 import { aVerifier, ouvrirAVerifier, alertesFiche } from './verifs.js';
 import { paysPlongee, drapeau } from './cv.js';
 import { dossiersEnCache, videosDePlongee, chargerDossiers } from '../videos.js';
@@ -227,9 +227,9 @@ export async function divesView() {
   const cfgVideos = await configVideos().catch(() => null);
   const dossiersVideos = cfgVideos ? dossiersEnCache(cfgVideos) : null;
   if (cfgVideos) chargerDossiers(cfgVideos).catch(() => {});
-  const autresV = cfgVideos ? await autresVideos().catch(() => ({})) : {};
+  const optsV = cfgVideos ? await optionsVideos(cfgVideos).catch(() => ({})) : {};
   const toutesV = [...dives, ...seances];
-  const aDesVideos = d => !!(dossiersVideos && videosDePlongee(d, dossiersVideos, toutesV, { autres: autresV })?.fichiers.length);
+  const aDesVideos = d => !!(dossiersVideos && videosDePlongee(d, dossiersVideos, toutesV, optsV)?.fichiers.length);
 
   // Ce qui manque, et ce qu'on peut aller chercher.
   const liste = listeMontre();

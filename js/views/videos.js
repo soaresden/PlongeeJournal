@@ -6,7 +6,8 @@
 import { el, toast, openModal, fmtDate } from '../lib.js';
 import { store, typeSeance } from '../store.js';
 import { lirePublink, chargerDossiers, videosDePlongee, urlMiniature, urlLecture, lienDossier,
-         dossiersLies, avecDossier, sansDossier } from '../videos.js';
+         dossiersLies, avecDossier, sansDossier, fichiersEnCache, luA } from '../videos.js';
+import { onglets } from '../onglets.js';
 
 /** Le lien enregistré dans les réglages, prêt pour l'API. */
 export async function configVideos() {
@@ -18,6 +19,28 @@ export async function configVideos() {
 export async function autresVideos() {
   const r = await store.getSettings();
   return r.videos?.autres || {};
+}
+
+/** Les fichiers assignés un à un dans l'assistant : { fileid: id de la sortie | '' (aucune) }. */
+export async function affectationsVideos() {
+  const r = await store.getSettings();
+  return r.videos?.affectations || {};
+}
+
+/** Tout ce que videosDePlongee doit savoir (dossiers mis de côté, assignations, fichiers à plat). */
+export async function optionsVideos(cfg) {
+  const r = await store.getSettings();
+  return { autres: r.videos?.autres || {}, affectations: r.videos?.affectations || {}, fichiers: cfg ? fichiersEnCache(cfg) : [] };
+}
+
+/** Enregistre des assignations (null : on revient à la proposition). */
+async function sauverAffectations(patch) {
+  const r = await store.getSettings();
+  const v = { ...(r.videos || {}) };
+  const a = { ...(v.affectations || {}) };
+  for (const [k, x] of Object.entries(patch)) { if (x == null) delete a[k]; else a[k] = String(x); }
+  v.affectations = a;
+  await store.saveSettings({ videos: v });
 }
 
 /** Plongées et séances du carnet, pour relier les dossiers. */
@@ -45,8 +68,8 @@ export async function carteVideosReglages() {
       try {
         const dossiers = await chargerDossiers(c, { forcer });
         const { toutes } = await sorties();
-        const autres = await autresVideos();
-        const lies = toutes.filter(d => videosDePlongee(d, dossiers, toutes, { autres })).length;
+        const opts = await optionsVideos(c);
+        const lies = toutes.filter(d => videosDePlongee(d, dossiers, toutes, opts)).length;
         etat.textContent = dossiers.length
           ? `✓ ${dossiers.length} dossier${dossiers.length > 1 ? 's' : ''} daté${dossiers.length > 1 ? 's' : ''}, du ${fmtDate(dossiers[0].date)} au ${fmtDate(dossiers.at(-1).date)} · ${lies} plongée${lies > 1 ? 's' : ''} ou séance${lies > 1 ? 's' : ''} avec des vidéos.`
           : 'Lien lu, mais aucun dossier avec une date dans son nom (ex. « 2026-08-30 Cap Vert »).';
@@ -68,7 +91,8 @@ export async function carteVideosReglages() {
         el('button.btn.primary.sm', { type: 'button', text: 'Enregistrer', onclick: async () => {
           const c = await tester(true);
           if (!c && champ.value.trim()) return;
-          await store.saveSettings({ videos: c ? { lien: c.lien } : null });
+          const avant = (await store.getSettings()).videos || {};
+          await store.saveSettings({ videos: c ? { ...avant, lien: c.lien } : null });
           toast(c ? 'Lien des vidéos enregistré' : 'Lien des vidéos retiré');
         } }),
         cfg ? el('button.btn.sm.ghost', { type: 'button', text: 'Retirer', onclick: async () => {
@@ -277,7 +301,7 @@ export function sectionVideos(dive, toutes, { lecture = false, sauver = d => sto
       remplacer(corps, el('div.hint', { style: { margin: 0 }, text: `pCloud injoignable : ${e.message}` }));
       return;
     }
-    const autres = await autresVideos();
+    const opts = await optionsVideos(cfg);
     const maj = async patch => {
       Object.assign(dive, patch);
       for (const [k, v] of Object.entries(patch)) if (v === undefined) delete dive[k];
@@ -292,7 +316,7 @@ export function sectionVideos(dive, toutes, { lecture = false, sauver = d => sto
     const choisis = new Set();
 
     const rendre = () => {
-      const v = videosDePlongee(dive, dossiers, toutes, { autres });
+      const v = videosDePlongee(dive, dossiers, toutes, opts);
       choisis.clear();
       if (!v) {
         remplacer(corps, 
@@ -308,7 +332,7 @@ export function sectionVideos(dive, toutes, { lecture = false, sauver = d => sto
       const tries = [...fichiers].sort((a, b) => (b.video - a.video) || a.nom.localeCompare(b.nom));
       // Les autres sorties du même jour qui montrent aussi ce dossier.
       const voisines = toutes.filter(o => o.id !== dive.id && o.date === dive.date
-        && videosDePlongee(o, dossiers, toutes, { autres })?.dossiers.some(x => lies.includes(x)));
+        && videosDePlongee(o, dossiers, toutes, opts)?.dossiers.some(x => lies.includes(x)));
 
       const barre = el('div.video-selection', { hidden: true });
       const rendreBarre = () => {
@@ -359,11 +383,12 @@ export function sectionVideos(dive, toutes, { lecture = false, sauver = d => sto
             el('div.hint', { style: { margin: '4px 0 0' }, text: [
               `${tries.filter(f => f.video).length} vidéo(s), ${tries.filter(f => !f.video).length} photo(s)`,
               parHeure ? `celles prises pendant cette ${mot}` : null,
-              v.auto ? 'trouvé à la date' : null].filter(Boolean).join(' · ') })),
+              v.auto && lies.length ? 'trouvé à la date' : null,
+              v.assignes ? `${v.assignes} assignée(s) dans l’assistant` : null].filter(Boolean).join(' · ') })),
           lecture ? null : el('button.btn.sm.ghost', { type: 'button', text: '＋ Dossier',
             onclick: () => choisirDossiers(dive, dossiers, ids => {
               // Le dossier du jour, s'il était là, reste relié.
-              const base = v.auto ? avecDossier(dive, lies[0].folderid) : {};
+              const base = v.auto && lies.length ? avecDossier(dive, lies[0].folderid) : {};
               maj(ids.reduce((acc, id) => ({ ...acc, ...avecDossier({ ...dive, ...acc }, id) }), base));
             }) })),
         tries.length ? el('div.video-grille', {}, ...vignettes) : el('div.hint', { text: 'Aucune vidéo.' }),
@@ -371,7 +396,7 @@ export function sectionVideos(dive, toutes, { lecture = false, sauver = d => sto
         lecture ? null : el('div.hint', { style: { margin: '6px 0 0' }, text: 'Appui long sur une vidéo pour en choisir plusieurs (retirer, répartir).' }),
         retirees && !lecture ? el('button.lien-texte', { type: 'button', style: { fontSize: '13px', marginTop: '6px' },
           text: `↺ Remettre les ${retirees} vidéo(s) retirée(s)`, onclick: () => maj({ videosRetirees: undefined }) }) : null,
-        el('a', { href: lienDossier(cfg, lies[0].folderid), target: '_blank', rel: 'noopener',
+        el('a', { href: lienDossier(cfg, lies[0]?.folderid ?? v.dossierFichier), target: '_blank', rel: 'noopener',
           style: { color: 'var(--accent)', fontSize: '13px', display: 'block', marginTop: '8px' },
           text: tries.length > 36 ? `Tout voir dans pCloud (${tries.length}) ↗` : 'Ouvrir dans pCloud ↗' }));
     };
@@ -409,26 +434,38 @@ export async function videosView() {
     wrap.append(await carteVideosReglages());
     return { title: 'Mes vidéos', node: wrap, back: true };
   }
-  const etat = el('div.hint', { text: 'Lecture du dossier pCloud…' });
+  const etat = el('div.hint.va-etat', { text: 'Lecture du dossier pCloud…' });
   const corps = el('div');
+  const zone = el('div');
   const barre = el('div.video-selection.flottante', { hidden: true });
   const selection = new Set();
-  wrap.append(etat);
 
   const rendre = async (forcer = false) => {
     let dossiers;
+    if (forcer) { etat.textContent = '🔄 Relecture de pCloud…'; bRelire.disabled = true; }
     try { dossiers = await chargerDossiers(cfg, { forcer }); } catch (e) {
-      etat.textContent = `pCloud injoignable : ${e.message}`; return;
-    }
+      etat.textContent = `pCloud injoignable : ${e.message}`; bRelire.disabled = false; return;
+    } finally { bRelire.disabled = false; }
     const { dives, seances, toutes } = await sorties();
-    const autres = await autresVideos();
-    const lies = new Map(dossiers.map(x => [x, toutes.filter(d => videosDePlongee(d, dossiers, toutes, { autres })?.dossiers.includes(x))]));
+    const opts = await optionsVideos(cfg);
+    const { autres } = opts;
+    const lies = new Map(dossiers.map(x => [x, toutes.filter(d => videosDePlongee(d, dossiers, toutes, opts)?.dossiers.includes(x))]));
     const nbLies = dossiers.filter(x => lies.get(x).length).length;
     const nbAutres = dossiers.filter(x => !lies.get(x).length && String(x.folderid) in autres).length;
     const nbSeuls = dossiers.length - nbLies - nbAutres;
-    etat.textContent = [`${dossiers.length} dossier${dossiers.length > 1 ? 's' : ''} daté${dossiers.length > 1 ? 's' : ''}`,
-      `${nbLies} relié${nbLies > 1 ? 's' : ''}`, nbAutres ? `${nbAutres} autre${nbAutres > 1 ? 's' : ''} (test caméra…)` : null,
-      nbSeuls ? `${nbSeuls} à relier` : null].filter(Boolean).join(' · ') + ' — appui long sur un dossier pour en choisir plusieurs.';
+    const t = luA(cfg);
+    const plats = opts.fichiers;
+    etat.textContent = [`${plats.filter(f => f.video).length} vidéos, ${plats.filter(f => !f.video).length} photos`,
+      `${dossiers.length} dossier${dossiers.length > 1 ? 's' : ''} daté${dossiers.length > 1 ? 's' : ''}`,
+      t ? `lu à ${new Date(t).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}` : null].filter(Boolean).join(' · ');
+    const aideDossiers = el('div.hint', { text: [`${nbLies} relié${nbLies > 1 ? 's' : ''}`, nbAutres ? `${nbAutres} autre${nbAutres > 1 ? 's' : ''} (test caméra…)` : null,
+      nbSeuls ? `${nbSeuls} à relier` : null].filter(Boolean).join(' · ') + ' — appui long sur un dossier pour en choisir plusieurs.' });
+    const ctx = { cfg, dossiers, plats, dives, seances, toutes, autres, aff: opts.affectations, navigate,
+      sauverAff: sauverAffectations, rendreTout: () => rendre(),
+      lireFichier: f => lire(cfg, [f], 0),
+      choisirSorties: (f, c) => choisirSorties({ nom: f.nom, date: f.date || f.dossierDate }, toutes, 'quelle plongée ?', c),
+      allerVers: id => { try { localStorage.setItem('plongee-journal:onglet:videos', id); localStorage.setItem('plongee-journal:videos-filtre', 'a-valider'); } catch { /* privé */ } rendre(); } };
+    const A = await import('./videos-assistant.js');
 
     /** Relie des dossiers à des sorties (chaque sortie reçoit tous les dossiers). */
     const relier = async (folders, cibles) => {
@@ -469,7 +506,7 @@ export async function videosView() {
         el('button.btn.sm.ghost', { type: 'button', text: 'Annuler', onclick: () => { selection.clear(); rendre(); } }));
     };
 
-    remplacer(corps, ...[...dossiers].reverse().map(x => {
+    remplacer(corps, aideDossiers, ...[...dossiers].reverse().map(x => {
       const relies = lies.get(x);
       const autre = !relies.length ? autres[x.folderid] : null;
       const apercu = x.fichiers.slice(0, 4);
@@ -511,13 +548,20 @@ export async function videosView() {
       return carte;
     }));
     rendreBarre();
+    zone.replaceChildren(onglets('videos', [
+      { id: 'videos', titre: '🎬 Vidéos → plongée', contenu: A.ongletVideosPlongee(ctx) },
+      { id: 'plongees', titre: '🤿 Plongées → vidéos', contenu: A.ongletPlongeesVideos(ctx) },
+      { id: 'dossiers', titre: '📁 Dossiers', contenu: [corps, barre] },
+    ]));
   };
 
+  const bRelire = el('button.btn.sm', { type: 'button', text: '🔄 Rafraîchir pCloud', title: 'Relire les dossiers et les noms de fichiers', onclick: () => rendre(true) });
+  wrap.classList.add('videos-page');
   wrap.append(
-    el('div.btn-row', {},
-      el('button.btn.sm', { type: 'button', text: '↻ Relire pCloud', onclick: () => rendre(true) }),
-      el('button.btn.sm.ghost', { type: 'button', text: 'Changer le lien', onclick: () => navigate('reglages') })),
-    corps, barre);
+    el('div.va-tete', {}, etat,
+      el('div.btn-row', {}, bRelire,
+        el('button.btn.sm.ghost', { type: 'button', text: 'Changer le lien', onclick: () => navigate('reglages') }))),
+    zone);
   rendre();
   return { title: 'Mes vidéos', node: wrap, back: true };
 }

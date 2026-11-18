@@ -96,6 +96,57 @@ check('heure de dossier : aucune dans « 2026-11-08 » ni « 30.08.2026 - plong�
   check('ancien format (un seul dossier) toujours lu', V.dossiersLies({ videoDossier: 10 }).join() === '10');
 }
 
+
+// --- l'assistant : jour et heure dans le nom, proposition, assignations ---
+{
+  const dh = n => JSON.stringify(V.dateHeureDuNom(n));
+  const att = (d, m) => JSON.stringify({ date: d, min: m });
+  check('nom : 2026-11-08_08h49_4K.mp4', dh('2026-11-08_08h49_4K.mp4') === att('2026-11-08', 529));
+  check('nom : WhatsApp … 2023-03-18 at 12.34.56(1)', dh('WhatsApp Image 2023-03-18 at 12.34.56(1).jpeg') === att('2023-03-18', 754));
+  check('nom : IMG_20230318_123456', dh('IMG_20230318_123456.jpg') === att('2023-03-18', 754));
+  check('nom : 20260622_11h46_Kayak', dh('20260622_11h46_Kayak Gx010109 Joined.mp4') === att('2026-06-22', 706));
+  check('nom : 2023-05-13 1ere (jour seul)', dh('2023-05-13 1ere.mp4') === att('2023-05-13', null));
+  check('nom : GX010096 (rien)', V.dateHeureDuNom('GX010096.MP4') === null);
+  check('heureDuNom : pas d’heure → null', V.heureDuNom('2023-05-13 1ere.mp4') === null);
+
+  const g = (id, name) => ({ isfolder: false, fileid: id, name, contenttype: 'video/mp4', parentfolderid: 0 });
+  const racine = { name: 'GoPro', isfolder: true, folderid: 1, contents: [
+    g(1, '2026-11-11_07h13_4K drop1.mp4'), g(2, '2026-11-11_08h34_4K drop2.mp4'), g(3, '2026-11-11_08h34_4K drop2.srt'),
+    g(4, '2026-11-11_13h40_4K.mp4'), g(9, '2026-11-11_16h00_snorkeling.mp4'),
+    { name: '2026-11-09 - 12h00 Miyaru Kandu', isfolder: true, folderid: 5, contents: [g(5, '2026-11-09_13h00_4K.mp4')] },
+    { name: '2025-11-29 Roussay', isfolder: true, folderid: 6, contents: [g(6, 'Gx010096 Joined.mp4')] },
+    { name: 'TOSORT', isfolder: true, folderid: 7, contents: [{ name: '100GOPRO', isfolder: true, folderid: 8, contents: [g(8, 'GX010200.MP4')] }] },
+  ] };
+  const plats = V.fichiersPlats(racine);
+  check('à plat : TOSORT ignoré, .srt ignoré', plats.map(f => f.fileid).join() === '1,2,4,9,5,6', plats.map(f => f.fileid).join());
+  check('à plat : le dossier qui contient', plats.find(f => f.fileid === 5).dossier === '2026-11-09 - 12h00 Miyaru Kandu' && plats.find(f => f.fileid === 1).dossier === '');
+  check('TOSORT absent des dossiers datés aussi', !V.dossiersDates({ contents: [{ name: 'TOSORT', isfolder: true, folderid: 7, contents: [{ name: '2026-01-01 x', isfolder: true, folderid: 9, contents: [g(8, 'a.mp4')] }] }] }).length);
+
+  const five = { id: 'five', date: '2026-11-11', heureImmersion: '07:11', heureSortie: '07:58', dureeMin: 47,
+    parties: [{ heureImmersion: '07:11', heureSortie: '07:22', dureeMin: 11 }, { heureImmersion: '07:34', heureSortie: '08:10', dureeMin: 36 }] };
+  const lily = { id: 'lily', date: '2026-11-11', heureImmersion: '11:55', heureSortie: '12:55', dureeMin: 60 };
+  const miyaru = { id: 'miy', date: '2026-11-09', heureImmersion: '12:00', heureSortie: '12:38', dureeMin: 38 };
+  const roussay = { id: 'rou', date: '2025-11-29', heureImmersion: '10:00', dureeMin: 40 };
+  const carnet = [five, lily, miyaru, roussay];
+  const P = id => V.proposer(plats.find(f => f.fileid === id), carnet);
+  check('deux drops : drop1 → partie 1', P(1).dive === five && P(1).partie === 1 && P(1).raison === 'pendant');
+  check('deux drops : drop2 → partie 2 (24 min après la sortie)', P(2).dive === five && P(2).partie === 2 && P(2).raison === 'apres');
+  check('à 1 h près : décalage de la caméra', P(4).dive === lily && P(4).raison === 'decalage' && P(4).decalage === -60);
+  check('rien à cette heure (snorkeling)', P(9).dive === null && P(9).raison === 'hors' && P(9).jour.length === 2);
+  check('dossier de la plongée : il l’emporte sur l’heure du nom', P(5).dive === miyaru && P(5).raison === 'dossier');
+  check('sans heure : la seule plongée du jour (faible)', P(6).dive === roussay && P(6).confiance === 'faible');
+
+  // Les assignations validées : le fichier vient sur la plongée, d'où qu'il soit, et quitte les autres.
+  const dd = V.dossiersDates(racine);
+  const opts = aff => ({ affectations: aff, fichiers: plats });
+  const ids = (d, aff) => V.videosDePlongee(d, dd, carnet, opts(aff))?.fichiers.map(f => f.fileid).join() ?? null;
+  check('fenêtres : les deux drops', JSON.stringify(V.fenetres(five)) === JSON.stringify([{ debut: 431, fin: 442, partie: 1 }, { debut: 454, fin: 490, partie: 2 }]));
+  check('sans assignation : drop2 retrouvé par l’heure (fenêtre du 2e drop)', ids(five, {}).split(',').includes('2'));
+  check('assigné à Lily : il quitte Five Rocks et va sur Lily', !ids(five, { 2: 'lily' }).split(',').includes('2') && ids(lily, { 2: 'lily' }).split(',').includes('2'), ids(five, { 2: 'lily' }) + ' / ' + ids(lily, { 2: 'lily' }));
+  check('assigné à aucune : il ne s’affiche nulle part', !ids(five, { 1: '' }).split(',').includes('1'));
+  check('assigné d’un autre dossier, sans dossier du jour', ids({ id: 'x', date: '2020-01-01' }, { 5: 'x' }) === '5');
+}
+
 // API simulée : le lien est en fait américain, le serveur européen répond 7001.
 const appels = [];
 const http = async url => {
