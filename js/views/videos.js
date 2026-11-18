@@ -149,6 +149,31 @@ async function ouvrirAvecUnLecteur(cfg, f, signaler = () => {}) {
   await natif.opener.open({ filePath: chemin, contentType: /\.mov$/i.test(f.nom) ? 'video/quicktime' : 'video/mp4', openWithDefault: false });
 }
 
+/** Le module natif de l'APK qui passe une vidéo à VLC, MX Player… (null sur le site, ou un ancien APK). */
+function lecteurExterne() {
+  const cap = window.Capacitor;
+  if (!cap?.isNativePlatform?.()) return null;
+  if (typeof cap.isPluginAvailable === 'function' && !cap.isPluginAvailable('LecteurExterne')) return null;
+  return typeof cap.Plugins?.LecteurExterne?.ouvrir === 'function' ? cap.Plugins.LecteurExterne : null;
+}
+
+/**
+ * Le fichier original, lu en streaming par un lecteur de l'appareil (VLC,
+ * MX Player… décodent le 4K H.265 que le lecteur de l'appli ne sait pas
+ * afficher). Rien n'est téléchargé. Sur le site : un nouvel onglet.
+ */
+async function regarderEnStreaming(cfg, f, signaler = () => {}) {
+  signaler('Ouverture…');
+  const url = await urlTelechargement(cfg, f);
+  const L = lecteurExterne();
+  if (!L) { window.open(url, '_blank', 'noopener'); signaler(''); return; }
+  const r = await L.ouvrir({ url, type: /\.mov$/i.test(f.nom) ? 'video/quicktime' : 'video/mp4', nom: f.nom });
+  if (r && r.lecteurs === 0) {
+    signaler([el('span', { text: 'Aucun lecteur vidéo trouvé : installe VLC (gratuit). ' }),
+      el('a', { href: 'market://details?id=org.videolan.vlc', style: { color: 'var(--accent)' }, text: 'VLC sur le Play Store ↗' })]);
+  } else signaler('');
+}
+
 function lire(cfg, fichiers, i) {
   openModal(close => {
     const zone = el('div.video-zone');
@@ -165,18 +190,24 @@ function lire(cfg, fichiers, i) {
     };
     const alerte = el('div.video-figee', { hidden: true });
     const etatLecteur = el('span.hint', { style: { margin: 0 } });
-    const autreLecteur = el('button.btn.sm', { type: 'button', text: '📲 Ouvrir avec un lecteur de la tablette', onclick: async () => {
+    const TEXTE_LECTEUR = '📺 Regarder dans VLC / un lecteur (streaming)';
+    const autreLecteur = el('button.btn.sm', { type: 'button', text: TEXTE_LECTEUR, onclick: async () => {
       const f = fichiers[courant];
-      // Gros fichier : un 2e toucher pour confirmer (il sera téléchargé sur l'appareil).
-      if (f.taille > 5e8 && window.Capacitor?.isNativePlatform?.() && autreLecteur.dataset.ok !== String(f.fileid)) {
+      const enStreaming = !!lecteurExterne();
+      // Ancien APK sans le module : téléchargement, avec un 2e toucher pour confirmer les gros fichiers.
+      if (!enStreaming && f.taille > 5e8 && window.Capacitor?.isNativePlatform?.() && autreLecteur.dataset.ok !== String(f.fileid)) {
         autreLecteur.dataset.ok = String(f.fileid);
         autreLecteur.textContent = `⬇ Télécharger ${taille(f.taille)} sur la tablette, puis ouvrir ?`;
-        etatLecteur.textContent = 'Touche encore pour confirmer.';
+        etatLecteur.textContent = 'Touche encore pour confirmer (mets l’appli à jour pour le streaming).';
         return;
       }
-      autreLecteur.textContent = '📲 Ouvrir avec un lecteur de la tablette';
+      autreLecteur.textContent = TEXTE_LECTEUR;
       autreLecteur.disabled = true;
-      try { video?.pause(); await ouvrirAvecUnLecteur(cfg, f, t => { etatLecteur.textContent = t; }); } catch (e) { etatLecteur.textContent = `✗ ${e.message}`; }
+      try {
+        video?.pause();
+        if (enStreaming) await regarderEnStreaming(cfg, f, t => { etatLecteur.replaceChildren(...[].concat(t)); });
+        else await ouvrirAvecUnLecteur(cfg, f, t => { etatLecteur.textContent = t; });
+      } catch (e) { etatLecteur.textContent = `✗ ${e.message}`; }
       autreLecteur.disabled = false;
     } });
     let guet = null;
@@ -188,7 +219,7 @@ function lire(cfg, fichiers, i) {
       titre.textContent = `${courant + 1}/${fichiers.length} · ${f.nom}${f.taille ? ` · ${taille(f.taille)}` : ''}`;
       alerte.hidden = true; etatLecteur.textContent = ''; clearTimeout(guet);
       autreLecteur.hidden = !f.video;
-      delete autreLecteur.dataset.ok; autreLecteur.textContent = '📲 Ouvrir avec un lecteur de la tablette';
+      delete autreLecteur.dataset.ok; autreLecteur.textContent = TEXTE_LECTEUR;
       zone.replaceChildren(el('div.hint', { text: 'Chargement…' }));
       try {
         const url = await urlLecture(cfg, f);
@@ -204,7 +235,7 @@ function lire(cfg, fichiers, i) {
               if (!imageFigee(video)) return;
               alerte.hidden = false;
               alerte.replaceChildren(el('b', { text: '🎞 L’image ne suit pas' }),
-                el('span', { text: ` : cette vidéo${/4k/i.test(f.nom) ? ' 4K' : ''} est trop lourde pour le lecteur de l’appli (le son passe, pas l’image). pCloud ne donne pas de version allégée pour un lien public : ouvre-la avec un lecteur de la tablette.` }));
+                el('span', { text: ` : cette vidéo${/4k/i.test(f.nom) ? ' 4K' : ''} est trop lourde pour le lecteur de l’appli (le son passe, pas l’image). pCloud ne donne pas de version allégée pour un lien public : regarde-la dans VLC ou un autre lecteur (bouton ci-dessous) : il la lit en streaming.` }));
             }, 4000);
           });
         }
